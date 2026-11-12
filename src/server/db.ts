@@ -29,6 +29,8 @@ export class Store {
     if (!cols.some((c) => c.name === 'refs')) this.db.exec('ALTER TABLE chronicle ADD COLUMN refs TEXT');
     // v1.15: every entry is also written in English
     if (!cols.some((c) => c.name === 'en')) this.db.exec('ALTER TABLE chronicle ADD COLUMN en TEXT');
+    // v1.33: and in German
+    if (!cols.some((c) => c.name === 'de')) this.db.exec('ALTER TABLE chronicle ADD COLUMN de TEXT');
     // v1.14: new bands are no longer written in the chronicle (their card says who founded them)
     this.db.exec("DELETE FROM chronicle WHERE kind IN ('split', 'colony')");
   }
@@ -59,11 +61,11 @@ export class Store {
 
   addEvents(world: string, events: ChronicleEntry[]) {
     if (!events.length) return;
-    const st = this.db.prepare('INSERT OR REPLACE INTO chronicle (world, id, tick, year, kind, importance, text, kids, person, band, refs, en) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+    const st = this.db.prepare('INSERT OR REPLACE INTO chronicle (world, id, tick, year, kind, importance, text, kids, person, band, refs, en, de) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
     this.db.exec('BEGIN');
     for (const e of events) {
       st.run(world, e.id, e.tick, Math.floor(e.year), e.kind, e.importance, e.text, e.kids ?? null, e.personId ?? null, e.bandId ?? null,
-        e.refs?.length ? JSON.stringify(e.refs) : null, e.en ? JSON.stringify(e.en) : null);
+        e.refs?.length ? JSON.stringify(e.refs) : null, e.en ? JSON.stringify(e.en) : null, e.de ? JSON.stringify(e.de) : null);
     }
     this.db.exec('COMMIT');
   }
@@ -112,6 +114,7 @@ export class Store {
       personId: (r.person as number) ?? undefined, bandId: (r.band as number) ?? undefined,
       refs: r.refs ? JSON.parse(r.refs as string) : undefined,
       en: r.en ? JSON.parse(r.en as string) : undefined,
+      de: r.de ? JSON.parse(r.de as string) : undefined,
     }));
   }
 

@@ -1,9 +1,11 @@
-// English for Letopis. The world speaks Bulgarian inside the simulation; everything a player reads can also be shown in English.
-// Names are transliterated (Иван Петров -> Ivan Petrov), nicknames, totems and places are translated.
+// English for Letopis. The world speaks Bulgarian inside the simulation; everything a player reads can also be shown
+// in English (here) and German (i18n-de.ts). People and villages get names of their own in each language
+// (Иван Петров is John Peterson), totems and clan names are translated.
 
 import { CLAN_EN, clanBase } from './clans';
+import { personName, villageName } from './people-l10n';
 
-export type Lang = 'bg' | 'en';
+export type Lang = 'bg' | 'en' | 'de';
 
 const TR: Record<string, string> = {
   а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p',
@@ -25,26 +27,14 @@ export function translit(s: string): string {
   return out;
 }
 
-const NICK_EN: Record<string, string> = {
-  'Яката ръка': 'Strongarm',
-  Силния: 'the Strong', Мечката: 'the Bear', Каменния: 'the Stone', Мъдрия: 'the Wise', Хитрия: 'the Cunning', Умника: 'the Clever',
-  Знаещия: 'the Knowing', Любопитния: 'the Curious', Скитника: 'the Wanderer', Търсача: 'the Seeker', Будния: 'the Watchful',
-  Добрия: 'the Kind', Веселия: 'the Merry', Разказвача: 'the Storyteller', Миротвореца: 'the Peacemaker', Здравия: 'the Hale',
-  Дъба: 'the Oak', Неуморния: 'the Tireless', Тихия: 'the Quiet', Високия: 'the Tall', Рижавия: 'the Red', Бързия: 'the Swift',
-  Малкия: 'the Little', Черния: 'the Dark',
-  Силната: 'the Strong', Яката: 'the Sturdy', Мъдрата: 'the Wise', Хитрата: 'the Cunning', Знаещата: 'the Knowing', Билкарката: 'the Herbalist',
-  Любопитната: 'the Curious', Скитницата: 'the Wanderer', Търсачката: 'the Seeker', Будната: 'the Watchful', Добрата: 'the Kind',
-  Веселата: 'the Merry', Песнопойката: 'the Songstress', Здравата: 'the Hale', Неуморната: 'the Tireless', Тихата: 'the Quiet',
-  Високата: 'the Tall', Рижавата: 'the Red', Бързата: 'the Swift', Малката: 'the Little', Черната: 'the Dark',
-};
-
-/** "Иван Мъдрия" -> "Ivan the Wise", "Мария Петрова" -> "Maria Petrova" */
+/** "Иван Мъдрия" -> "John the Wise", "Мария Петрова" -> "Mary Peterson" */
 export function personEn(name: string): string {
-  if (!name) return name;
-  const multi = NICK_EN['Яката ръка'];
-  let rest = name.replace('Яката ръка', '\u0001');
-  rest = rest.split(' ').map((w) => (w === '\u0001' ? multi : NICK_EN[w] ?? translit(w))).join(' ');
-  return rest;
+  return personName(name, 'en', translit);
+}
+
+/** "Бялово" -> "Whiteford" */
+export function villageEn(name: string): string {
+  return villageName(name, 'en') ?? translit(name);
 }
 
 // totems, adjectives and places of band names, by their dictionary form and with the article
@@ -96,7 +86,7 @@ export function bandEn(name: string): string {
 /** how a band is named inside an English sentence: "the Clan of the Wolf", "the village of Belovo" */
 export function bandLabelEn(name: string, settlement: string | null | undefined, subject = false): string {
   const the = subject ? 'The' : 'the';
-  return settlement ? `${the} village of ${translit(settlement)}` : bandThe(name, subject);
+  return settlement ? `${the} village of ${villageEn(settlement)}` : bandThe(name, subject);
 }
 
 /** "the Wolf Tooth", "the Silent" (never "the The Silent") */
@@ -112,8 +102,8 @@ export function bandTextEn(s: string): string {
   if (/^(Родът|рода) на /.test(s)) return (s[0] === 'Р' ? 'The ' : 'the ') + bandEn(s);
   if (clanBase(s)) return bandThe(s);
   const v = /^(Селото|селото) (.+)$/.exec(s);
-  if (v) return `${v[1][0] === 'С' ? 'The' : 'the'} village of ${translit(v[2])}`;
-  return translit(s);
+  if (v) return `${v[1][0] === 'С' ? 'The' : 'the'} village of ${villageEn(v[2])}`;
+  return villageEn(s);
 }
 
 export const TECH_EN: Record<string, { name: string; text: string; kids: string }> = {
@@ -146,7 +136,7 @@ export const TECH_EN: Record<string, { name: string; text: string; kids: string 
   calendar: { name: 'Calendar', text: '{name} of {band} counted the days from one full moon to the next and wrote down when to sow. The harvest is no longer late.', kids: '{name} found out exactly when to sow the seeds by watching the moon and the stars.' },
   horse: { name: 'Tamed Horse', text: '{name} of {band} tamed a wild horse and hitched it to the cart. The road to the neighbours became three times shorter.', kids: '{name} made friends with a horse and now they ride together!' },
 };
-const TECH_BG: Record<string, string> = {
+export const TECH_BG: Record<string, string> = {
   Огън: 'fire', 'Каменни сечива': 'stone_tools', 'Познание за билките': 'herb_lore', 'Погребални обреди': 'burial', Копие: 'spear',
   'Облекло от кожи': 'clothing', 'Скални рисунки': 'cave_art', Риболов: 'fishing', Шатри: 'shelter', 'Лък и стрели': 'bow',
   'Опитомено куче': 'dog', 'Мелене на зърно': 'grinding', Земеделие: 'agriculture', Керамика: 'pottery', Скотовъдство: 'herding',
@@ -222,7 +212,7 @@ export const TASK_NAMES_EN: Record<string, string> = {
   herd: 'herding the animals', build: 'building', child: 'playing', elder: 'telling stories', travel: 'travelling', lead: 'leading the clan',
   scout: 'looking for a new camp', chop: 'chopping wood', sleep: 'sleeping', guard: 'guarding the village', bodyguard: 'guarding the chief',
 };
-const TASK_BG: Record<string, string> = {
+export const TASK_BG: Record<string, string> = {
   почива: 'rest', 'събира плодове и корени': 'gather', ловува: 'hunt', 'лови риба': 'fish', 'прави сечива': 'craft', 'обработва нивата': 'farm',
   'пасе животните': 'herd', строи: 'build', играе: 'child', 'разказва истории': 'elder', пътува: 'travel', 'води рода': 'lead',
   'търси ново място за лагера': 'scout', 'сече дърва': 'chop', спи: 'sleep', 'пази селото': 'guard', 'пази водача': 'bodyguard',

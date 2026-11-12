@@ -8,7 +8,11 @@ import { FEMALE, MALE, bandColor, bandName, fixBandName, familyFrom, nickname, p
 import { ERAS, TECHS, TECH_BY_ID, Tech, eraOf } from './tech';
 import { BIG, startStage, treeKinds } from '../../shared/trees';
 import { findRoad } from './roads';
-import { BEAST_EN, ERAS_EN, FEATURE_EN, SECRET_HEROES_EN, SECRET_KINDS_EN, TECH_EN, bandEn, bandLabelEn, bandThe, causeEn, chiefEn, deedEn, personEn, translit } from '../../shared/i18n';
+import { BEAST_EN, ERAS_EN, FEATURE_EN, SECRET_HEROES_EN, SECRET_KINDS_EN, TECH_EN, bandEn, bandLabelEn, bandThe, villageEn, causeEn, chiefEn, deedEn, personEn, translit } from '../../shared/i18n';
+import {
+  BEAST_DE, ERAS_DE, ERAS_DE_ART, ERA_WHY_DE, FEATURE_DE, SECRET_HEROES_DE, SECRET_KINDS_DE, TECH_DE, bandLabelDe, bandWithDe, causeDe, chiefDe,
+  fillTechDe, numDe, personDe, techDe, villageDe,
+} from '../../shared/i18n-de';
 
 export const START_YEAR = -12000;
 /** what a new age brings, written in the chronicle when the first band reaches it: [bg, en] */
@@ -439,7 +443,9 @@ export class Simulation {
       `Летописът започва. ${this.s.people.length} души в три рода бродят из ${'земите край голямата река'}. Не знаят огъня, нямат имена на местата. Имат само един друг.`,
       'Началото! Няколко семейства живеят сред дивата природа. Нямат огън, нито къщи. Да видим докъде ще стигнат.', undefined, undefined, [],
       [`The chronicle begins. ${this.s.people.length} people in three clans roam the lands by the great river. They do not know fire and have no names for places. They have only each other.`,
-        'The beginning! A few families live in the wild. They have no fire and no houses. Let us see how far they get.']);
+        'The beginning! A few families live in the wild. They have no fire and no houses. Let us see how far they get.'],
+      [`Die Chronik beginnt. ${this.s.people.length} Menschen in drei Clans ziehen durch das Land am großen Fluss. Sie kennen das Feuer nicht und haben keine Namen für die Orte. Sie haben nur einander.`,
+        'Der Anfang! Ein paar Familien leben in der Wildnis. Sie haben kein Feuer und keine Häuser. Mal sehen, wie weit sie kommen.']);
   }
 
   /** dry land a camp can stand on: not sea, lake or a river big enough to be drawn as water */
@@ -568,6 +574,18 @@ export class Simulation {
     return bandLabelEn(b.name, b.settlementName, subject);
   }
 
+  /** German: the person (always in the nominative) and the band in a case */
+  nameDe(p: Person): string {
+    return personDe(this.nameOf(p));
+  }
+  bDe(b: Band, c: 'nom' | 'akk' | 'dat' | 'gen', capital = false): string {
+    return bandLabelDe(b.name, b.settlementName, c, capital);
+  }
+  /** "aus dem Clan X", "im Dorf X", "vom Clan X", "beim Clan X" */
+  bWith(prep: 'aus' | 'in' | 'von' | 'bei', b: Band, capital = false): string {
+    return bandWithDe(prep, b.name, b.settlementName, capital);
+  }
+
   techName(id: string, en = false): string {
     return en ? TECH_EN[id]?.name ?? id : TECH_BY_ID.get(id)?.name ?? id;
   }
@@ -592,7 +610,7 @@ export class Simulation {
   }
 
   private emit(kind: string, importance: number, text: string, kids?: string, personId?: number, bandId?: number, extra: ChronicleRef[] = [],
-    en?: [string, string?]) {
+    en?: [string, string?], de?: [string, string?]) {
     // every name in the text that has more to show becomes a link
     const cand: ChronicleRef[] = [...extra];
     const p = personId ? this.byId.get(personId) : undefined;
@@ -611,6 +629,7 @@ export class Simulation {
       kind, importance, text, kids, personId, bandId,
       refs: refs.length ? refs : undefined,
       en: en ? { text: en[0], kids: en[1] } : undefined,
+      de: de ? { text: de[0], kids: de[1] } : undefined,
     });
   }
 
@@ -936,17 +955,21 @@ export class Simulation {
       const nameE = this.nameEn(p);
       const fillEn = (s: string) => s.replace('{name}', nameE).replace('{band}', this.bandEnLabel(b)).replace('{Band}', this.bandEnLabel(b, true));
       const te = TECH_EN[tech.id];
+      const td = TECH_DE[tech.id];
+      const fillDe = (s: string) => fillTechDe(s, this.nameDe(p), b.name, b.settlementName);
       if (first) {
         this.s.discovered.push(tech.id);
         if (!(this.s.firsts ??= []).some((f) => f.tech === tech.id)) {
           this.s.firsts.push({ tech: tech.id, pid: p.id, name, band: this.bandLabel(b, true), year: Math.floor(this.year) });
         }
         p.deeds.push(`Откри „${tech.name}“ (${formatYear(this.year)})`);
-        this.emit('discovery', 3, fill(tech.text), fill(tech.kids), p.id, b.id, [], te ? [fillEn(te.text), fillEn(te.kids)] : undefined);
+        this.emit('discovery', 3, fill(tech.text), fill(tech.kids), p.id, b.id, [], te ? [fillEn(te.text), fillEn(te.kids)] : undefined,
+          td ? [fillDe(td.text), fillDe(td.kids)] : undefined);
       } else {
         p.deeds.push(`Преоткри „${tech.name}“ за своя род`);
         this.emit('rediscovery', 1, `${name} от ${this.bandLabel(b)} откри наново „${tech.name}“, без да знае, че другаде вече го умеят.`, undefined, p.id, b.id, [],
-          [`${nameE} of ${this.bandEnLabel(b)} discovered “${this.techName(tech.id, true)}” anew, not knowing that others already have it.`]);
+          [`${nameE} of ${this.bandEnLabel(b)} discovered “${this.techName(tech.id, true)}” anew, not knowing that others already have it.`],
+          [`${this.nameDe(p)} ${this.bWith('aus', b)} entdeckte „${td?.name ?? tech.name}“ neu, ohne zu wissen, dass andere es längst beherrschen.`]);
       }
       if (tech.id === 'agriculture') this.settle(b, m);
       return; // one discovery per band per month
@@ -973,8 +996,10 @@ export class Simulation {
     this.emit('settle', 3,
       `${b.name} спря да скита и основа селото ${b.settlementName}. ${chief ? `Старейшината ${this.nameOf(elder)}` : `Най-възрастният в рода, ${this.nameOf(elder)},`} избра мястото край водата.`,
       `${b.name} построи село и го нарече ${b.settlementName}!`, elder.id, b.id, [],
-      [`${bandThe(b.name, true)} stopped wandering and founded the village of ${translit(b.settlementName)}. ${chief ? `The elder ${this.nameEn(elder)}` : `The oldest of the clan, ${this.nameEn(elder)},`} chose the place by the water.`,
-        `${bandThe(b.name, true)} built a village and named it ${translit(b.settlementName)}!`]);
+      [`${bandThe(b.name, true)} stopped wandering and founded the village of ${villageEn(b.settlementName)}. ${chief ? `The elder ${this.nameEn(elder)}` : `The oldest of the clan, ${this.nameEn(elder)},`} chose the place by the water.`,
+        `${bandThe(b.name, true)} built a village and named it ${villageEn(b.settlementName)}!`],
+      [`${bandLabelDe(b.name, null, 'nom', true)} zog nicht mehr umher und gründete das Dorf ${villageDe(b.settlementName)}. ${chief ? `${elder.sex ? 'Die Älteste' : 'Der Älteste'} ${this.nameDe(elder)}` : `${elder.sex ? 'Die Älteste' : 'Der Älteste'} im Clan, ${this.nameDe(elder)},`} wählte den Platz am Wasser.`,
+        `${bandLabelDe(b.name, null, 'nom', true)} hat ein Dorf gebaut und es ${villageDe(b.settlementName)} genannt!`]);
   }
 
   private lifeAndDeath(members: Map<number, Person[]>) {
@@ -1018,7 +1043,9 @@ export class Simulation {
           this.emit('elder', 1, `${this.nameOf(p)} от ${this.bandLabel(b)} навърши 70 години, рядкост в тези сурови времена. Сега гледа децата край огъня и им разказва истории.`,
             `${this.nameOf(p)} стана на 70! Сега разказва приказки на децата край огъня.`, p.id, b.id, [],
             [`${this.nameEn(p)} of ${this.bandEnLabel(b)} turned 70, a rare thing in these harsh times. Now ${p.sex ? 'she' : 'he'} watches the children by the fire and tells them stories.`,
-              `${this.nameEn(p)} turned 70! Now ${p.sex ? 'she' : 'he'} tells stories to the children by the fire.`]);
+              `${this.nameEn(p)} turned 70! Now ${p.sex ? 'she' : 'he'} tells stories to the children by the fire.`],
+            [`${this.nameDe(p)} ${this.bWith('aus', b)} wurde 70 Jahre alt, eine Seltenheit in diesen harten Zeiten. Jetzt hütet ${p.sex ? 'sie' : 'er'} die Kinder am Feuer und erzählt ihnen Geschichten.`,
+              `${this.nameDe(p)} ist 70 geworden! Jetzt erzählt ${p.sex ? 'sie' : 'er'} den Kindern am Feuer Geschichten.`]);
         }
         // births
         if (p.sex === 1 && p.partnerId && a >= 16 && a <= 42) {
@@ -1046,7 +1073,8 @@ export class Simulation {
         child.x = mother.x; child.y = mother.y;
         if (twins && k === 1) {
           this.emit('twins', 1, `В ${this.bandLabel(b)} ${this.nameOf(mother)} роди близнаци.`, `В ${this.bandLabel(b)} се родиха близнаци!`, child.id, b.id, [this.pRef(mother)],
-            [`In ${this.bandEnLabel(b)}, ${this.nameEn(mother)} gave birth to twins.`, `Twins were born in ${this.bandEnLabel(b)}!`]);
+            [`In ${this.bandEnLabel(b)}, ${this.nameEn(mother)} gave birth to twins.`, `Twins were born in ${this.bandEnLabel(b)}!`],
+            [`${this.bWith('in', b, true)} brachte ${this.nameDe(mother)} Zwillinge zur Welt.`, `${this.bWith('in', b, true)} wurden Zwillinge geboren!`]);
         }
       }
     }
@@ -1075,18 +1103,23 @@ export class Simulation {
     });
     const me = [this.pRef(p)];
     const nE = this.nameEn(p), he = p.sex ? 'she' : 'he', ofB = b ? this.bandEnLabel(b) : 'the clan';
+    const nD = this.nameDe(p), er = p.sex ? 'sie' : 'er', ausB = b ? this.bWith('aus', b) : 'aus dem Clan';
     const found = p.deeds.find((d) => d.startsWith('Откри'));
     if (found) {
       this.emit('death', 2, `${this.nameOf(p)} ${cause} на ${age} години. Родът ще помни, че тя/той ${found.toLowerCase()}.`.replace('тя/той', p.sex ? 'тя' : 'той'),
         `${this.nameOf(p)} си отиде на ${age} години. Всички помнят какво е открил${p.sex ? 'а' : ''}.`, p.id, p.bandId, me,
         [`${nE} ${causeEn(cause)} at ${age}. The clan will remember that ${he} ${deedEn(found).replace(/^D/, 'd')}.`,
-          `${nE} passed away at ${age}. Everyone remembers what ${he} discovered.`]);
+          `${nE} passed away at ${age}. Everyone remembers what ${he} discovered.`],
+        [`${nD} ${causeDe(cause, age)}. Der Clan wird nicht vergessen, dass ${er} „${techDe(/„(.+)“/.exec(found)?.[1] ?? '')}“ entdeckt hat.`,
+          `${nD} ist mit ${age} Jahren gestorben. Alle erinnern sich daran, was ${er} entdeckt hat.`]);
     } else if (age >= 70) {
       this.emit('death', 1, `${this.nameOf(p)} от ${b ? this.bandLabel(b) : 'рода'} ${cause} на почтените ${age} години.`, undefined, p.id, p.bandId, me,
-        [`${nE} of ${ofB} ${causeEn(cause)} at the venerable age of ${age}.`]);
+        [`${nE} of ${ofB} ${causeEn(cause)} at the venerable age of ${age}.`],
+        [`${nD} ${ausB} ${causeDe(cause, age)}. Ein gesegnetes Alter.`]);
     } else if (cause === 'загина на лов') {
       this.emit('death', 1, `${this.nameOf(p)} от ${b ? this.bandLabel(b) : 'рода'} не се върна от лова.`, `${this.nameOf(p)} не се върна от лова. Родът е тъжен.`, p.id, p.bandId, me,
-        [`${nE} of ${ofB} did not come back from the hunt.`, `${nE} did not come back from the hunt. The clan is sad.`]);
+        [`${nE} of ${ofB} did not come back from the hunt.`, `${nE} did not come back from the hunt. The clan is sad.`],
+        [`${nD} ${ausB} kehrte nicht von der Jagd zurück.`, `${nD} ist nicht von der Jagd zurückgekommen. Alle sind traurig.`]);
     }
   }
 
@@ -1131,7 +1164,8 @@ export class Simulation {
           if (this.rng.chance(0.15)) {
             this.emit('marriage', 1, `${this.nameOf(man)} и ${this.nameOf(woman)} събраха ${this.bandLabel(b)} и ${this.bandLabel(other)} в едно семейство.`, undefined, man.id, b.id,
               [this.pRef(woman), ...this.bRefs(other)],
-              [`${this.nameEn(man)} and ${this.nameEn(woman)} joined ${this.bandEnLabel(b)} and ${this.bandEnLabel(other)} into one family.`]);
+              [`${this.nameEn(man)} and ${this.nameEn(woman)} joined ${this.bandEnLabel(b)} and ${this.bandEnLabel(other)} into one family.`],
+              [`${this.nameDe(man)} und ${this.nameDe(woman)} verbanden ${this.bDe(b, 'akk')} und ${this.bDe(other, 'akk')} zu einer Familie.`]);
           }
         }
       }
@@ -1154,7 +1188,8 @@ export class Simulation {
           for (const p of m) { p.bandId = near.id; members.get(near.id)!.push(p); }
           for (const tech of b.techs) this.addTech(near, tech);
           this.emit('merge', 1, `Последните ${m.length} от ${this.bandLabel(b)} се присъединиха към ${this.bandLabel(near)}.`, undefined, undefined, near.id, this.bRefs(b),
-            [`The last ${m.length} of ${this.bandEnLabel(b)} joined ${this.bandEnLabel(near)}.`]);
+            [`The last ${m.length} of ${this.bandEnLabel(b)} joined ${this.bandEnLabel(near)}.`],
+            [`Die letzten ${m.length} ${this.bWith('aus', b)} schlossen sich ${this.bDe(near, 'dat')} an.`]);
           members.set(b.id, []);
           this.removeBand(b, near);
           continue;
@@ -1194,7 +1229,8 @@ export class Simulation {
     // a name is never given twice in one world, even after the band is gone
     if (!merged) {
       this.emit('extinct', 2, `${this.bandLabel(b, true)} угасна. Няма кой да запали огъня на тяхното място.`, `${this.bandLabel(b, true)} изчезна. Няма останали хора от този род.`, undefined, b.id, gone,
-        [`${this.bandEnLabel(b, true)} has died out. No one is left to light a fire in their place.`, `${this.bandEnLabel(b, true)} is gone. No one from this clan is left.`]);
+        [`${this.bandEnLabel(b, true)} has died out. No one is left to light a fire in their place.`, `${this.bandEnLabel(b, true)} is gone. No one from this clan is left.`],
+        [`${this.bDe(b, 'nom', true)} ist erloschen. Niemand ist mehr da, der dort ein Feuer entzündet.`, `${this.bDe(b, 'nom', true)} ist verschwunden. Von diesem Clan ist niemand mehr übrig.`]);
     }
     // knowledge lost forever?
     for (const tech of b.techs) {
@@ -1202,7 +1238,8 @@ export class Simulation {
         const name = TECH_BY_ID.get(tech)?.name ?? tech;
         this.s.discovered = this.s.discovered.filter((x) => x !== tech);
         this.emit('lost', 2, `Заедно с ${this.bandLabel(b)} изчезна и знанието за „${name}“. Някой ще трябва да го открие наново.`, undefined, undefined, b.id, gone,
-          [`With ${this.bandEnLabel(b)}, the knowledge of “${this.techName(tech, true)}” vanished too. Someone will have to discover it anew.`]);
+          [`With ${this.bandEnLabel(b)}, the knowledge of “${this.techName(tech, true)}” vanished too. Someone will have to discover it anew.`],
+          [`Mit ${this.bDe(b, 'dat')} ging auch das Wissen um „${TECH_DE[tech]?.name ?? name}“ verloren. Jemand wird es neu entdecken müssen.`]);
       }
     }
   }
@@ -1248,7 +1285,8 @@ export class Simulation {
     if (had && b.settled) { // nomad bands change elders too often to write each one down
       this.emit('chief', 1, `${this.nameOf(best)} стана ${this.chiefTitle().toLowerCase()} на ${this.bandLabel(b)}.`,
         `${this.nameOf(best)} е новият ${this.chiefTitle().toLowerCase()} на ${this.bandLabel(b)}.`, best.id, b.id, [],
-        [`${this.nameEn(best)} became ${chiefEn(this.chiefTitle()).toLowerCase()} of ${this.bandEnLabel(b)}.`]);
+        [`${this.nameEn(best)} became ${chiefEn(this.chiefTitle()).toLowerCase()} of ${this.bandEnLabel(b)}.`],
+        [`${this.nameDe(best)} ist jetzt ${chiefDe(this.chiefTitle(), best.sex === 1)} ${this.bDe(b, 'gen')}.`]);
     }
     return best;
   }
@@ -1401,7 +1439,8 @@ export class Simulation {
           b.met.push(a.id);
           if (this.rng.chance(0.4)) {
             this.emit('meet', 1, `${this.bandLabel(a, true)} и ${this.bandLabel(b)} се срещнаха край ${this.featureNear(a)}. Размениха си кремък и истории.`, undefined, undefined, a.id, this.bRefs(b),
-              [`${this.bandEnLabel(a, true)} and ${this.bandEnLabel(b)} met by ${FEATURE_EN[this.featureNear(a)] ?? 'the river'}. They traded flint and stories.`]);
+              [`${this.bandEnLabel(a, true)} and ${this.bandEnLabel(b)} met by ${FEATURE_EN[this.featureNear(a)] ?? 'the river'}. They traded flint and stories.`],
+              [`${this.bDe(a, 'nom', true)} und ${this.bDe(b, 'nom')} trafen sich ${FEATURE_DE[this.featureNear(a)] ?? 'am Fluss'}. Sie tauschten Feuerstein und Geschichten.`]);
           }
         }
         // knowledge travels between neighbours
@@ -1411,13 +1450,15 @@ export class Simulation {
         for (const tech of a.techs) if (!sb.has(tech) && this.canUse(b, tech) && this.rng.chance(share)) {
           this.addTech(b, tech);
           this.emit('learn', 1, `${this.bandLabel(b, true)} научи „${TECH_BY_ID.get(tech)!.name}“ от ${this.bandLabel(a)}.`, undefined, undefined, b.id, this.bRefs(a),
-            [`${this.bandEnLabel(b, true)} learned “${this.techName(tech, true)}” from ${this.bandEnLabel(a)}.`]);
+            [`${this.bandEnLabel(b, true)} learned “${this.techName(tech, true)}” from ${this.bandEnLabel(a)}.`],
+            [`${this.bDe(b, 'nom', true)} lernte „${TECH_DE[tech]?.name ?? tech}“ ${this.bWith('von', a)}.`]);
           if (tech === 'agriculture') this.settle(b, this.s.people.filter((p) => p.bandId === b.id));
         }
         for (const tech of b.techs) if (!sa.has(tech) && this.canUse(a, tech) && this.rng.chance(share)) {
           this.addTech(a, tech);
           this.emit('learn', 1, `${this.bandLabel(a, true)} научи „${TECH_BY_ID.get(tech)!.name}“ от ${this.bandLabel(b)}.`, undefined, undefined, a.id, this.bRefs(b),
-            [`${this.bandEnLabel(a, true)} learned “${this.techName(tech, true)}” from ${this.bandEnLabel(b)}.`]);
+            [`${this.bandEnLabel(a, true)} learned “${this.techName(tech, true)}” from ${this.bandEnLabel(b)}.`],
+            [`${this.bDe(a, 'nom', true)} lernte „${TECH_DE[tech]?.name ?? tech}“ ${this.bWith('von', b)}.`]);
           if (tech === 'agriculture') this.settle(a, this.s.people.filter((p) => p.bandId === a.id));
         }
       }
@@ -1472,7 +1513,9 @@ export class Simulation {
         this.emit('hunt', 2, `${this.nameOf(h)} поведе ловците на ${this.bandLabel(b)} срещу ${beast}. Месото стигна за цял сезон.`,
           `${this.nameOf(h)} и ловците хванаха ${beast}! Цяло угощение!`, h.id, b.id, [],
           [`${this.nameEn(h)} led the hunters of ${this.bandEnLabel(b)} against ${BEAST_EN[beast] ?? beast}. The meat lasted a whole season.`,
-            `${this.nameEn(h)} and the hunters caught ${BEAST_EN[beast] ?? beast}! A real feast!`]);
+            `${this.nameEn(h)} and the hunters caught ${BEAST_EN[beast] ?? beast}! A real feast!`],
+          [`${this.nameDe(h)} führte die Jäger ${this.bDe(b, 'gen')} gegen ${BEAST_DE[beast] ?? beast}. Das Fleisch reichte für eine ganze Jahreszeit.`,
+            `${this.nameDe(h)} und die Jäger haben ${BEAST_DE[beast] ?? beast} erlegt! Ein richtiges Festmahl!`]);
       }
     }
     // a hard winter
@@ -1480,7 +1523,8 @@ export class Simulation {
       const b = this.rng.pick(this.s.bands);
       b.food *= 0.4;
       this.emit('winter', 1, `Люта зима сполетя ${this.bandLabel(b)}. Запасите се стопиха.`, `Много студена зима при ${this.bandLabel(b)}. Сняг до колене!`, undefined, b.id, [],
-        [`A bitter winter struck ${this.bandEnLabel(b)}. The stores melted away.`, `A very cold winter for ${this.bandEnLabel(b)}. Snow up to the knees!`]);
+        [`A bitter winter struck ${this.bandEnLabel(b)}. The stores melted away.`, `A very cold winter for ${this.bandEnLabel(b)}. Snow up to the knees!`],
+        [`Ein bitterkalter Winter traf ${this.bDe(b, 'akk')}. Die Vorräte schmolzen dahin.`, `Ein sehr kalter Winter ${this.bWith('bei', b)}. Schnee bis zu den Knien!`]);
     }
     // drought in summer
     if (this.month === 6 && this.rng.chance(0.03)) {
@@ -1488,7 +1532,8 @@ export class Simulation {
       const cx = Math.round(b.cx), cy = Math.round(b.cy);
       for (let y = cy - 12; y <= cy + 12; y++) for (let x = cx - 12; x <= cx + 12; x++) if (inBounds(x, y)) this.t.plants[idx(x, y)] *= 0.4;
       this.emit('drought', 1, `Суша изгори тревите около ${this.bandLabel(b)}. Плодовете тази година са малко.`, undefined, undefined, b.id, [],
-        [`Drought burned the grass around ${this.bandEnLabel(b)}. There is little fruit this year.`]);
+        [`Drought burned the grass around ${this.bandEnLabel(b)}. There is little fruit this year.`],
+        [`Eine Dürre verbrannte das Gras rund um ${this.bDe(b, 'akk')}. In diesem Jahr gibt es wenig Früchte.`]);
     }
   }
 
@@ -1499,7 +1544,8 @@ export class Simulation {
       this.s.era = era;
       const why = ERA_WHY[era] ?? ['', ''];
       this.emit('era', 3, `Започва ${ERAS[era].name}.${why[0] ? ` ${why[0]}` : ''}`, `Нова епоха: ${ERAS[era].name}!`, undefined, undefined, [],
-        [`The ${ERAS_EN[era]} begins.${why[1] ? ` ${why[1]}` : ''}`, `A new age: the ${ERAS_EN[era]}!`]);
+        [`The ${ERAS_EN[era]} begins.${why[1] ? ` ${why[1]}` : ''}`, `A new age: the ${ERAS_EN[era]}!`],
+        [`${ERAS_DE_ART[era] === 'das' ? 'Das' : 'Die'} ${ERAS_DE[era]} beginnt.${ERA_WHY_DE[era] ? ` ${ERA_WHY_DE[era]}` : ''}`, `Ein neues Zeitalter: ${ERAS_DE_ART[era]} ${ERAS_DE[era]}!`]);
     }
   }
 
@@ -1510,7 +1556,8 @@ export class Simulation {
       if (pop >= mk && this.s.milestone < mk) {
         this.s.milestone = mk;
         if (mk > 50) this.emit('milestone', 2, `Хората по света вече са ${mk.toLocaleString('bg-BG')}.`, `Вече има ${mk} души на света!`, undefined, undefined, [],
-          [`There are now ${mk.toLocaleString('en-US')} people in the world.`, `There are ${mk} people in the world now!`]);
+          [`There are now ${mk.toLocaleString('en-US')} people in the world.`, `There are ${mk} people in the world now!`],
+          [`Auf der Welt leben jetzt ${numDe(mk)} Menschen.`, `Jetzt gibt es schon ${numDe(mk)} Menschen auf der Welt!`]);
       }
     }
   }
@@ -1642,7 +1689,9 @@ export class Simulation {
     this.emit('secret', 2, `Тайна №${k + 1}, ${hero}: някой, който гледа отгоре, забеляза ${kind.name}. Намерени тайни: ${list.length} от ${SECRET_COUNT}.`,
       `Ура! Намерена е тайна №${k + 1}, ${hero}: ${kind.name}! Тайни: ${list.length} от ${SECRET_COUNT}.`, undefined, undefined, [],
       [`Secret #${k + 1}, ${SECRET_HEROES_EN[k]}: someone watching from above spotted ${SECRET_KINDS_EN[kind.id]?.name ?? kind.name}. Secrets found: ${list.length} of ${SECRET_COUNT}.`,
-        `Hooray! Secret #${k + 1} is found, ${SECRET_HEROES_EN[k]}: ${SECRET_KINDS_EN[kind.id]?.name ?? kind.name}! Secrets: ${list.length} of ${SECRET_COUNT}.`]);
+        `Hooray! Secret #${k + 1} is found, ${SECRET_HEROES_EN[k]}: ${SECRET_KINDS_EN[kind.id]?.name ?? kind.name}! Secrets: ${list.length} of ${SECRET_COUNT}.`],
+      [`Geheimnis Nr. ${k + 1}, ${SECRET_HEROES_DE[k]}: Jemand, der von oben zuschaut, hat ${SECRET_KINDS_DE[kind.id]?.akk ?? kind.name} entdeckt. Gefundene Geheimnisse: ${list.length} von ${SECRET_COUNT}.`,
+        `Hurra! Geheimnis Nr. ${k + 1} ist gefunden, ${SECRET_HEROES_DE[k]}: ${SECRET_KINDS_DE[kind.id]?.name ?? kind.name}! Geheimnisse: ${list.length} von ${SECRET_COUNT}.`]);
     return { first: true, found: list.length, at };
   }
 

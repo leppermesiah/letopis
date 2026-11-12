@@ -125,6 +125,8 @@ function restartWorld() {
     kids: 'Хората на този свят изчезнаха. Но скоро ще започне нов свят!',
     en: { text: 'The last person of this world has passed away. The chronicle closes. A new world will begin soon.',
       kids: 'The people of this world are gone. But a new world will begin soon!' },
+    de: { text: 'Der letzte Mensch dieser Welt ist gestorben. Die Chronik schließt sich. Bald beginnt eine neue Welt.',
+      kids: 'Die Menschen dieser Welt sind verschwunden. Aber bald beginnt eine neue Welt!' },
   }]);
   store.endWorld(old, summary);
   save();
