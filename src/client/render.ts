@@ -187,6 +187,9 @@ export class WorldRenderer {
   capitals = new Set<number>();
   fogLayer = new Container();
   campLayer = new Container();
+  /** kingdoms: a soft patch of the capital's colour under every town of the realm */
+  realmLayer = new Container();
+  private realmKey = '';
   peopleLayer = new Container();
   glowLayer = new Container();
   labelLayer = new Container();
@@ -240,7 +243,7 @@ export class WorldRenderer {
   constructor(app: Application, atlas: Atlas) {
     this.app = app;
     this.atlas = atlas;
-    this.world.addChild(this.farLayer, this.waterLayer, this.terrainLayer, this.snowLayer, this.objLayer, this.campLayer, this.peopleLayer, this.fogLayer, this.glowLayer, this.labelLayer);
+    this.world.addChild(this.farLayer, this.waterLayer, this.terrainLayer, this.snowLayer, this.realmLayer, this.objLayer, this.campLayer, this.peopleLayer, this.fogLayer, this.glowLayer, this.labelLayer);
     this.nightCanvas.width = 8;
     this.nightCanvas.height = 8;
     this.nightSprite = new Sprite(Texture.from(this.nightCanvas));
@@ -876,6 +879,34 @@ export class WorldRenderer {
     for (const [id, c] of this.camps) if (!seen.has(id)) { c.destroy(); this.camps.delete(id); }
     if (this.info) this.updateCleared();
     this.fauna.updateBands(bands);
+    this.updateRealms(bands);
+  }
+
+  /** every kingdom as one shape: a patch around each town and a road of colour to the capital, drawn once and faded as a whole */
+  private updateRealms(bands: BandView[]) {
+    const realms = new Map<number, BandView[]>();
+    for (const b of bands) if (b.kingdom) (realms.get(b.kingdom.id) ?? realms.set(b.kingdom.id, []).get(b.kingdom.id)!).push(b);
+    const key = [...realms].map(([id, m]) => `${id}:${m[0].kingdom!.color}:${m.map((b) => `${b.id}@${Math.round(b.x)},${Math.round(b.y)}`).join('|')}`).join(';');
+    if (key === this.realmKey) return;
+    this.realmKey = key;
+    for (const c of this.realmLayer.removeChildren()) c.destroy({ children: true });
+    const R = 7; // tiles around each town
+    const rx = R * TW * 0.75, ry = rx / 2;
+    for (const members of realms.values()) {
+      const color = members[0].kingdom!.color;
+      const cap = members.find((b) => b.kingdom!.capital) ?? members[0];
+      const g = new Graphics();
+      const cp = this.tileTop(cap.x, cap.y);
+      for (const b of members) {
+        const p = this.tileTop(b.x, b.y);
+        g.ellipse(p.x, p.y, rx, ry).fill(color);
+        if (b !== cap) g.moveTo(p.x, p.y).lineTo(cp.x, cp.y).stroke({ color, width: TW * 0.9 });
+      }
+      const box = new Container();
+      box.addChild(g);
+      box.alpha = 0.38;
+      this.realmLayer.addChild(box);
+    }
   }
 
   /** red outline around the chosen person (null clears it) */
@@ -1070,7 +1101,7 @@ export class WorldRenderer {
     this.world.position.set(0, 0);
     this.world.scale.set(1);
     for (const c of this.chunkViews) for (const part of c.parts) part.visible = true;
-    const hide = [this.farLayer, this.campLayer, this.peopleLayer, this.glowLayer, this.labelLayer];
+    const hide = [this.farLayer, this.realmLayer, this.campLayer, this.peopleLayer, this.glowLayer, this.labelLayer];
     const was = hide.map((l) => l.visible);
     for (const l of hide) l.visible = false;
     for (const l of [this.waterLayer, this.terrainLayer, this.snowLayer, this.objLayer, this.fogLayer]) l.visible = true;
@@ -1660,7 +1691,7 @@ export class CampSprite {
     this.c.position.set(p.x, p.y);
     this.glow.position.set(p.x, p.y - 4);
     this.glow.visible = b.hasFire || b.dwelling === 'house';
-    this.label.text = b.settlementName ? `${VILLAGE(b.settlementName)} (${b.size})` : `${B(b.name).replace(/^(Родът на|Clan of the) /, '')} (${b.size})`;
+    this.label.text = b.settlementName ? `${b.kingdom?.capital ? '👑 ' : ''}${VILLAGE(b.settlementName)} (${b.size})` : `${B(b.name).replace(/^(Родът на|Clan of the) /, '')} (${b.size})`;
     this.label.style.fontSize = kids ? 16 : 12;
     this.bannerCloth.tint = b.color;
     this.tag.position.set(p.x, p.y - 30);

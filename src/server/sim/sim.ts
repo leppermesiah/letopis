@@ -321,7 +321,7 @@ export class Simulation {
 
   kingdomView(b: Band): BandView['kingdom'] {
     const k = this.kingdomOf(b);
-    return k ? { id: k.id, place: k.place, capital: k.capital === b.id, members: k.members.length } : null;
+    return k ? { id: k.id, place: k.place, capital: k.capital === b.id, members: k.members.length, color: this.bandById.get(k.capital)?.color ?? b.color, founded: k.founded } : null;
   }
 
   /** 'царство Бялово' in a sentence, 'Царство Бялово' at its start */
@@ -1654,6 +1654,70 @@ export class Simulation {
       this.emit('drought', 1, `Суша изгори тревите около ${this.bandLabel(b)}. Плодовете тази година са малко.`, undefined, undefined, b.id, [],
         [`Drought burned the grass around ${this.bandEnLabel(b)}. There is little fruit this year.`],
         [`Eine Dürre verbrannte das Gras rund um ${this.bDe(b, 'akk')}. In diesem Jahr gibt es wenig Früchte.`]);
+    }
+    this.seasonEvents();
+  }
+
+  /** the year turning: an early spring, a spring flood, locusts, a rich harvest, a harvest feast */
+  private seasonEvents() {
+    const farmers = () => this.s.bands.filter((b) => b.settled && this.hasTech(b, 'agriculture'));
+    // early spring (March): the snow goes early and the first greens come
+    if (this.month === 2 && this.rng.chance(0.04)) {
+      const b = this.rng.pick(this.s.bands);
+      b.food *= 1.15;
+      this.emit('spring', 1, `Пролетта дойде рано при ${this.bandLabel(b)}. Снегът се стопи, а първите билки поникнаха седмици по-рано.`,
+        `При ${this.bandLabel(b)} пролетта дойде рано. Навсякъде цъфтят цветя!`, undefined, b.id, [],
+        [`Spring came early to ${this.bandEnLabel(b)}. The snow melted and the first herbs came up weeks ahead.`, `Spring came early to ${this.bandEnLabel(b)}. Flowers are blooming everywhere!`],
+        [`Der Frühling kam früh ${this.bWith(b.settled ? 'in' : 'bei', b)}. Der Schnee schmolz, und die ersten Kräuter sprossen Wochen früher.`, `${this.bWith(b.settled ? 'in' : 'bei', b, true)} kam der Frühling früh. Überall blühen Blumen!`]);
+    }
+    // spring flood (April): a village by the water loses part of its fields
+    if (this.month === 3 && this.rng.chance(0.03)) {
+      const wet = farmers().filter((b) => this.areaHas(b, 3, 'fish'));
+      if (wet.length) {
+        const b = this.rng.pick(wet);
+        b.food *= 0.7;
+        this.emit('flood', 1, `Пролетното пълноводие заля нивите на ${this.bandLabel(b)}. Хората спасиха зърното, но сеитбата трябва да започне отначало.`,
+          `Реката преля и заля нивите на ${this.bandLabel(b)}. Всички помагат да се засее наново.`, undefined, b.id, [],
+          [`The spring flood covered the fields of ${this.bandEnLabel(b)}. People saved the grain, but the sowing has to start over.`, `The river overflowed and covered the fields of ${this.bandEnLabel(b)}. Everyone helps to sow again.`],
+          [`Das Frühjahrshochwasser überschwemmte die Felder ${this.bDe(b, 'gen')}. Die Menschen retteten das Korn, aber die Aussaat muss von vorn beginnen.`,
+            `Der Fluss trat über die Ufer und überschwemmte die Felder ${this.bDe(b, 'gen')}. Alle helfen, neu zu säen.`]);
+      }
+    }
+    // locusts (July): rare, a cloud eats a village's fields
+    if (this.month === 6 && this.rng.chance(0.012)) {
+      const f = farmers();
+      if (f.length) {
+        const b = this.rng.pick(f);
+        b.food *= 0.6;
+        this.emit('locusts', 1, `Облак скакалци се спусна над нивите на ${this.bandLabel(b)}. За един ден от житото останаха само стъбла.`,
+          `Хиляди скакалци изядоха житото на ${this.bandLabel(b)}. Догодина ще е по-добре!`, undefined, b.id, [],
+          [`A cloud of locusts came down on the fields of ${this.bandEnLabel(b)}. In one day only stalks were left of the wheat.`, `Thousands of locusts ate the wheat of ${this.bandEnLabel(b)}. Next year will be better!`],
+          [`Eine Wolke Heuschrecken fiel über die Felder ${this.bDe(b, 'gen')} her. An einem einzigen Tag blieben vom Weizen nur die Halme.`,
+            `Tausende Heuschrecken haben den Weizen ${this.bDe(b, 'gen')} gefressen. Nächstes Jahr wird es besser!`]);
+      }
+    }
+    // a rich harvest (September)
+    if (this.month === 8 && this.rng.chance(0.06)) {
+      const f = farmers();
+      if (f.length) {
+        const b = this.rng.pick(f);
+        b.food *= 1.3;
+        this.emit('harvest', 1, `Богата реколта при ${this.bandLabel(b)}. Хамбарите са пълни догоре, а зърното ще стигне и за съседите.`,
+          `При ${this.bandLabel(b)} житото порасна високо. Хамбарите са пълни!`, undefined, b.id, [],
+          [`A rich harvest for ${this.bandEnLabel(b)}. The granaries are full to the top, with grain to spare for the neighbours.`, `The wheat grew tall at ${this.bandEnLabel(b)}. The granaries are full!`],
+          [`Eine reiche Ernte ${this.bWith('in', b)}. Die Speicher sind bis oben voll, und das Korn reicht auch für die Nachbarn.`, `${this.bWith('in', b, true)} wuchs der Weizen hoch. Die Speicher sind voll!`]);
+      }
+    }
+    // a harvest feast (October): a village that keeps a calendar celebrates the end of the harvest
+    if (this.month === 9 && this.rng.chance(0.04)) {
+      const f = farmers().filter((b) => this.hasTech(b, 'calendar'));
+      if (f.length) {
+        const b = this.rng.pick(f);
+        this.emit('feast', 1, `${this.bandLabel(b, true)} отпразнува края на жътвата с песни и хора край огъня до зори.`,
+          `${this.bandLabel(b, true)} празнува: песни, танци и пита с мед!`, undefined, b.id, [],
+          [`${this.bandEnLabel(b, true)} celebrated the end of the harvest with songs and dancing round the fire until dawn.`, `${this.bandEnLabel(b, true)} is having a feast: songs, dancing and honey bread!`],
+          [`${this.bDe(b, 'nom', true)} feierte das Ende der Ernte mit Liedern und Tänzen am Feuer bis zum Morgengrauen.`, `${this.bDe(b, 'nom', true)} feiert: Lieder, Tänze und Honigbrot!`]);
+      }
     }
   }
 

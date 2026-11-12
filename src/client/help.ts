@@ -18,6 +18,12 @@ const TAG_ORDER: Tag[] = ['breaking', 'new', 'old'];
 
 /** newest first; a new version gets its own entry here */
 export const CHANGELOG: Release[] = [
+  { v: '1.37', items: [
+    ['Нов раздел „Царства“: всяко царство с царя, столицата и селата му.', 'A new Kingdoms tab: every kingdom with its king, capital and villages.', 'Ein neuer Reiter „Königreiche“: jedes Königreich mit König, Hauptstadt und Dörfern.'],
+    ['На картата земята на всяко царство е оцветена в цвета на столицата, а столицата има корона до името.', 'On the map the land of every kingdom is tinted in the colour of its capital, and the capital has a crown by its name.', 'Auf der Karte ist das Land jedes Königreichs in der Farbe seiner Hauptstadt getönt, und die Hauptstadt hat eine Krone neben dem Namen.'],
+    ['Сезони в летописа: ранна пролет, пролетно пълноводие, скакалци, богата реколта и празник след жътвата.', 'Seasons in the chronicle: an early spring, a spring flood, locusts, a rich harvest and a harvest feast.', 'Jahreszeiten in der Chronik: ein früher Frühling, ein Frühjahrshochwasser, Heuschrecken, eine reiche Ernte und ein Erntefest.'],
+    ['Родовете с номер след името (например „Дълбок корен 15“) вече се превеждат на английски и немски.', 'Clans with a number after the name (like “Deep Root 15”) are now translated into English and German.', 'Clans mit einer Nummer nach dem Namen (etwa „Tiefe Wurzel 15“) werden jetzt ins Englische und Deutsche übersetzt.'],
+  ] },
   { v: '1.36', items: [
     ['В новостите важните бележки са най-отгоре, с цветен етикет: несъвместими промени, неща само за нови светове и как ги приема съществуващ свят.', 'In “What’s new”, the important notes come first, with a coloured label: breaking changes, things for new worlds only, and how an existing world takes a change.', 'In den Neuigkeiten stehen wichtige Hinweise oben, mit einem farbigen Etikett: inkompatible Änderungen, Dinge nur für neue Welten und wie eine bestehende Welt eine Änderung übernimmt.'],
   ] },

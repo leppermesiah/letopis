@@ -230,7 +230,7 @@ function onTick(m: TickMessage) {
     const row = people.find((p) => p[0] === r.selectedId);
     if (row) ageEl.textContent = String(row[5]);
   }
-  if (activeTab === 'bands' || activeTab === 'stats') renderSide();
+  if (activeTab === 'bands' || activeTab === 'kingdoms' || activeTab === 'stats') renderSide();
 }
 
 /** reload the page when the server runs a newer build (after an update of the container) */
@@ -303,7 +303,7 @@ function linkedText(e: ChronicleEntry): string {
 function eventHtml(e: ChronicleEntry): string {
   const icon: Record<string, string> = {
     discovery: '💡', rediscovery: '🔁', settle: '🏘️', colony: '🏘️', split: '🚶', death: '🕯️', twins: '👶', hunt: '🦣',
-    winter: '❄️', secret: '✨', drought: '☀️', extinct: '🌑', lost: '📜', meet: '🤝', learn: '📚', era: '⭐', milestone: '👥', genesis: '🌅', merge: '🔗', marriage: '💞', end: '🌑', kingdom: '👑',
+    winter: '❄️', secret: '✨', drought: '☀️', extinct: '🌑', lost: '📜', meet: '🤝', learn: '📚', era: '⭐', milestone: '👥', genesis: '🌅', merge: '🔗', marriage: '💞', end: '🌑', kingdom: '👑', spring: '🌸', flood: '🌊', locusts: '🦗', harvest: '🌾', feast: '🎉',
   };
   return `<li class="ev imp${e.importance}">
     <span class="ev-icon">${icon[e.kind] ?? '•'}</span>
@@ -389,6 +389,8 @@ function renderSide() {
       <li data-band="${b.id}"><span class="dot" style="background:#${b.color.toString(16).padStart(6, '0')}"></span>
       <div><b>${esc(b.settlementName ? VILLAGE(b.settlementName) : B(b.name))}</b>${b.settlementName ? `<small> · ${esc(B(b.name))}</small>` : ''}
       <div class="muted">${b.size} ${T('души', 'people', 'Menschen')} · ${b.settled ? T('село', 'village', 'Dorf') : T('скитат', 'nomads', 'Nomaden')} · ${T('знания', 'knowledge', 'Wissen')}: ${b.techs.length}</div></div></li>`).join('')}</ul>`;
+  } else if (activeTab === 'kingdoms') {
+    body.innerHTML = kingdomsHtml();
   } else if (activeTab === 'heroes') {
     body.innerHTML = `<p class="muted">${T('Зареждам...', 'Loading...', 'Wird geladen …')}</p>`;
     api<{ id: number; name: string; age: number; band: string; deeds: string[] }[]>('/api/heroes').then((hs) => {
@@ -645,6 +647,33 @@ async function showTree(id: number) {
     ${line(T('По бащина линия', 'Father\'s line', 'Väterliche Linie'), t.fatherLine)}`, false, 'wide');
 }
 
+
+/** the Kingdoms tab: every realm with its king, capital and towns, biggest first */
+function kingdomsHtml(): string {
+  const realms = new Map<number, BandView[]>();
+  for (const b of bands) if (b.kingdom) (realms.get(b.kingdom.id) ?? realms.set(b.kingdom.id, []).get(b.kingdom.id)!).push(b);
+  if (!realms.size) {
+    return `<p class="muted">${T('Още няма царства. Те се появяват в желязната епоха, когато голям град със стени открие „Царство“ и покани съседите си.',
+      'There are no kingdoms yet. They come in the Iron Age, when a big walled town discovers “Kingdom” and invites its neighbours.',
+      'Noch gibt es keine Königreiche. Sie entstehen in der Eisenzeit, wenn eine große Stadt mit Mauern das „Königreich“ entdeckt und ihre Nachbarn einlädt.')}</p>`;
+  }
+  const town = (b: BandView) => `<a href="#" data-band="${b.id}">${esc(VILLAGE(b.settlementName ?? b.name))}</a>`;
+  const list = [...realms.values()].map((m) => ({ m, cap: m.find((b) => b.kingdom!.capital) ?? m[0], people: m.reduce((a, b) => a + b.size, 0) }))
+    .sort((a, b) => b.people - a.people);
+  return `<p class="muted">${T(`${list.length} царства. Селата влизат в тях мирно, по покана на царя.`, `${list.length} kingdoms. Villages join them peacefully, invited by the king.`,
+    `${list.length} Königreiche. Die Dörfer treten ihnen friedlich bei, auf Einladung des Königs.`)}</p>
+    <ul class="kingdoms">${list.map(({ m, cap, people }) => {
+      const k = cap.kingdom!;
+      const v = VILLAGE(k.place);
+      const king = cap.chief ? `<a href="#" data-person="${cap.chief.id}">${esc(P(cap.chief.name))}</a>` : T('няма', 'none', 'keiner');
+      const others = m.filter((b) => b !== cap).sort((a, b) => b.size - a.size);
+      return `<li><span class="dot" style="background:#${k.color.toString(16).padStart(6, '0')}"></span><div>
+        <b>👑 ${esc(T(`Царство ${v}`, `Kingdom of ${v}`, `Königreich ${v}`))}</b>
+        <div class="muted">${T('от', 'since', 'seit')} ${fmtYear(k.founded)} · ${m.length} ${T(m.length === 1 ? 'село' : 'села', m.length === 1 ? 'village' : 'villages', m.length === 1 ? 'Dorf' : 'Dörfer')} · ${people} ${T('души', 'people', 'Menschen')}</div>
+        <div>${T('Цар', 'King', 'König')}: ${king} · ${T('Столица', 'Capital', 'Hauptstadt')}: ${town(cap)}</div>
+        ${others.length ? `<div class="muted">${others.map(town).join(', ')}</div>` : ''}</div></li>`;
+    }).join('')}</ul>`;
+}
 
 /** iron age: "Capital of the Kingdom of Whiteford (5 villages)" */
 function kingdomHtml(k: BandView['kingdom']): string {
