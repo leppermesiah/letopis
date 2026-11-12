@@ -110,6 +110,8 @@ export interface BandView {
   founded: number; // year
   hasFire: boolean;
   dwelling: 'none' | 'tent' | 'hut' | 'house';
+  /** iron age: the kingdom of this town (place = its Bulgarian name) */
+  kingdom?: { id: number; place: string; capital: boolean; members: number } | null;
 }
 
 /** compact person: [id, x*10, y*10, taskIndex, bandId, ageYears, sex(0 m,1 f), chief(1) or not(0)] */
@@ -132,6 +134,8 @@ export interface ChronicleEntry {
   refs?: ChronicleRef[];
   /** the same entry in English (entries written before v1.15 have none) */
   en?: { text: string; kids?: string };
+  /** the same in German */
+  de?: { text: string; kids?: string };
 }
 
 export interface ChronicleRef { n: string; p?: number; b?: number }
@@ -220,7 +224,13 @@ export interface FamilyTree {
   fatherLine: TreeNode[];
 }
 
-export function formatYear(year: number, lang: 'bg' | 'en' = 'bg'): string {
+export function formatYear(year: number, lang: 'bg' | 'en' | 'de' = 'bg'): string {
+  if (lang === 'de') {
+    // German: "11.881 v. Chr.", four-digit years without the dot
+    const y = Math.abs(Math.round(year));
+    const s = y >= 10000 ? String(y).replace(/\B(?=(\d{3})+(?!\d))/g, '.') : String(y);
+    return year < 0 ? `${s} v. Chr.` : `${s} n. Chr.`;
+  }
   if (lang === 'en') {
     const e = Math.abs(Math.round(year)).toLocaleString('en-US');
     return year < 0 ? `${e} BC` : `AD ${e}`;

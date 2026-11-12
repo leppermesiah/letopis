@@ -267,6 +267,30 @@ group('trader', cells('AJ', (1,)), 'pose', PEOPLE_WPP, 0)
 group('scribe', cells('AJ', (2,)), 'pose', PEOPLE_WPP, 0)
 group('rider', cells('AJ', (3,)), 'pose', PEOPLE_WPP, 0)
 group('sailer', cells('AJ', (4,)), 'pose', PEOPLE_WPP, 0)
+# iron age (AS props, AT/AU town, AV workers, AW travellers, AX guard)
+for cid, name, w in (('AS11', 'charcoal', 0.055), ('AS12', 'bloomery', 0.055), ('AS13', 'ianvil', 0.045), ('AS14', 'irack', 0.05),
+                     ('AS21', 'mint', 0.05), ('AS22', 'chest', 0.045), ('AS23', 'stele', 0.045), ('AS24', 'scrolls', 0.05),
+                     ('AS31', 'herbtable', 0.05), ('AS32', 'amphorae', 0.045), ('AS33', 'press', 0.05), ('AS34', 'beehives', 0.05),
+                     ('AS41', 'fountain', 0.05), ('AS42', 'crane', 0.055), ('AS43', 'blocks', 0.045), ('AS44', 'milestone', 0.045),
+                     ('AT41', 'aqueduct', 0.085), ('AT42', 'aqfount', 0.08), ('AT43', 'archbridge', 0.08), ('AT44', 'lighthouse', 0.07),
+                     ('AU33', 'warehouse', 0.08), ('AU34', 'galley', 0.08),
+                     ('AU41', 'iwall', 0.08), ('AU42', 'iwallc', 0.08), ('AU43', 'igate', 0.09), ('AU44', 'itower', 0.07)):
+    group(name, cid, 'thing', w, 0)
+group('villab', cells('AT', (1,)), 'thing', 0.09, 0)     # 0..3: foundation, walls, beams, done (courtyard house)
+group('palaceb', cells('AT', (2,)), 'thing', 0.11, 0)    # 0..3: terrace, walls, columns, done
+group('mill', cells('AT', (3,)), 'thing', 0.08, 0)       # 4 frames: the wheel turns
+group('theatreb', cells('AU', (1,)), 'thing', 0.1, 0)    # 0..3
+group('schoolb', cells('AU', (2,)), 'thing', 0.09, 0)    # 0..3
+group('ismith', cells('AV', (1,)), 'pose', PEOPLE_WPP, 0)
+group('mason', cells('AV', (2,)), 'pose', PEOPLE_WPP, 0)
+group('healer', cells('AV', (3,)), 'pose', PEOPLE_WPP, 0)
+group('actor', cells('AV', (4,)), 'pose', PEOPLE_WPP, 0)
+group('trader2', cells('AW', (1,)), 'pose', PEOPLE_WPP, 0)
+group('rowship', cells('AW', (2,)), 'pose', PEOPLE_WPP, 0)
+group('king', cells('AW', (3,)), 'pose', PEOPLE_WPP, 0)
+group('teacher', cells('AW', (4,)), 'pose', PEOPLE_WPP, 0)
+group('igwalk', cells('AX', (1, 2)), 'person', 13.6, 64)
+group('igidle', cells('AX', (3, 4)), 'person', 13.6, 64)
 # band symbols (white, tinted in game), same order as SYMBOLS in render.ts
 group('sym', 'AQ101 AQ102 AQ103 AQ104 AQ105 AQ106 AQ107 AQ108 AQ109 AQ110 AQ201 AQ202 AQ203 AQ204 AQ205 AQ206 AQ207 AQ208 AQ209 AQ210 AQ301 AQ302 AQ303 AQ304 AQ305 AQ306 AQ307 AQ308 AQ309 AQ310 AQ401 AQ402 AQ403 AQ404 AQ405 AQ406 AQ407 AQ408 AQ409 AQ410 AQ501 AQ502 AQ503 AQ504 AQ505 AQ506 AQ507 AQ508 AQ509 AQ510 AR101 AR102 AR103 AR104 AR105 AR106 AR107 AR108 AR109 AR110 AR201 AR202 AR203 AR204 AR205 AR206 AR207 AR208 AR209 AR210 AR301 AR302 AR303 AR304 AR305 AR306 AR307 AR308 AR309 AR310 AR401 AR402 AR403 AR404 AR405 AR406 AR407 AR408 AR409 AR410 AR501 AR502 AR503 AR504 AR505 AR506 AR507 AR508 AR509 AR510', 'symbol', 6, 64)
 
@@ -478,14 +502,14 @@ def main() -> int:
                 items.append((name, base, 0.5, ay, s))
                 items.append((name + '_c', cloth, 0.5, ay, s))
                 continue
-            if kind == 'pose' and cid[:2] in ('AI', 'AJ'):
+            if kind == 'pose' and cid[:2] in ('AI', 'AJ', 'AV', 'AW'):
                 # bronze age linen: only the bright cloth is tinted (grey anvils and stones stay)
-                head = {'AI3': 0.35, 'AJ2': 0.35, 'AJ4': 0.0}.get(cid[:3], 0.28)
+                head = {'AI3': 0.35, 'AJ2': 0.35, 'AJ4': 0.0, 'AW2': 0.0, 'AV3': 0.35}.get(cid[:3], 0.28)
                 base, cloth = split_cloth(img, head, 0.66)
                 items.append((name, base, 0.5, ay, s))
                 items.append((name + '_c', cloth, 0.5, ay, s))
                 continue
-            if kind == 'person' and cid[:2] in ('AN', 'AO'):
+            if kind == 'person' and cid[:2] in ('AN', 'AO', 'AX'):
                 # guards: only the light tunic takes the clan colour, the grey wolf fur and the metal stay
                 base, cloth = split_fur(img, 0.3) if cid[:2] == 'AN' else split_cloth(img, 0.3, 0.72, 0.3)
                 items.append((name, base, 0.5, ay, s))

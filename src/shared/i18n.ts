@@ -1,9 +1,11 @@
-// English for Letopis. The world speaks Bulgarian inside the simulation; everything a player reads can also be shown in English.
-// Names are transliterated (Иван Петров -> Ivan Petrov), nicknames, totems and places are translated.
+// English for Letopis. The world speaks Bulgarian inside the simulation; everything a player reads can also be shown
+// in English (here) and German (i18n-de.ts). People and villages get names of their own in each language
+// (Иван Петров is John Peterson), totems and clan names are translated.
 
 import { CLAN_EN, clanBase } from './clans';
+import { personName, villageName } from './people-l10n';
 
-export type Lang = 'bg' | 'en';
+export type Lang = 'bg' | 'en' | 'de';
 
 const TR: Record<string, string> = {
   а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p',
@@ -25,26 +27,14 @@ export function translit(s: string): string {
   return out;
 }
 
-const NICK_EN: Record<string, string> = {
-  'Яката ръка': 'Strongarm',
-  Силния: 'the Strong', Мечката: 'the Bear', Каменния: 'the Stone', Мъдрия: 'the Wise', Хитрия: 'the Cunning', Умника: 'the Clever',
-  Знаещия: 'the Knowing', Любопитния: 'the Curious', Скитника: 'the Wanderer', Търсача: 'the Seeker', Будния: 'the Watchful',
-  Добрия: 'the Kind', Веселия: 'the Merry', Разказвача: 'the Storyteller', Миротвореца: 'the Peacemaker', Здравия: 'the Hale',
-  Дъба: 'the Oak', Неуморния: 'the Tireless', Тихия: 'the Quiet', Високия: 'the Tall', Рижавия: 'the Red', Бързия: 'the Swift',
-  Малкия: 'the Little', Черния: 'the Dark',
-  Силната: 'the Strong', Яката: 'the Sturdy', Мъдрата: 'the Wise', Хитрата: 'the Cunning', Знаещата: 'the Knowing', Билкарката: 'the Herbalist',
-  Любопитната: 'the Curious', Скитницата: 'the Wanderer', Търсачката: 'the Seeker', Будната: 'the Watchful', Добрата: 'the Kind',
-  Веселата: 'the Merry', Песнопойката: 'the Songstress', Здравата: 'the Hale', Неуморната: 'the Tireless', Тихата: 'the Quiet',
-  Високата: 'the Tall', Рижавата: 'the Red', Бързата: 'the Swift', Малката: 'the Little', Черната: 'the Dark',
-};
-
-/** "Иван Мъдрия" -> "Ivan the Wise", "Мария Петрова" -> "Maria Petrova" */
+/** "Иван Мъдрия" -> "John the Wise", "Мария Петрова" -> "Mary Peterson" */
 export function personEn(name: string): string {
-  if (!name) return name;
-  const multi = NICK_EN['Яката ръка'];
-  let rest = name.replace('Яката ръка', '\u0001');
-  rest = rest.split(' ').map((w) => (w === '\u0001' ? multi : NICK_EN[w] ?? translit(w))).join(' ');
-  return rest;
+  return personName(name, 'en', translit);
+}
+
+/** "Бялово" -> "Whiteford" */
+export function villageEn(name: string): string {
+  return villageName(name, 'en') ?? translit(name);
 }
 
 // totems, adjectives and places of band names, by their dictionary form and with the article
@@ -96,7 +86,7 @@ export function bandEn(name: string): string {
 /** how a band is named inside an English sentence: "the Clan of the Wolf", "the village of Belovo" */
 export function bandLabelEn(name: string, settlement: string | null | undefined, subject = false): string {
   const the = subject ? 'The' : 'the';
-  return settlement ? `${the} village of ${translit(settlement)}` : bandThe(name, subject);
+  return settlement ? `${the} village of ${villageEn(settlement)}` : bandThe(name, subject);
 }
 
 /** "the Wolf Tooth", "the Silent" (never "the The Silent") */
@@ -112,8 +102,8 @@ export function bandTextEn(s: string): string {
   if (/^(Родът|рода) на /.test(s)) return (s[0] === 'Р' ? 'The ' : 'the ') + bandEn(s);
   if (clanBase(s)) return bandThe(s);
   const v = /^(Селото|селото) (.+)$/.exec(s);
-  if (v) return `${v[1][0] === 'С' ? 'The' : 'the'} village of ${translit(v[2])}`;
-  return translit(s);
+  if (v) return `${v[1][0] === 'С' ? 'The' : 'the'} village of ${villageEn(v[2])}`;
+  return villageEn(s);
 }
 
 export const TECH_EN: Record<string, { name: string; text: string; kids: string }> = {
@@ -145,14 +135,27 @@ export const TECH_EN: Record<string, { name: string; text: string; kids: string 
   walls: { name: 'City Walls', text: '{Band} raised stone walls around its houses. {name} led the work. The village becomes a town.', kids: '{name} built a tall wall around the village. Now it is a real town!' },
   calendar: { name: 'Calendar', text: '{name} of {band} counted the days from one full moon to the next and wrote down when to sow. The harvest is no longer late.', kids: '{name} found out exactly when to sow the seeds by watching the moon and the stars.' },
   horse: { name: 'Tamed Horse', text: '{name} of {band} tamed a wild horse and hitched it to the cart. The road to the neighbours became three times shorter.', kids: '{name} made friends with a horse and now they ride together!' },
+  iron: { name: 'Iron', text: '{name} of {band} fired the furnace hotter than ever, and a dark metal came out of the red ore. Iron is everywhere and cheaper than bronze. A new age begins.', kids: '{name} forged iron: dark, strong and found everywhere!' },
+  alphabet: { name: 'Alphabet', text: '{name} of {band} gave each sound a sign of its own. Hundreds of signs are no longer needed: two dozen are enough to write any word.', kids: '{name} invented the alphabet: just a few letters, and you can write anything with them!' },
+  harbor: { name: 'Harbour', text: '{name} of {band} piled stones in the bay and built a pier. Ships now stop here and bring goods from distant shores.', kids: '{name} built a harbour, and ships come to visit from far away!' },
+  kingdom: { name: 'Kingdom', text: '{Band} gathered the neighbouring villages under one crown, and {name} took it. The first kingdom is born without a single battle.', kids: '{name} brought several villages together into one kingdom by inviting them all to a big feast!' },
+  coins: { name: 'Coins', text: '{name} of {band} struck small silver discs of equal weight with a stamp. Nobody has to drag cows and pots around to buy something anymore.', kids: '{name} made the first coins. You can buy anything with them, no need to bring a cow along!' },
+  laws: { name: 'Written Laws', text: '{name} of {band} carved the laws on a stone slab in the square. Anyone can read them, and the judge can no longer decide on a whim.', kids: '{name} wrote the rules on a big stone so they are the same for everyone.' },
+  theatre: { name: 'Theatre', text: '{name} of {band} put on a mask and acted out an old legend before the whole town. People wept and laughed together.', kids: '{name} put on a funny mask and everyone laughed!' },
+  medicine: { name: 'Medicine', text: '{name} of {band} wrote down which herb cures which illness. Healers now learn from scrolls, not only from their grandmothers.', kids: '{name} wrote down how to cure illnesses, so others can help too.' },
+  aqueduct: { name: 'Aqueduct', text: '{Band} brought water from the mountains along stone arches. {name} led the work. Clean water flows in the town and there is less sickness.', kids: '{name} built a stone bridge for water, and it flows all the way to the town!' },
+  library: { name: 'Library', text: '{name} of {band} gathered all the scrolls in one place. What is learned once is no longer forgotten.', kids: '{name} put lots of scrolls in one house. Everyone can read there!' },
+  watermill: { name: 'Watermill', text: '{name} of {band} put a wheel in the river and made it turn the millstone. The river grinds the flour instead of people.', kids: '{name} got the river to turn a big wheel, and it grinds flour all by itself!' },
+  arch: { name: 'Arch and Concrete', text: '{name} of {band} mixed volcanic sand with lime and built an arch that holds itself up. Bridges and domes now stand for centuries.', kids: '{name} made a stone you can pour like mud, and then it turns hard!' },
 };
-const TECH_BG: Record<string, string> = {
+export const TECH_BG: Record<string, string> = {
   Огън: 'fire', 'Каменни сечива': 'stone_tools', 'Познание за билките': 'herb_lore', 'Погребални обреди': 'burial', Копие: 'spear',
   'Облекло от кожи': 'clothing', 'Скални рисунки': 'cave_art', Риболов: 'fishing', Шатри: 'shelter', 'Лък и стрели': 'bow',
   'Опитомено куче': 'dog', 'Мелене на зърно': 'grinding', Земеделие: 'agriculture', Керамика: 'pottery', Скотовъдство: 'herding',
   Тъкане: 'weaving', 'Глинени къщи': 'mudbrick', 'Лодка от дънер': 'boats',
   Мед: 'copper', Рало: 'plough', Колело: 'wheel', Бронз: 'bronze', Платно: 'sailing', Писменост: 'writing', Търговия: 'trade',
   'Крепостни стени': 'walls', Календар: 'calendar', 'Опитомен кон': 'horse',
+  Желязо: 'iron', Азбука: 'alphabet', Пристанище: 'harbor', Царство: 'kingdom', Монети: 'coins', 'Писани закони': 'laws', Театър: 'theatre', Медицина: 'medicine', Акведукт: 'aqueduct', Библиотека: 'library', 'Водна мелница': 'watermill', 'Свод и бетон': 'arch',
 };
 /** every discovery the game knows, in the order history found them: [id, Bulgarian name, era] */
 export const TECH_LIST: [string, string, number][] = [
@@ -163,7 +166,52 @@ export const TECH_LIST: [string, string, number][] = [
   ['weaving', 'Тъкане', 1], ['mudbrick', 'Глинени къщи', 1], ['copper', 'Мед', 1], ['plough', 'Рало', 1], ['wheel', 'Колело', 1],
   ['bronze', 'Бронз', 2], ['sailing', 'Платно', 2], ['writing', 'Писменост', 2], ['trade', 'Търговия', 2], ['walls', 'Крепостни стени', 2],
   ['calendar', 'Календар', 2], ['horse', 'Опитомен кон', 2],
+  ['iron', 'Желязо', 3], ['alphabet', 'Азбука', 3], ['harbor', 'Пристанище', 3], ['kingdom', 'Царство', 3], ['coins', 'Монети', 3], ['laws', 'Писани закони', 3], ['theatre', 'Театър', 3], ['medicine', 'Медицина', 3], ['aqueduct', 'Акведукт', 3], ['library', 'Библиотека', 3], ['watermill', 'Водна мелница', 3], ['arch', 'Свод и бетон', 3],
 ];
+
+/** a line about each discovery, for the ones still to come: [Bulgarian, English] */
+export const TECH_DESC: Record<string, [string, string]> = {
+  fire: ['Да опитомиш огъня: топлина, светлина и печено месо.', 'Taming fire: warmth, light and cooked meat.'],
+  stone_tools: ['Остри ножове и стъргала от кремък.', 'Sharp knives and scrapers knapped from flint.'],
+  burial: ['Мъртвите се изпращат с обред и се помнят.', 'The dead are sent off with a rite and remembered.'],
+  spear: ['Каменен връх на дълга пръчка: ловът става по-безопасен.', 'A stone point on a long shaft: safer hunting.'],
+  herb_lore: ['Кои треви лекуват и кои тровят.', 'Which plants heal and which ones poison.'],
+  clothing: ['Дрехи от кожи, за да се преживее зимата.', 'Clothes sewn from hides to survive the winter.'],
+  cave_art: ['Рисунки с охра и въглен по стените на пещерите.', 'Pictures in ochre and charcoal on cave walls.'],
+  shelter: ['Кожи, опънати върху кости и клони: подслон навсякъде.', 'Hides stretched over bones and branches: shelter anywhere.'],
+  fishing: ['Харпун и риба от реката.', 'A harpoon, and fish from the river.'],
+  dog: ['Вълчетата край огъня стават първите кучета.', 'Wolf pups by the fire become the first dogs.'],
+  bow: ['Жила върху огъната пръчка: удар от далеч.', 'Sinew on a bent stick: striking from afar.'],
+  grinding: ['Зърно, смляно между два камъка, става брашно.', 'Grain ground between two stones becomes flour.'],
+  agriculture: ['Засетите зърна дават ниви, а родът спира да скита.', 'Sown grain gives fields, and the clan stops wandering.'],
+  pottery: ['Изпечена глина пази храната от мишки и влага.', 'Fired clay keeps food safe from mice and damp.'],
+  herding: ['Кози и овце в кошара: мляко и месо без лов.', 'Goats and sheep in a fold: milk and meat without hunting.'],
+  weaving: ['Лен, изпреден на конец и изтъкан на плат.', 'Flax spun into thread and woven into cloth.'],
+  mudbrick: ['Къщи от плет и кал: селото става дом.', 'Houses of wattle and daub: the village becomes home.'],
+  boats: ['Издълбан дънер: реките вече не са граница.', 'A hollowed log: rivers are no longer a border.'],
+  copper: ['Зелен камък в жарта дава червен метал.', 'A green stone in the embers gives a red metal.'],
+  plough: ['Вол и заострен кол: нива за ден вместо за седмица.', 'An ox and a sharp stake: a field in a day, not a week.'],
+  wheel: ['Дървен кръг на ос и първата каруца.', 'A wooden disc on an axle, and the first cart.'],
+  bronze: ['Мед и калай дават метал, по-твърд от камък.', 'Copper and tin make a metal harder than stone.'],
+  sailing: ['Платно на лодката: вятърът гребе вместо хората.', 'A sail on the boat: the wind rows instead of people.'],
+  writing: ['Знаци в глината, които помнят вместо хората.', 'Marks in clay that remember for people.'],
+  trade: ['Размяна на стоки между далечни села.', 'Goods exchanged between distant villages.'],
+  walls: ['Каменни стени около селото: първите градове.', 'Stone walls around the village: the first towns.'],
+  calendar: ['Звездите казват кога да се сее и кога да се жъне.', 'The stars tell when to sow and when to reap.'],
+  horse: ['Кон под седлото: пътят от седмица става ден.', 'A horse to ride: a week of walking becomes a day.'],
+  iron: ['Тъмен метал от червена руда: сечива за всеки.', 'A dark metal from red ore: tools for everyone.'],
+  alphabet: ['Един знак за всеки звук: всеки може да се научи да пише.', 'One sign for each sound: anyone can learn to write.'],
+  harbor: ['Каменен кей: корабите идват от далечни брегове.', 'A stone pier: ships arrive from distant shores.'],
+  kingdom: ['Няколко села под една корона и една столица.', 'Several villages under one crown and one capital.'],
+  coins: ['Сребро с печат: пазарът става лесен.', 'Stamped silver: the market becomes easy.'],
+  laws: ['Правилата на камък, еднакви за всички.', 'Rules in stone, the same for everyone.'],
+  theatre: ['Маски, сцена и стари легенди пред целия град.', 'Masks, a stage and old legends before the whole town.'],
+  medicine: ['Лечение, записано в свитъци.', 'Healing written down in scrolls.'],
+  aqueduct: ['Каменни арки носят чиста вода до града.', 'Stone arches carry clean water to the town.'],
+  library: ['Свитъците на едно място: знанието не се губи.', 'All the scrolls in one place: knowledge is not lost.'],
+  watermill: ['Реката върти воденичния камък.', 'The river turns the millstone.'],
+  arch: ['Свод, който държи сам себе си, и камък, който се излива.', 'An arch that holds itself up, and stone that can be poured.'],
+};
 
 /** a tech by its Bulgarian name (what the server sends) */
 export function techEn(bg: string): string {
@@ -180,7 +228,7 @@ export function eraEn(bg: string): string {
 
 export const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 export const CHIEF_TITLES_EN = ['Elder', 'Elder', 'Chieftain', 'Prince', 'Mayor', 'Mayor', 'Mayor', 'Mayor', 'Mayor'];
-const CHIEF_BG: Record<string, string> = { Старейшина: 'Elder', Вожд: 'Chieftain', Княз: 'Prince', Кмет: 'Mayor' };
+const CHIEF_BG: Record<string, string> = { Старейшина: 'Elder', Вожд: 'Chieftain', Княз: 'Prince', Кмет: 'Mayor', Цар: 'King' };
 export function chiefEn(bg: string): string {
   return CHIEF_BG[bg] ?? CHIEF_BG[bg[0]?.toUpperCase() + bg.slice(1)] ?? bg;
 }
@@ -190,7 +238,7 @@ export const TASK_NAMES_EN: Record<string, string> = {
   herd: 'herding the animals', build: 'building', child: 'playing', elder: 'telling stories', travel: 'travelling', lead: 'leading the clan',
   scout: 'looking for a new camp', chop: 'chopping wood', sleep: 'sleeping', guard: 'guarding the village', bodyguard: 'guarding the chief',
 };
-const TASK_BG: Record<string, string> = {
+export const TASK_BG: Record<string, string> = {
   почива: 'rest', 'събира плодове и корени': 'gather', ловува: 'hunt', 'лови риба': 'fish', 'прави сечива': 'craft', 'обработва нивата': 'farm',
   'пасе животните': 'herd', строи: 'build', играе: 'child', 'разказва истории': 'elder', пътува: 'travel', 'води рода': 'lead',
   'търси ново място за лагера': 'scout', 'сече дърва': 'chop', спи: 'sleep', 'пази селото': 'guard', 'пази водача': 'bodyguard',
@@ -243,6 +291,7 @@ export function deedEn(d: string): string {
   if ((m = /^Откри „(.+)“ \((.+)\)$/.exec(d))) return `Discovered “${techEn(m[1])}” (${yearsInTextEn(m[2])})`;
   if ((m = /^Преоткри „(.+)“ за своя род$/.exec(d))) return `Rediscovered “${techEn(m[1])}” for the clan`;
   if ((m = /^Доживя до 70 години \((.+)\)$/.exec(d))) return `Lived to 70 (${yearsInTextEn(m[1])})`;
+  if ((m = /^Стана първият цар на царство (.+) \((.+)\)$/.exec(d))) return `Became the first king of the Kingdom of ${villageEn(m[1])} (${yearsInTextEn(m[2])})`;
   if ((m = /^Основа (.+) и стана негов (\S+) \((.+)\)$/.exec(d))) return `Founded the ${bandEn(m[1])} and became its ${chiefEn(m[2]).toLowerCase()} (${yearsInTextEn(m[3])})`;
   if ((m = /^Поведе лова на (.+)$/.exec(d))) return `Led the hunt for ${BEAST_EN[m[1]] ?? m[1]}`;
   return yearsInTextEn(d);

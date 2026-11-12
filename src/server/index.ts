@@ -11,6 +11,8 @@ import { TECHS } from './sim/tech';
 
 const PORT = Number(process.env.LETOPIS_PORT ?? 2222);
 const DATA = path.resolve(process.env.LETOPIS_DATA ?? '/data');
+// set by the image build: 'dev' for the test image, empty for the real one
+const CHANNEL = (process.env.LETOPIS_CHANNEL ?? '').trim();
 const SPEED = Math.max(0.01, Number(process.env.LETOPIS_SPEED ?? 1)); // only for testing: 100 = 100x faster
 const SAVE_EVERY_MS = 2 * 60 * 1000;
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -123,6 +125,8 @@ function restartWorld() {
     kids: 'Хората на този свят изчезнаха. Но скоро ще започне нов свят!',
     en: { text: 'The last person of this world has passed away. The chronicle closes. A new world will begin soon.',
       kids: 'The people of this world are gone. But a new world will begin soon!' },
+    de: { text: 'Der letzte Mensch dieser Welt ist gestorben. Die Chronik schließt sich. Bald beginnt eine neue Welt.',
+      kids: 'Die Menschen dieser Welt sind verschwunden. Aber bald beginnt eine neue Welt!' },
   }]);
   store.endWorld(old, summary);
   save();
@@ -234,7 +238,11 @@ const server = http.createServer((req, res) => {
       'cache-control': fresh ? 'no-cache' : 'public, max-age=86400',
       ...(zip ? { 'content-encoding': 'gzip', vary: 'accept-encoding' } : {}),
     });
-    if (zip) createReadStream(file).pipe(createGzip({ level: 6 })).pipe(res);
+    if (CHANNEL && file.endsWith('index.html')) {
+      // the test server says so in the browser tab: "Летопис - Dev"
+      const page = readFileSync(file, 'utf8').replace('<title>Летопис</title>', `<title>Летопис - ${CHANNEL[0].toUpperCase()}${CHANNEL.slice(1)}</title>`);
+      res.end(zip ? gzipSync(page) : page);
+    } else if (zip) createReadStream(file).pipe(createGzip({ level: 6 })).pipe(res);
     else createReadStream(file).pipe(res);
   } catch (e) {
     log('HTTP грешка', e);

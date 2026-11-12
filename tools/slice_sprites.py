@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Cut the 4x4 AI sprite sheets in art/sheets into single cleaned sprites in art/cut.
 
-Usage: python3 -I tools/slice_sprites.py
+Usage: python3 -I tools/slice_sprites.py [sheet letters, e.g. AS AT; all when none]
 Needs Pillow and numpy. Output is committed, so the game build does not need Python.
 """
 import os
@@ -125,6 +125,8 @@ def main() -> int:
         if not name.endswith('.png'):
             continue
         letter = name.split('-')[0]  # 'A-grass.png' -> A, 'AB-stumps.png' -> AB
+        if len(sys.argv) > 1 and letter not in sys.argv[1:]:
+            continue  # only the sheets named on the command line
         img = np.array(Image.open(os.path.join(SHEETS, name)).convert('RGBA'))
         if img[..., 3].min() == 255:
             img = key_magenta(img)

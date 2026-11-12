@@ -118,12 +118,50 @@ export const TECHS: Tech[] = [
   { id: 'horse', name: 'Опитомен кон', era: 2, target: -2000, prereq: ['herding', 'wheel'], need: 'wildHerd', base: 0.0015, gene: 'soc',
     text: '{name} от {band} опитоми див кон и го впрегна в каруцата. Пътят до съседите стана три пъти по-кратък.',
     kids: '{name} се сприятели с кон и сега яздят заедно!' },
+  // gateway to the Iron Age
+  { id: 'iron', name: 'Желязо', era: 3, target: -1200, prereq: ['bronze'], need: 'ore', base: 0.002, gene: 'int',
+    text: '{name} от {band} разпали пещта по-силно от всякога и от червената руда излезе тъмен метал. Желязото е навсякъде и е по-евтино от бронза. Започва нова епоха.',
+    kids: '{name} изкова желязо: тъмно, здраво и го има навсякъде!' },
+  { id: 'alphabet', name: 'Азбука', era: 3, target: -1050, prereq: ['writing', 'trade'], need: null, base: 0.0015, gene: 'int',
+    text: '{name} от {band} даде по един знак на всеки звук. Вече не са нужни стотици знаци: две дузини стигат, за да се запише всяка дума.',
+    kids: '{name} измисли азбуката: малко букви, а с тях се пише всичко!' },
+  { id: 'harbor', name: 'Пристанище', era: 3, target: -800, prereq: ['sailing', 'trade'], need: 'fish', base: 0.0015, gene: 'soc',
+    text: '{name} от {band} насипа камъни в залива и построи кей. Корабите вече спират тук и носят стоки от далечни брегове.',
+    kids: '{name} построи пристанище и при тях идват кораби отдалеч!' },
+  { id: 'kingdom', name: 'Царство', era: 3, target: -750, prereq: ['walls', 'writing'], need: null, base: 0.0012, gene: 'soc',
+    text: '{Band} събра съседните села под една корона, а короната пое {name}. Без нито една битка се ражда първото царство.',
+    kids: '{name} събра няколко села в едно царство, като ги покани на голям празник!' },
+  { id: 'coins', name: 'Монети', era: 3, target: -650, prereq: ['trade', 'bronze'], need: 'ore', base: 0.0015, gene: 'soc',
+    text: '{name} от {band} отсече малки сребърни кръгчета с еднакво тегло и печат. Вече не трябва да се мъкнат крави и гърнета, за да се купи нещо.',
+    kids: '{name} направи първите монети. С тях се купува всичко, без да се влачат крави!' },
+  { id: 'laws', name: 'Писани закони', era: 3, target: -600, prereq: ['alphabet'], need: null, base: 0.0015, gene: 'soc',
+    text: '{name} от {band} издълба законите на каменна плоча на площада. Всеки може да ги прочете и съдията вече не решава както му скимне.',
+    kids: '{name} написа правилата на голям камък, за да са еднакви за всички.' },
+  { id: 'theatre', name: 'Театър', era: 3, target: -500, prereq: ['alphabet'], need: null, base: 0.0012, gene: 'cur',
+    text: '{name} от {band} сложи маска и изигра стара легенда пред целия град. Хората плакаха и се смяха заедно.',
+    kids: '{name} сложи смешна маска и всички се смяха!' },
+  { id: 'medicine', name: 'Медицина', era: 3, target: -420, prereq: ['herb_lore', 'alphabet'], need: null, base: 0.0012, gene: 'int',
+    text: '{name} от {band} записа коя билка коя болест лекува. Лечителите вече се учат от свитъци, а не само от бабите си.',
+    kids: '{name} записа как се лекуват болестите, за да могат и други да помагат.' },
+  { id: 'aqueduct', name: 'Акведукт', era: 3, target: -310, prereq: ['walls', 'iron'], need: null, base: 0.0012, gene: 'str',
+    text: '{Band} докара вода от планината по каменни арки. {name} поведе строежа. В града тече чиста вода и болестите намаляват.',
+    kids: '{name} построи каменен мост за вода и тя тече чак до града!' },
+  { id: 'library', name: 'Библиотека', era: 3, target: -280, prereq: ['alphabet', 'laws'], need: null, base: 0.0012, gene: 'int',
+    text: '{name} от {band} събра всички свитъци на едно място. Каквото е научено веднъж, вече не се забравя.',
+    kids: '{name} събра много свитъци в една къща. Там всеки може да чете!' },
+  { id: 'watermill', name: 'Водна мелница', era: 3, target: -250, prereq: ['wheel', 'grinding', 'iron'], need: null, base: 0.0015, gene: 'int',
+    text: '{name} от {band} сложи колело в реката и го накара да върти воденичния камък. Реката меле брашното вместо хората.',
+    kids: '{name} накара реката да върти голямо колело и то меле брашно само!' },
+  { id: 'arch', name: 'Свод и бетон', era: 3, target: -50, prereq: ['aqueduct'], need: null, base: 0.0012, gene: 'str',
+    text: '{name} от {band} смеси вулканичен пясък с вар и построи свод, който държи сам себе си. Мостове и куполи вече стоят векове.',
+    kids: '{name} направи камък, който се излива като кал и после става твърд!' },
 ];
 
 export const TECH_BY_ID = new Map(TECHS.map((t) => [t.id, t]));
 
 /** Era of a set of known techs: the highest era with a defining tech known. */
 export function eraOf(techs: Set<string>): number {
+  if (techs.has('iron')) return 3;
   if (techs.has('bronze')) return 2;
   if (techs.has('agriculture')) return 1;
   return 0;

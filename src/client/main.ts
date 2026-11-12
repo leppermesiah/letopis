@@ -4,9 +4,13 @@ import {
   BandView, ChronicleEntry, Discovery, FamilyTree, GoneBand, TreeNode, PersonDetail, PersonRow, SnapshotMessage, TASKS, TASK_NAMES, TickMessage, WorldInfo, b64decode,
 } from '../shared/types';
 import { SECRET_COUNT, SecretFind, SecretSpot } from '../shared/secrets';
-import { ERAS_BG, ERAS_EN, TECH_LIST } from '../shared/i18n';
+import { ERAS_BG, ERAS_EN, TECH_DESC, TECH_LIST } from '../shared/i18n';
+import { ERAS_DE, TECH_DESC_DE, bandTextCaseDe } from '../shared/i18n-de';
+import { isWoman } from '../shared/people-l10n';
+import type { Lang } from '../shared/i18n';
+import { hasNews, helpWindowHtml } from './help';
 import {
-  B, BL, CAUSE, CHIEF, DEED, EN, ERA, GENE, HERO, P, SECRET_KIND, T, TASK, TECH, TECH_ID, TITLE, VILLAGE, fmtYear, monthName, num, refName, setLang, translatePage,
+  B, BL, CAUSE, CHIEF, DE, DEED, EN, ERA, L3, LANG, LOCALE, GENE, HERO, P, SECRET_KIND, T, TASK, TECH, TECH_ID, TITLE, VILLAGE, fmtYear, monthName, num, refName, setLang, translatePage,
 } from './lang';
 
 translatePage();
@@ -193,7 +197,7 @@ function applyTime(t: TickMessage['time'], population: number) {
   $('#pop').textContent = num(population);
   $('#bandsCount').textContent = String(bands.length);
   const days = (Date.now() - t.startedAt) / 86400000;
-  $('#age').textContent = days < 1 ? `${Math.round(days * 24)} ${T('ч.', 'h')}` : `${Math.floor(days)} ${T('дни', 'days')}`;
+  $('#age').textContent = days < 1 ? `${Math.round(days * 24)} ${T('ч.', 'h', 'Std.')}` : `${Math.floor(days)} ${T('дни', 'days', 'Tage')}`;
 }
 
 function onSnapshot(m: SnapshotMessage) {
@@ -241,7 +245,7 @@ setInterval(() => void checkVersion(), 60_000);
 {
   $('#build').textContent = `ver. ${__VERSION__}`;
   const t = new Date(parseInt(__BUILD__, 36));
-  if (!Number.isNaN(t.getTime())) $('#build').title = `${T('от', 'built')} ${t.toLocaleString(EN ? 'en-GB' : 'bg-BG')}`;
+  if (!Number.isNaN(t.getTime())) $('#build').title = `${T('от', 'built', 'Stand:')} ${t.toLocaleString(LOCALE)}`;
 }
 
 function connect() {
@@ -262,7 +266,7 @@ function connect() {
 // ---------- chronicle ----------
 
 function evText(e: ChronicleEntry): string {
-  const src = EN && e.en ? e.en : e;
+  const src = (EN && e.en) || (DE && (e.de ?? e.en)) || e;
   return kids && src.kids ? src.kids : src.text;
 }
 
@@ -270,8 +274,9 @@ function evText(e: ChronicleEntry): string {
 function linkedText(e: ChronicleEntry): string {
   const text = evText(e);
   // English entries name people and bands in English
-  const english = EN && !!e.en;
-  const refs = (e.refs ?? []).map((r0) => (english ? { ...r0, n: refName(r0.n, !!r0.p) } : r0)).sort((a, b) => b.n.length - a.n.length);
+  // English and German entries name people and bands in their own language; an old entry without German is shown in English
+  const lang = EN && e.en ? 'en' : DE && e.de ? 'de' : DE && e.en ? 'en' : 'bg';
+  const refs = (e.refs ?? []).map((r0) => (lang !== 'bg' ? { ...r0, n: refName(r0.n, !!r0.p, lang) } : r0)).sort((a, b) => b.n.length - a.n.length);
   // longest names first, never two links over the same letters
   const taken: { a: number; z: number; r: (typeof refs)[number] }[] = [];
   for (const r of refs) {
@@ -298,7 +303,7 @@ function linkedText(e: ChronicleEntry): string {
 function eventHtml(e: ChronicleEntry): string {
   const icon: Record<string, string> = {
     discovery: '💡', rediscovery: '🔁', settle: '🏘️', colony: '🏘️', split: '🚶', death: '🕯️', twins: '👶', hunt: '🦣',
-    winter: '❄️', secret: '✨', drought: '☀️', extinct: '🌑', lost: '📜', meet: '🤝', learn: '📚', era: '⭐', milestone: '👥', genesis: '🌅', merge: '🔗', marriage: '💞', end: '🌑',
+    winter: '❄️', secret: '✨', drought: '☀️', extinct: '🌑', lost: '📜', meet: '🤝', learn: '📚', era: '⭐', milestone: '👥', genesis: '🌅', merge: '🔗', marriage: '💞', end: '🌑', kingdom: '👑',
   };
   return `<li class="ev imp${e.importance}">
     <span class="ev-icon">${icon[e.kind] ?? '•'}</span>
@@ -348,40 +353,51 @@ function renderSide() {
   document.querySelectorAll<HTMLButtonElement>('.tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === activeTab)));
   const body = $('#sideBody');
   if (activeTab === 'chronicle') {
-    body.innerHTML = `<label class="chk"><input type="checkbox" id="onlyBig" ${onlyBig ? 'checked' : ''}> ${T('Само важните събития', 'Only important events')}</label>
+    body.innerHTML = `<label class="chk"><input type="checkbox" id="onlyBig" ${onlyBig ? 'checked' : ''}> ${T('Само важните събития', 'Only important events', 'Nur wichtige Ereignisse')}</label>
       <ul id="chronicleList" class="events">${feed.filter(feedFilter).map(eventHtml).join('')}</ul>
-      <button id="more" class="btn ghost">${T('По-стари записи', 'Older entries')}</button>`;
+      <button id="more" class="btn ghost">${T('По-стари записи', 'Older entries', 'Ältere Einträge')}</button>`;
     $('#onlyBig').onchange = (e) => { onlyBig = (e.target as HTMLInputElement).checked; save('letopis.onlyBig', onlyBig); renderSide(); };
     $('#more').onclick = loadOlder;
   } else if (activeTab === 'discoveries') {
-    body.innerHTML = `<p class="muted">${T('Зареждам...', 'Loading...')}</p>`;
+    body.innerHTML = `<p class="muted">${T('Зареждам...', 'Loading...', 'Wird geladen …')}</p>`;
     api<Discovery[]>('/api/discoveries').then((ds) => {
       if (activeTab !== 'discoveries') return;
       const known = new Set(ds.map((d) => d.tech));
-      const done = (d: Discovery) => `<li><b>${esc(TECH_ID(d.tech, d.name))}</b> - ${T('открито от', 'discovered by')} ${d.pid ? `<a href="#" class="ref" data-person="${d.pid}">${esc(P(d.who))}</a>` : esc(P(d.who))}${d.band ? ` <span class="muted">(${esc(BL(d.band.replace(/^рода/, 'Родът').replace(/^селото/, 'Селото')))})</span>` : ''} ${T('през', 'in')} <span class="yr">${fmtYear(d.year)}</span></li>`;
-      // still to come: greyed out, in the order history found them, each age under its name
-      const todo = TECH_LIST.filter(([id]) => !known.has(id));
-      const eras = [...new Set(todo.map(([, , e]) => e))];
-      body.innerHTML = `<p class="muted">${T(`Открити ${known.size} от ${TECH_LIST.length} знания. Всяко е открито за първи път от някого в този свят.`, `${known.size} of ${TECH_LIST.length} discoveries made. Each one was first found by someone in this world.`)}</p>
-        <ul class="discoveries">${ds.map(done).join('')}</ul>
-        ${eras.map((e) => `<h3 class="todo-era">${esc(EN ? ERAS_EN[e] : ERAS_BG[e])}</h3><ul class="discoveries">${todo.filter(([, , x]) => x === e)
-          .map(([id, bg]) => `<li class="todo"><b>${esc(TECH_ID(id, bg))}</b> - ${T('още не е открито', 'not discovered yet')}</li>`).join('')}</ul>`).join('')}`;
+      // German has no "discovered by" here: the name would have to change its case ("von Johann dem Starken")
+      const done = (d: Discovery) => {
+        const who = d.pid ? `<a href="#" class="ref" data-person="${d.pid}">${esc(P(d.who))}</a>` : esc(P(d.who));
+        const band = d.band ? ` <span class="muted">(${esc(BL(d.band.replace(/^рода/, 'Родът').replace(/^селото/, 'Селото')))})</span>` : '';
+        const yr = `<span class="yr">${fmtYear(d.year)}</span>`;
+        return `<li><b>${esc(TECH_ID(d.tech, d.name))}</b> - ${DE ? `${who}${band}, ${yr}` : `${T('открито от', 'discovered by', '')} ${who}${band} ${T('през', 'in', '')} ${yr}`}</li>`;
+      };
+      const byId = new Map(ds.map((d) => [d.tech, d]));
+      // every age with all its discoveries, like the secrets: the ones still to come are grey and only described
+      const eras = [...new Set(TECH_LIST.map(([, , e]) => e))];
+      const todo = ([id, bg]: [string, string, number]) => `<li class="todo"><b>${esc(TECH_ID(id, bg))}</b> - ${esc((DE ? TECH_DESC_DE[id] : TECH_DESC[id]?.[EN ? 1 : 0]) ?? T('още не е открито', 'not discovered yet', 'noch nicht entdeckt'))}</li>`;
+      body.innerHTML = `<p class="muted">${T(`Открити ${known.size} от ${TECH_LIST.length} знания. Всяко е открито за първи път от някого в този свят.`, `${known.size} of ${TECH_LIST.length} discoveries made. Each one was first found by someone in this world.`,
+        `${known.size} von ${TECH_LIST.length} Entdeckungen gemacht. Jede wurde in dieser Welt von jemandem zum ersten Mal gefunden.`)}</p>
+        ${eras.map((e) => {
+          const list = TECH_LIST.filter(([, , x]) => x === e);
+          const n = list.filter(([id]) => byId.has(id)).length;
+          return `<section class="tech-age"><h3 class="tech-era">${esc(L3(ERAS_BG, ERAS_EN, ERAS_DE)[e])} <span>${n}/${list.length}</span></h3>
+            <ul class="discoveries">${list.map((t) => (byId.has(t[0]) ? done(byId.get(t[0])!) : todo(t))).join('')}</ul></section>`;
+        }).join('')}`;
     });
   } else if (activeTab === 'bands') {
     const sorted = [...bands].sort((a, b) => b.size - a.size);
     body.innerHTML = `<ul class="bands">${sorted.map((b) => `
       <li data-band="${b.id}"><span class="dot" style="background:#${b.color.toString(16).padStart(6, '0')}"></span>
       <div><b>${esc(b.settlementName ? VILLAGE(b.settlementName) : B(b.name))}</b>${b.settlementName ? `<small> · ${esc(B(b.name))}</small>` : ''}
-      <div class="muted">${b.size} ${T('души', 'people')} · ${b.settled ? T('село', 'village') : T('скитат', 'nomads')} · ${T('знания', 'knowledge')}: ${b.techs.length}</div></div></li>`).join('')}</ul>`;
+      <div class="muted">${b.size} ${T('души', 'people', 'Menschen')} · ${b.settled ? T('село', 'village', 'Dorf') : T('скитат', 'nomads', 'Nomaden')} · ${T('знания', 'knowledge', 'Wissen')}: ${b.techs.length}</div></div></li>`).join('')}</ul>`;
   } else if (activeTab === 'heroes') {
-    body.innerHTML = `<p class="muted">${T('Зареждам...', 'Loading...')}</p>`;
+    body.innerHTML = `<p class="muted">${T('Зареждам...', 'Loading...', 'Wird geladen …')}</p>`;
     api<{ id: number; name: string; age: number; band: string; deeds: string[] }[]>('/api/heroes').then((hs) => {
       if (activeTab !== 'heroes') return;
       body.innerHTML = hs.length ? `<ul class="heroes">${hs.map((h) => `<li data-person="${h.id}"><b>${esc(P(h.name))}</b>
-        <span class="muted">${h.age} ${T('г.', 'y')} · ${esc(BL(h.band))}</span>${h.deeds.length ? `<div>${h.deeds.map((x) => esc(DEED(x))).join('<br>')}</div>` : ''}</li>`).join('')}</ul>`
-        : `<p class="muted">${T('Още никой не е направил нещо велико. Търпение.', 'Nobody has done anything great yet. Patience.')}</p>`;
+        <span class="muted">${h.age} ${T('г.', 'y', 'J.')} · ${esc(BL(h.band))}</span>${h.deeds.length ? `<div>${h.deeds.map((x) => esc(DEED(x))).join('<br>')}</div>` : ''}</li>`).join('')}</ul>`
+        : `<p class="muted">${T('Още никой не е направил нещо велико. Търпение.', 'Nobody has done anything great yet. Patience.', 'Noch hat niemand etwas Großes vollbracht. Geduld.')}</p>`;
     }).catch(() => {
-      if (activeTab === 'heroes') body.innerHTML = `<p class="muted">${T('Не успях да заредя личностите. Опитай пак след малко.', 'Could not load the people. Try again in a moment.')}</p>`;
+      if (activeTab === 'heroes') body.innerHTML = `<p class="muted">${T('Не успях да заредя личностите. Опитай пак след малко.', 'Could not load the people. Try again in a moment.', 'Die Personen konnten nicht geladen werden. Versuch es gleich noch einmal.')}</p>`;
     });
   } else if (activeTab === 'stats') {
     renderStats(body);
@@ -392,14 +408,16 @@ function renderSide() {
       const when = (ms: number) => {
         if (!ms) return '';
         const d = new Date(ms), two = (n: number) => String(n).padStart(2, '0');
+        if (DE) return ` – Gefunden am ${two(d.getDate())}.${two(d.getMonth() + 1)}.${d.getFullYear()} um ${two(d.getHours())}:${two(d.getMinutes())} Uhr`;
         return EN ? ` - Found on ${two(d.getDate())}.${two(d.getMonth() + 1)}.${d.getFullYear()} at ${two(d.getHours())}:${two(d.getMinutes())}`
           : ` - Открит на ${two(d.getDate())}.${two(d.getMonth() + 1)}.${d.getFullYear()} в ${two(d.getHours())}:${two(d.getMinutes())}ч.`;
       };
       body.innerHTML = `<p class="muted">${T(`Намерени ${found.length} от ${SECRET_COUNT}. Тайните са мънички и се крият из проучената земя. Зимата ги затрупва със сняг.`,
-        `Found ${found.length} of ${SECRET_COUNT}. The secrets are tiny and hide in the explored land. Winter buries them in snow.`)}</p>
+        `Found ${found.length} of ${SECRET_COUNT}. The secrets are tiny and hide in the explored land. Winter buries them in snow.`,
+        `${found.length} von ${SECRET_COUNT} gefunden. Die Geheimnisse sind winzig und verstecken sich im erkundeten Land. Im Winter liegen sie unter dem Schnee.`)}</p>
         <ol class="secrets">${Array.from({ length: SECRET_COUNT }, (_, k) => at.has(k)
           ? `<li class="found"><b>${esc(HERO(k))}</b>${when(at.get(k)!)}</li>`
-          : `<li>${T('Намери ме', 'Find me')}</li>`).join('')}</ol>`;
+          : `<li>${T('Намери ме', 'Find me', 'Finde mich')}</li>`).join('')}</ol>`;
     });
   }
 }
@@ -413,12 +431,12 @@ async function renderStats(body: HTMLElement) {
   const techsKnown = new Set(bands.flatMap((b) => b.techs));
   body.innerHTML = `
     <div class="kpis">
-      <div><span>${T('Родени', 'Born')}</span><b id="born2">${$('#born').textContent}</b></div>
-      <div><span>${T('Починали', 'Died')}</span><b>${$('#died').textContent}</b></div>
-      <div><span>${T('Знания', 'Knowledge')}</span><b>${techsKnown.size}</b></div>
+      <div><span>${T('Родени', 'Born', 'Geboren')}</span><b id="born2">${$('#born').textContent}</b></div>
+      <div><span>${T('Починали', 'Died', 'Gestorben')}</span><b>${$('#died').textContent}</b></div>
+      <div><span>${T('Знания', 'Knowledge', 'Wissen')}</span><b>${techsKnown.size}</b></div>
     </div>
-    <h3>${T('Население', 'Population')}</h3><canvas id="popChart" height="160"></canvas>
-    <h3>${T('Какво знаят хората', 'What people know')}</h3><div class="techs">${[...techsKnown].map((t) => `<span class="pill">${esc(TECH(t))}</span>`).join('') || `<span class="muted">${T('Нищо още', 'Nothing yet')}</span>`}</div>`;
+    <h3>${T('Население', 'Population', 'Bevölkerung')}</h3><canvas id="popChart" height="160"></canvas>
+    <h3>${T('Какво знаят хората', 'What people know', 'Was die Menschen wissen')}</h3><div class="techs">${[...techsKnown].map((t) => `<span class="pill">${esc(TECH(t))}</span>`).join('') || `<span class="muted">${T('Нищо още', 'Nothing yet', 'Noch nichts')}</span>`}</div>`;
   const c = $('#popChart') as HTMLCanvasElement;
   const w = (c.width = c.clientWidth * 2), h = (c.height = 320);
   const g = c.getContext('2d')!;
@@ -440,7 +458,7 @@ async function renderStats(body: HTMLElement) {
   g.fillText(fmtYear(rows[0].year), 8, h - 8);
   const endLabel = fmtYear(rows[rows.length - 1].year);
   g.fillText(endLabel, w - g.measureText(endLabel).width - 8, h - 8);
-  g.fillText(`${T('макс.', 'max')} ${num(Math.round(max / 1.1))}`, 8, 26);
+  g.fillText(`${T('макс.', 'max', 'max.')} ${num(Math.round(max / 1.1))}`, 8, 26);
 }
 
 async function loadOlder() {
@@ -473,25 +491,32 @@ function openRef(el: HTMLElement) {
 
 /** "Основан от X, дошъл от Y" for a band card; the first bands came with the world */
 function originHtml(founder?: { id: number; name: string } | null, from?: { id: number; name: string } | null): string {
-  if (!founder && !from) return `<div class="muted">${T('Един от първите родове на света.', 'One of the first clans of the world.')}</div>`;
-  const who = founder ? `<a href="#" data-person="${founder.id}">${esc(P(founder.name))}</a>` : T('неизвестен', 'unknown');
-  const src = from ? ` · ${T('дошли от', 'came from')} <a href="#" data-band="${from.id}">${esc(BL(from.name))}</a>` : '';
-  return `<div>${T('Основан от', 'Founded by')} ${who}${src}</div>`;
+  if (!founder && !from) return `<div class="muted">${T('Един от първите родове на света.', 'One of the first clans of the world.', 'Einer der ersten Clans der Welt.')}</div>`;
+  const who = founder ? `<a href="#" data-person="${founder.id}">${esc(P(founder.name))}</a>` : T('неизвестен', 'unknown', 'unbekannt');
+  const fromLink = (label: string) => `<a href="#" data-band="${from!.id}">${esc(label)}</a>`;
+  if (DE) {
+    // "Gründer: Johann der Starke · hervorgegangen aus dem Clan Wolfszahn"
+    const src2 = from ? ` · hervorgegangen aus ${fromLink(bandTextCaseDe(from.name, 'dat'))}` : '';
+    return `<div>${founder && isWoman(founder.name) ? 'Gründerin' : 'Gründer'}: ${who}${src2}</div>`;
+  }
+  const src = from ? ` · ${T('дошли от', 'came from', '')} ${fromLink(BL(from.name))}` : '';
+  return `<div>${T('Основан от', 'Founded by', '')} ${who}${src}</div>`;
 }
 
 async function showGoneBand(id: number) {
   const r2 = await api<{ live?: BandView; gone?: GoneBand }>(`/api/band/${id}`).catch(() => null);
   if (r2?.live) { const b = r2.live; stopTour(); lookAt(b.x, b.y, 1.6); showBand(b); return; }
   const g = r2?.gone;
-  if (!g) { openCard(`<h2>${T('Изгубен в мъглата на времето', 'Lost in the mists of time')}</h2><p class="muted">${T('Летописът не помни повече за този род.', 'The chronicle remembers nothing more of this clan.')}</p>`); return; }
+  if (!g) { openCard(`<h2>${T('Изгубен в мъглата на времето', 'Lost in the mists of time', 'Im Nebel der Zeit verloren')}</h2><p class="muted">${T('Летописът не помни повече за този род.', 'The chronicle remembers nothing more of this clan.', 'Die Chronik weiß nichts mehr über diesen Clan.')}</p>`); return; }
   openCard(`
     <h2><span class="dot" style="background:#${g.color.toString(16).padStart(6, '0')}"></span> ${esc(g.settlementName ? VILLAGE(g.settlementName) : B(g.name))}</h2>
     <div class="muted">${g.settlementName ? `${esc(B(g.name))} · ` : ''}${fmtYear(g.foundedYear)} – ${fmtYear(g.endedYear)}</div>
     ${originHtml(g.founder, g.from)}
-    <p>${g.end === 'extinct' ? T('Този род угасна. Няма останали хора от него.', 'This clan died out. No one from it is left.')
+    <p>${g.end === 'extinct' ? T('Този род угасна. Няма останали хора от него.', 'This clan died out. No one from it is left.', 'Dieser Clan ist erloschen. Von ihm ist niemand mehr übrig.')
+      : DE ? `Die Letzten dieses Clans schlossen sich ${esc(bandTextCaseDe(g.end, 'dat'))} an.`
       : EN ? `The last of this clan joined ${esc(BL(g.end.replace(/^Родът/, 'рода').replace(/^Селото/, 'селото')))}.`
       : `Последните от този род се присъединиха към ${esc(g.end.replace(/^Родът/, 'рода').replace(/^Селото/, 'селото'))}.`}</p>
-    <h3>${T('Какво знаеха', 'What they knew')}</h3><div class="techs">${g.techs.map((t) => `<span class="pill">${esc(TECH(t))}</span>`).join('') || `<span class="muted">${T('Нищо', 'Nothing')}</span>`}</div>`);
+    <h3>${T('Какво знаеха', 'What they knew', 'Was sie wussten')}</h3><div class="techs">${g.techs.map((t) => `<span class="pill">${esc(TECH(t))}</span>`).join('') || `<span class="muted">${T('Нищо', 'Nothing', 'Nichts')}</span>`}</div>`);
 }
 
 // ---------- cards ----------
@@ -501,6 +526,7 @@ function openCard(html: string, beside = false, extra = '') {
   $('#card').hidden = false;
   $('#card').classList.toggle('beside', beside);
   $('#card').classList.toggle('wide', extra === 'wide');
+  $('#card').classList.toggle('helpcard', extra === 'help');
   if (!beside) { follow = null; r.select(null); ($('#card') as HTMLElement).style.cssText = ''; }
 }
 function closeCard() {
@@ -522,7 +548,7 @@ async function showPerson(id: number) {
   const d = await api<PersonDetail>(`/api/person/${id}`).catch(() => null);
   if (!d) return;
   // the first people have no parents: the world starts with them
-  const link = (p: { id: number; name: string } | null) => (p ? `<a href="#" data-person="${p.id}">${esc(P(p.name))}</a>` : `<span class="muted">${d.generation <= 1 ? T('от първите хора', 'one of the first people') : T('неизвестен', 'unknown')}</span>`);
+  const link = (p: { id: number; name: string } | null) => (p ? `<a href="#" data-person="${p.id}">${esc(P(p.name))}</a>` : `<span class="muted">${d.generation <= 1 ? T('от първите хора', 'one of the first people', 'aus der ersten Generation') : T('неизвестен', 'unknown', 'unbekannt')}</span>`);
   const genes = Object.entries(d.genes).map(([k, v]) => `<div class="gene"><span>${esc(GENE(k))}</span><div class="bar"><i style="width:${v}%"></i></div></div>`).join('');
   const alive = d.diedYear === null;
   // someone at home (not drawn) steps out to be followed
@@ -533,17 +559,17 @@ async function showPerson(id: number) {
   openCard(`
     <div class="person-head"><div class="avatar ${d.sex ? 'f' : 'm'}">${d.sex ? '👩' : '👨'}</div>
       <div><h2>${esc(P(d.name))}</h2>
-      <div class="muted">${alive ? `<span id="pAge">${d.age}</span> ${T('години', 'years')} · ${esc(BL(d.bandName))}` : `${fmtYear(d.bornYear)} – ${fmtYear(d.diedYear!)}, ${esc(CAUSE(d.cause ?? ''))} ${T('на', 'at')} ${d.age}`}</div>
-      ${d.title ? `<div class="title">${esc(TITLE(d.title))}</div>` : ''}
-      ${alive && d.task ? `<div>${T('Сега', 'Now')} ${esc(TASK(r.nightTask(id) ?? d.task))}</div>` : ''}<div class="muted">${T(`${d.generation}-о поколение`, `generation ${d.generation}`)}</div></div></div>
+      <div class="muted">${alive ? `<span id="pAge">${d.age}</span> ${T('години', 'years', 'Jahre')} · ${esc(BL(d.bandName))}` : `${fmtYear(d.bornYear)} – ${fmtYear(d.diedYear!)}, ${esc(CAUSE(d.cause ?? '', d.age))}`}</div>
+      ${d.title ? `<div class="title">${esc(TITLE(d.title, d.sex === 1))}</div>` : ''}
+      ${alive && d.task ? `<div>${T('Сега', 'Now', 'Gerade:')} ${esc(TASK(r.nightTask(id) ?? d.task))}</div>` : ''}<div class="muted">${T(`${d.generation}-о поколение`, `generation ${d.generation}`, `${d.generation}. Generation`)}</div></div></div>
     <div class="genes">${genes}</div>
     <dl class="family">
-      <dt>${T('Майка', 'Mother')}</dt><dd>${link(d.mother)}</dd><dt>${T('Баща', 'Father')}</dt><dd>${link(d.father)}</dd>
-      <dt>${T('Партньор', 'Partner')}</dt><dd>${link(d.partner)}</dd>
-      <dt>${T('Деца', 'Children')}</dt><dd>${d.children.length ? d.children.map((c) => `<a href="#" data-person="${c.id}" class="${c.alive ? '' : 'dead'}">${esc(P(c.name))}</a>`).join(', ') : `<span class="muted">${T('няма', 'none')}</span>`}</dd>
+      <dt>${T('Майка', 'Mother', 'Mutter')}</dt><dd>${link(d.mother)}</dd><dt>${T('Баща', 'Father', 'Vater')}</dt><dd>${link(d.father)}</dd>
+      <dt>${T('Партньор', 'Partner', d.partner && isWoman(d.partner.name) ? 'Partnerin' : 'Partner')}</dt><dd>${link(d.partner)}</dd>
+      <dt>${T('Деца', 'Children', 'Kinder')}</dt><dd>${d.children.length ? d.children.map((c) => `<a href="#" data-person="${c.id}" class="${c.alive ? '' : 'dead'}">${esc(P(c.name))}</a>`).join(', ') : `<span class="muted">${T('няма', 'none', 'keine')}</span>`}</dd>
     </dl>
-    <button class="btn tree-btn" data-tree="${d.id}">${T('Родословие', 'Family tree')}</button>
-    ${d.deeds.length ? `<h3>${T('Дела', 'Deeds')}</h3><ul class="deeds">${d.deeds.map((x) => `<li>${esc(DEED(x))}</li>`).join('')}</ul>` : ''}`, beside);
+    <button class="btn tree-btn" data-tree="${d.id}">${T('Родословие', 'Family tree', 'Stammbaum')}</button>
+    ${d.deeds.length ? `<h3>${T('Дела', 'Deeds', 'Taten')}</h3><ul class="deeds">${d.deeds.map((x) => `<li>${esc(DEED(x))}</li>`).join('')}</ul>` : ''}`, beside);
   if (live && alive) { follow = id; r.select(id); }
 }
 
@@ -582,10 +608,10 @@ async function showSecret(spot: SecretSpot) {
   r.markSecret(spot.k);
   if (activeTab === 'secrets') renderSide();
   openCard(`
-    <h2>✨ ${T('№', '#')}${spot.k + 1} ${esc(HERO(spot.k))}</h2>
+    <h2>✨ ${T('№', '#', 'Nr. ')}${spot.k + 1} ${esc(HERO(spot.k))}</h2>
     <div class="muted">${esc(kind.name[0].toUpperCase() + kind.name.slice(1))}</div>
     <p>${esc(kind.text)}</p>
-    <div class="muted">${res ? `${res.first ? T('Ти си първият, който я откри!', 'You are the first to find it!') : T('Някой вече я е открил преди теб.', 'Someone found it before you.')} ${T('Намерени тайни', 'Secrets found')}: ${res.found} ${T('от', 'of')} ${SECRET_COUNT}.` : ''}</div>`);
+    <div class="muted">${res ? `${res.first ? T('Ти си първият, който я откри!', 'You are the first to find it!', 'Niemand war vor dir hier: Du hast es zuerst gefunden!') : T('Някой вече я е открил преди теб.', 'Someone found it before you.', 'Jemand hat es schon vor dir gefunden.')} ${T('Намерени тайни', 'Secrets found', 'Gefundene Geheimnisse')}: ${res.found} ${T('от', 'of', 'von')} ${SECRET_COUNT}.` : ''}</div>`);
 }
 
 /** family tree: three generations of ancestors, and the straight lines back to the first people */
@@ -595,30 +621,40 @@ async function showTree(id: number) {
   // "11 785 – 11 708 г. пр.н.е.": the era is written once when both years share it
   const years = (n: TreeNode) => {
     const a = fmtYear(n.bornYear);
-    if (n.diedYear === null) return `${T('от', 'since')} ${a}`;
+    if (n.diedYear === null) return `${T('от', 'since', 'seit')} ${a}`;
     const b = fmtYear(n.diedYear);
-    const tail = a.match(EN ? / BC$/ : / г\..*$/)?.[0] ?? '';
+    const tail = a.match(L3(/ г\..*$/, / BC$/, / v\. Chr\.$/))?.[0] ?? '';
     return tail && b.endsWith(tail) ? `${a.slice(0, -tail.length)} – ${b}` : `${a} – ${b}`;
   };
   const box = (n: TreeNode | null | undefined, gen: number): string => {
-    if (!n) return `<div class="tbox empty">${gen <= 1 ? T('от първите хора', 'one of the first people') : T('неизвестен', 'unknown')}</div>`;
+    if (!n) return `<div class="tbox empty">${gen <= 1 ? T('от първите хора', 'one of the first people', 'aus der ersten Generation') : T('неизвестен', 'unknown', 'unbekannt')}</div>`;
     const parents = n.mother !== undefined || n.father !== undefined
       ? `<div class="tpar">${box(n.father, n.generation - 1)}${box(n.mother, n.generation - 1)}</div>` : '';
-    return `<div class="tn"><div class="tbox ${n.sex ? 'f' : 'm'}${n.diedYear !== null ? ' dead' : ''}" data-tree="${n.id}" title="${T('Покажи неговото родословие', 'Show their family tree')}">
+    return `<div class="tn"><div class="tbox ${n.sex ? 'f' : 'm'}${n.diedYear !== null ? ' dead' : ''}" data-tree="${n.id}" title="${T('Покажи неговото родословие', 'Show their family tree', 'Stammbaum anzeigen')}">
       <b>${esc(P(n.name))}</b><small>${years(n)}</small></div>${parents}</div>`;
   };
   const line = (title: string, l: TreeNode[]) => l.length
-    ? `<details class="tline"><summary>${title}: ${T(`${l.length} поколения назад, до`, `${l.length} generations back, to`)} ${esc(P(l[l.length - 1].name))}</summary><ol>${l.map((n) => `<li><a href="#" data-tree="${n.id}">${esc(P(n.name))}</a> <span class="muted">${years(n)}</span></li>`).join('')}</ol></details>`
+    ? `<details class="tline"><summary>${title}: ${T(`${l.length} поколения назад, до`, `${l.length} generations back, to`, `${l.length} Generationen zurück:`)} ${esc(P(l[l.length - 1].name))}</summary><ol>${l.map((n) => `<li><a href="#" data-tree="${n.id}">${esc(P(n.name))}</a> <span class="muted">${years(n)}</span></li>`).join('')}</ol></details>`
     : '';
   const root = t.root;
   openCard(`
-    <h2>${T('Родословие', 'Family tree')}</h2>
-    <div class="muted"><a href="#" data-person="${root.id}">${esc(P(root.name))}</a> · ${T(`${root.generation}-о поколение · цъкни някого, за да видиш неговите предци`, `generation ${root.generation} · click someone to see their ancestors`)}</div>
+    <h2>${T('Родословие', 'Family tree', 'Stammbaum')}</h2>
+    <div class="muted"><a href="#" data-person="${root.id}">${esc(P(root.name))}</a> · ${T(`${root.generation}-о поколение · цъкни някого, за да видиш неговите предци`, `generation ${root.generation} · click someone to see their ancestors`, `${root.generation}. Generation · klicke auf jemanden, um seine Vorfahren zu sehen`)}</div>
     <div class="tree">${box(root, root.generation)}</div>
-    ${line(T('По майчина линия', 'Mother\'s line'), t.motherLine)}
-    ${line(T('По бащина линия', 'Father\'s line'), t.fatherLine)}`, false, 'wide');
+    ${line(T('По майчина линия', 'Mother\'s line', 'Mütterliche Linie'), t.motherLine)}
+    ${line(T('По бащина линия', 'Father\'s line', 'Väterliche Linie'), t.fatherLine)}`, false, 'wide');
 }
 
+
+/** iron age: "Capital of the Kingdom of Whiteford (5 villages)" */
+function kingdomHtml(k: BandView['kingdom']): string {
+  if (!k) return '';
+  const n = k.members;
+  const v = VILLAGE(k.place);
+  return `<div>${esc(k.capital
+    ? T(`Столица на царство ${v}`, `Capital of the Kingdom of ${v}`, `Hauptstadt des Königreichs ${v}`)
+    : T(`Част от царство ${v}`, `Part of the Kingdom of ${v}`, `Teil des Königreichs ${v}`))} (${n} ${T(n === 1 ? 'село' : 'села', n === 1 ? 'village' : 'villages', n === 1 ? 'Dorf' : 'Dörfer')})</div>`;
+}
 function showBand(b: BandView) {
   const members = people.filter((p) => p[4] === b.id);
   const kidsN = members.filter((p) => p[5] < 12).length;
@@ -629,13 +665,14 @@ function showBand(b: BandView) {
   }
   openCard(`
     <h2><span class="dot" style="background:#${b.color.toString(16).padStart(6, '0')}"></span> ${esc(b.settlementName ? VILLAGE(b.settlementName) : B(b.name))}</h2>
-    <div class="muted">${b.settlementName ? `${esc(B(b.name))} · ` : ''}${T('от', 'since')} ${fmtYear(b.founded)} · ${b.settled ? T('уседнали', 'settled') : T('скитат по земята', 'wandering the land')}</div>
-    ${b.chief ? `<div>${esc(CHIEF(b.chief.title))}: <a href="#" data-person="${b.chief.id}">${esc(P(b.chief.name))}</a></div>` : ''}
+    <div class="muted">${b.settlementName ? `${esc(B(b.name))} · ` : ''}${T('от', 'since', 'seit')} ${fmtYear(b.founded)} · ${b.settled ? T('уседнали', 'settled', 'sesshaft') : T('скитат по земята', 'wandering the land', 'ziehen durchs Land')}</div>
+    ${b.chief ? `<div>${esc(CHIEF(b.chief.title, isWoman(b.chief.name)))}: <a href="#" data-person="${b.chief.id}">${esc(P(b.chief.name))}</a></div>` : ''}
+    ${kingdomHtml(b.kingdom)}
     ${originHtml(b.founder, b.from)}
-    <div class="kpis"><div><span>${T('Хора', 'People')}</span><b>${b.size}</b></div><div><span>${T('Деца', 'Children')}</span><b>${kidsN}</b></div><div><span>${T('Запаси', 'Food')}</span><b>${b.food}</b></div></div>
-    <h3>${T('Какво правят сега', 'What they are doing')}</h3><ul class="deeds">${[...tasks].sort((a, c) => c[1] - a[1]).map(([t, n]) => `<li>${n} ${esc(t)}</li>`).join('')}</ul>
-    <h3>${T('Какво знаят', 'What they know')}</h3><div class="techs">${b.techs.map((t) => `<span class="pill">${esc(TECH(t))}</span>`).join('') || `<span class="muted">${T('Още нищо', 'Nothing yet')}</span>`}</div>
-    <h3>${T('Хората', 'The people')}</h3><div class="names">${members.slice(0, 60).map((p) => `<a href="#" data-person="${p[0]}">#${p[0]}</a>`).join(', ')}</div>`);
+    <div class="kpis"><div><span>${T('Хора', 'People', 'Menschen')}</span><b>${b.size}</b></div><div><span>${T('Деца', 'Children', 'Kinder')}</span><b>${kidsN}</b></div><div><span>${T('Запаси', 'Food', 'Vorräte')}</span><b>${b.food}</b></div></div>
+    <h3>${T('Какво правят сега', 'What they are doing', 'Was sie gerade tun')}</h3><ul class="deeds">${[...tasks].sort((a, c) => c[1] - a[1]).map(([t, n]) => `<li>${n} ${esc(t)}</li>`).join('')}</ul>
+    <h3>${T('Какво знаят', 'What they know', 'Was sie wissen')}</h3><div class="techs">${b.techs.map((t) => `<span class="pill">${esc(TECH(t))}</span>`).join('') || `<span class="muted">${T('Още нищо', 'Nothing yet', 'Noch nichts')}</span>`}</div>
+    <h3>${T('Хората', 'The people', 'Die Menschen')}</h3><div class="names">${members.slice(0, 60).map((p) => `<a href="#" data-person="${p[0]}">#${p[0]}</a>`).join(', ')}</div>`);
   // names come from the server one by one; fill them in lazily
   const links = [...document.querySelectorAll<HTMLAnchorElement>('#cardBody .names a')];
   links.slice(0, 40).forEach(async (a) => {
@@ -655,10 +692,10 @@ async function whileAway(seen: number) {
   const hours = lastVisit ? Math.round((Date.now() - lastVisit) / 3600000) : 0;
   const top = res.events.filter((e) => e.importance >= 3).slice(-12);
   const rest = res.events.filter((e) => e.importance === 2).slice(-8);
-  openCard(`<h2>${T('Докато те нямаше', 'While you were away')}${hours ? ` (${hours} ${T('ч.', 'h')})` : ''}</h2>
-    <p class="muted">${T(`Записани са ${num(res.total)} нови събития, ${res.big} от тях важни.`, `${num(res.total)} new events were written, ${res.big} of them important.`)}</p>
-    ${top.length ? `<h3>${T('Най-важното', 'The highlights')}</h3><ul class="events">${top.map(eventHtml).join('')}</ul>` : ''}
-    ${rest.length ? `<h3>${T('Още', 'More')}</h3><ul class="events">${rest.map(eventHtml).join('')}</ul>` : ''}`);
+  openCard(`<h2>${T('Докато те нямаше', 'While you were away', 'Während du weg warst')}${hours ? ` (${hours} ${T('ч.', 'h', 'Std.')})` : ''}</h2>
+    <p class="muted">${T(`Записани са ${num(res.total)} нови събития, ${res.big} от тях важни.`, `${num(res.total)} new events were written, ${res.big} of them important.`, `${num(res.total)} neue Ereignisse wurden aufgeschrieben, ${res.big} davon wichtig.`)}</p>
+    ${top.length ? `<h3>${T('Най-важното', 'The highlights', 'Das Wichtigste')}</h3><ul class="events">${top.map(eventHtml).join('')}</ul>` : ''}
+    ${rest.length ? `<h3>${T('Още', 'More', 'Weiteres')}</h3><ul class="events">${rest.map(eventHtml).join('')}</ul>` : ''}`);
 }
 
 // ---------- tour mode: the camera wanders by itself ----------
@@ -707,9 +744,19 @@ $('#nightBtn').onclick = () => {
 const toggleSide = () => save('letopis.sideHidden', document.body.classList.toggle('side-hidden'));
 if (store('letopis.sideHidden', false)) document.body.classList.add('side-hidden');
 $('#sideToggle').onclick = toggleSide;
-$('#langBtn').textContent = EN ? 'БГ' : 'EN';
-$('#langBtn').title = EN ? 'Български' : 'English';
-$('#langBtn').onclick = () => setLang(EN ? 'bg' : 'en');
+// the language: Bulgarian, English or German
+const langSel = $('#langSel') as HTMLSelectElement;
+langSel.value = LANG;
+langSel.title = T('Език', 'Language', 'Sprache');
+langSel.onchange = () => setLang(langSel.value as Lang);
+
+// "?": what is new and a short help; a dot on it while a new version is unread
+const helpBtn = $('#helpBtn');
+helpBtn.classList.toggle('news', hasNews());
+helpBtn.onclick = () => {
+  openCard(helpWindowHtml(), false, 'help');
+  helpBtn.classList.remove('news');
+};
 $('#sideHandle').onclick = toggleSide;
 
 // ---------- frame loop ----------

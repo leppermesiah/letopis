@@ -18,7 +18,7 @@ while nobody is watching.
 - Clans wander, split, meet, learn from each other, settle into villages and sometimes die out together with their knowledge.
 - Trees grow and get cut for fires and huts; a clan moves on when the wood around its camp is gone.
 - A living chronicle of everything that happens, with clickable people and clans, family trees back to the first humans and a list of first discoveries.
-- English and Bulgarian, switchable at any time with the language button.
+- Bulgarian, English and German, switchable at any time with the language selector. People, villages and clans carry names native to each language.
 - Kids mode with bigger letters and simpler explanations.
 - "While you were away": the highlights since your last visit.
 - Tour mode: the camera wanders the world by itself and stops where something happens. Nice on a TV.

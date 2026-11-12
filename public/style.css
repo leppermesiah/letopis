@@ -26,6 +26,11 @@ body.kids { --fs: 18px; --side-w: 420px; }
 .btn { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; cursor: pointer; backdrop-filter: blur(8px); }
 .btn:hover { border-color: var(--accent); }
 .btn[aria-pressed='true'] { background: var(--accent); color: #1a1206; border-color: var(--accent); }
+.btn.lang { appearance: none; -webkit-appearance: none; padding: 8px 14px; text-align: center; }
+.btn.lang option { color: #111; background: #fff; }
+.btn.help { position: relative; font-size: 17px; font-weight: 600; }
+/* a new version that has not been read yet */
+.btn.help.news::after { content: ''; position: absolute; top: 2px; right: 2px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--panel-solid); }
 .btn.round { width: 38px; height: 38px; padding: 0; font-size: 20px; line-height: 1; }
 .btn.ghost { background: transparent; width: 100%; margin: 8px 0 16px; }
 
@@ -57,6 +62,12 @@ body.side-hidden .top { right: 12px; }
 .discoveries li { padding: 8px 2px; border-bottom: 1px solid var(--line); }
 .discoveries li.todo { color: var(--muted); opacity: 0.55; }
 .discoveries li.todo b { font-weight: 500; }
+/* each age is its own card with a clear title */
+.tech-age { margin: 14px 0 0; padding: 0 12px 4px; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--line); border-left: 3px solid var(--accent-2); border-radius: var(--radius); }
+.tech-age + .tech-age { margin-top: 18px; }
+h3.tech-era { display: flex; justify-content: space-between; align-items: baseline; margin: 0 -12px; padding: 10px 12px 8px; font-family: var(--serif); font-size: 16px; font-weight: 600; color: var(--accent-2); border-bottom: 1px solid var(--line); }
+h3.tech-era span { font-family: var(--font); font-size: 12px; color: var(--muted); font-weight: 400; }
+.tech-age .discoveries li:last-child { border-bottom: 0; }
 h3.todo-era { margin: 14px 0 2px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .discoveries .yr { color: var(--accent); }
 .tab[aria-selected='true'] { color: var(--text); border-bottom-color: var(--accent); }
@@ -154,3 +165,21 @@ a.ref:hover { border-bottom-style: solid; }
 .secrets li.found b { color: var(--accent-2); font-weight: 600; }
 
 .person-head .title { color: var(--accent); font-weight: 600; }
+
+/* the "?" window: one line per version that opens and closes, then the help */
+.card.helpcard { width: min(600px, calc(100vw - 32px)); }
+.releases { margin: 10px 0 4px; }
+.release { border: 1px solid var(--line); border-radius: 10px; margin: 0 0 8px; background: rgba(255, 255, 255, 0.03); }
+.release summary { cursor: pointer; padding: 9px 12px; color: var(--accent-2); font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
+.release summary::-webkit-details-marker { display: none; }
+.release summary::after { content: '▾'; color: var(--muted); transition: transform 0.15s; }
+.release[open] summary::after { transform: rotate(180deg); }
+.release ul { margin: 0; padding: 0 14px 10px 32px; line-height: 1.5; }
+.card.helpcard h4 { margin: 12px 0 4px; color: var(--accent); font-weight: 600; }
+.help { margin: 0; padding-left: 20px; line-height: 1.5; }
+.help li { margin: 2px 0; }
+/* "what's new": breaking changes and new-world-only notes on top of each version */
+.release .tag { display: inline-block; font-size: 0.75em; font-weight: 600; padding: 0 6px; border-radius: 8px; margin-right: 2px; vertical-align: 1px; }
+.release .tag.breaking { background: #b3261e; color: #fff; }
+.release .tag.new { background: #c27c0e; color: #fff; }
+.release .tag.old { background: #3b5b8c; color: #fff; }
