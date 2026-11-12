@@ -176,6 +176,18 @@ export const TECH_DE: Record<string, { name: string; text: string; kids: string 
   walls: { name: 'Stadtmauern', text: '{Band} errichtete Steinmauern um seine Häuser. {name} leitete die Arbeit. Aus dem Dorf wird eine Stadt.', kids: '{name} hat eine hohe Mauer um das Dorf gebaut. Jetzt ist es eine richtige Stadt!' },
   calendar: { name: 'Kalender', text: '{name} {aus band} zählte die Tage von einem Vollmond zum nächsten und schrieb auf, wann gesät werden muss. Die Ernte kommt nicht mehr zu spät.', kids: '{name} hat am Mond und an den Sternen abgelesen, wann man die Samen säen muss.' },
   horse: { name: 'Gezähmtes Pferd', text: '{name} {aus band} zähmte ein Wildpferd und spannte es vor den Karren. Der Weg zu den Nachbarn wurde dreimal kürzer.', kids: '{name} hat sich mit einem Pferd angefreundet, und jetzt reiten sie zusammen!' },
+  iron: { name: 'Eisen', text: '{name} {aus band} heizte den Ofen heißer als je zuvor, und aus dem roten Erz kam ein dunkles Metall. Eisen gibt es überall, und es ist billiger als Bronze. Ein neues Zeitalter beginnt.', kids: '{name} hat Eisen geschmiedet: dunkel, fest und überall zu finden!' },
+  alphabet: { name: 'Alphabet', text: '{name} {aus band} gab jedem Laut ein eigenes Zeichen. Hunderte Zeichen braucht man nicht mehr: Zwei Dutzend genügen, um jedes Wort zu schreiben.', kids: '{name} hat das Alphabet erfunden: nur wenige Buchstaben, und damit kann man alles schreiben!' },
+  harbor: { name: 'Hafen', text: '{name} {aus band} schüttete Steine in die Bucht und baute eine Mole. Nun legen hier Schiffe an und bringen Waren von fernen Küsten.', kids: '{name} hat einen Hafen gebaut, und von weit her kommen Schiffe zu Besuch!' },
+  kingdom: { name: 'Königreich', text: '{Band} vereinte die Nachbardörfer unter einer Krone, und {name} setzte sie auf. Ohne eine einzige Schlacht entsteht das erste Königreich.', kids: '{name} hat mehrere Dörfer zu einem Königreich vereint und alle zu einem großen Fest eingeladen!' },
+  coins: { name: 'Münzen', text: '{name} {aus band} prägte kleine Silberscheiben mit gleichem Gewicht und einem Stempel. Niemand muss mehr Kühe und Töpfe mitschleppen, um etwas zu kaufen.', kids: '{name} hat die ersten Münzen gemacht. Damit kann man alles kaufen, ohne eine Kuh mitzuschleppen!' },
+  laws: { name: 'Geschriebene Gesetze', text: '{name} {aus band} meißelte die Gesetze in eine Steinplatte auf dem Platz. Jeder kann sie lesen, und der Richter entscheidet nicht mehr nach Lust und Laune.', kids: '{name} hat die Regeln auf einen großen Stein geschrieben, damit sie für alle gleich sind.' },
+  theatre: { name: 'Theater', text: '{name} {aus band} setzte eine Maske auf und spielte vor der ganzen Stadt eine alte Sage. Die Menschen weinten und lachten gemeinsam.', kids: '{name} hat eine lustige Maske aufgesetzt, und alle haben gelacht!' },
+  medicine: { name: 'Heilkunde', text: '{name} {aus band} schrieb auf, welches Kraut gegen welche Krankheit hilft. Heiler lernen jetzt aus Schriftrollen, nicht nur von ihren Großmüttern.', kids: '{name} hat aufgeschrieben, wie man Krankheiten heilt, damit auch andere helfen können.' },
+  aqueduct: { name: 'Aquädukt', text: '{Band} brachte Wasser aus den Bergen über steinerne Bögen in die Stadt. {name} führte die Arbeiten an. Nun fließt sauberes Wasser, und es gibt weniger Krankheiten.', kids: '{name} hat eine Brücke für Wasser gebaut, und es fließt bis in die Stadt!' },
+  library: { name: 'Bibliothek', text: '{name} {aus band} trug alle Schriftrollen an einem Ort zusammen. Was einmal gelernt ist, gerät nicht mehr in Vergessenheit.', kids: '{name} hat viele Schriftrollen in ein Haus gebracht. Dort kann jeder lesen!' },
+  watermill: { name: 'Wassermühle', text: '{name} {aus band} setzte ein Rad in den Fluss und ließ es den Mühlstein drehen. Der Fluss mahlt das Mehl statt der Menschen.', kids: '{name} hat den Fluss ein großes Rad drehen lassen, und das mahlt ganz allein Mehl!' },
+  arch: { name: 'Gewölbe und Beton', text: '{name} {aus band} mischte Vulkansand mit Kalk und baute einen Bogen, der sich selbst trägt. Brücken und Kuppeln stehen nun jahrhundertelang.', kids: '{name} hat einen Stein gemacht, den man wie Matsch gießen kann und der dann hart wird!' },
 };
 
 /** fill a TECH_DE text for a person and a band */
@@ -216,6 +228,18 @@ export const TECH_DESC_DE: Record<string, string> = {
   walls: 'Steinmauern um das Dorf: die ersten Städte.',
   calendar: 'Die Sterne sagen, wann gesät und wann geerntet wird.',
   horse: 'Ein Pferd zum Reiten: Aus einer Woche Fußweg wird ein Tag.',
+  iron: 'Ein dunkles Metall aus rotem Erz: Werkzeug für alle.',
+  alphabet: 'Ein Zeichen für jeden Laut: Jeder kann schreiben lernen.',
+  harbor: 'Eine steinerne Mole: Schiffe kommen von fernen Küsten.',
+  kingdom: 'Mehrere Dörfer unter einer Krone und mit einer Hauptstadt.',
+  coins: 'Gestempeltes Silber: Der Markt wird einfach.',
+  laws: 'Regeln in Stein, für alle gleich.',
+  theatre: 'Masken, eine Bühne und alte Sagen vor der ganzen Stadt.',
+  medicine: 'Heilkunst, in Schriftrollen festgehalten.',
+  aqueduct: 'Steinerne Bögen bringen sauberes Wasser in die Stadt.',
+  library: 'Alle Schriftrollen an einem Ort: Wissen geht nicht verloren.',
+  watermill: 'Der Fluss dreht den Mühlstein.',
+  arch: 'Ein Bogen, der sich selbst trägt, und Stein, den man gießen kann.',
 };
 
 /** a tech by its Bulgarian name (what the server sends) */
@@ -237,13 +261,14 @@ export function eraDe(bg: string, eras: string[]): string {
 export const ERA_WHY_DE: Record<number, string> = {
   1: 'Die Menschen suchen ihre Nahrung nicht mehr nur, sie bauen sie an.',
   2: 'Kupfer und Zinn verschmelzen zu einem Metall, das härter ist als Stein. Aus Dörfern werden Städte.',
+  3: 'Eisen gibt es überall, und es ist billiger als Bronze. Dörfer schließen sich zu Königreichen zusammen.',
 };
 
 export const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 
 /** chief titles: [for a man, for a woman] */
 const CHIEF_DE: Record<string, [string, string]> = {
-  Старейшина: ['Ältester', 'Älteste'], Вожд: ['Häuptling', 'Stammesführerin'], Княз: ['Fürst', 'Fürstin'], Кмет: ['Bürgermeister', 'Bürgermeisterin'],
+  Старейшина: ['Ältester', 'Älteste'], Вожд: ['Häuptling', 'Stammesführerin'], Княз: ['Fürst', 'Fürstin'], Кмет: ['Bürgermeister', 'Bürgermeisterin'], Цар: ['König', 'Königin'],
 };
 export function chiefDe(bg: string, female = false): string {
   const t = CHIEF_DE[bg] ?? CHIEF_DE[bg[0]?.toUpperCase() + bg.slice(1)];
@@ -329,6 +354,7 @@ export function deedDe(d: string): string {
   if ((m = /^Откри „(.+)“ \((.+)\)$/.exec(d))) return `Entdeckte „${techDe(m[1])}“ (${yearsInTextDe(m[2])})`;
   if ((m = /^Преоткри „(.+)“ за своя род$/.exec(d))) return `Entdeckte „${techDe(m[1])}“ für den eigenen Clan neu`;
   if ((m = /^Доживя до 70 години \((.+)\)$/.exec(d))) return `Wurde 70 Jahre alt (${yearsInTextDe(m[1])})`;
+  if ((m = /^Стана първият цар на царство (.+) \((.+)\)$/.exec(d))) return `Wurde der erste König des Königreichs ${villageDe(m[1])} (${yearsInTextDe(m[2])})`;
   if ((m = /^Основа (.+) и стана негов (\S+) \((.+)\)$/.exec(d))) return `Gründete ${bandTextCaseDe(m[1], 'akk')} und stand ihm vor (${yearsInTextDe(m[3])})`;
   if ((m = /^Поведе лова на (.+)$/.exec(d))) return `Führte die Jagd auf ${BEAST_DE[m[1]] ?? m[1]} an`;
   return yearsInTextDe(d);

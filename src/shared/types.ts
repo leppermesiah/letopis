@@ -110,6 +110,8 @@ export interface BandView {
   founded: number; // year
   hasFire: boolean;
   dwelling: 'none' | 'tent' | 'hut' | 'house';
+  /** iron age: the kingdom of this town (place = its Bulgarian name) */
+  kingdom?: { id: number; place: string; capital: boolean; members: number } | null;
 }
 
 /** compact person: [id, x*10, y*10, taskIndex, bandId, ageYears, sex(0 m,1 f), chief(1) or not(0)] */

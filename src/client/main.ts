@@ -303,7 +303,7 @@ function linkedText(e: ChronicleEntry): string {
 function eventHtml(e: ChronicleEntry): string {
   const icon: Record<string, string> = {
     discovery: '💡', rediscovery: '🔁', settle: '🏘️', colony: '🏘️', split: '🚶', death: '🕯️', twins: '👶', hunt: '🦣',
-    winter: '❄️', secret: '✨', drought: '☀️', extinct: '🌑', lost: '📜', meet: '🤝', learn: '📚', era: '⭐', milestone: '👥', genesis: '🌅', merge: '🔗', marriage: '💞', end: '🌑',
+    winter: '❄️', secret: '✨', drought: '☀️', extinct: '🌑', lost: '📜', meet: '🤝', learn: '📚', era: '⭐', milestone: '👥', genesis: '🌅', merge: '🔗', marriage: '💞', end: '🌑', kingdom: '👑',
   };
   return `<li class="ev imp${e.importance}">
     <span class="ev-icon">${icon[e.kind] ?? '•'}</span>
@@ -645,6 +645,16 @@ async function showTree(id: number) {
     ${line(T('По бащина линия', 'Father\'s line', 'Väterliche Linie'), t.fatherLine)}`, false, 'wide');
 }
 
+
+/** iron age: "Capital of the Kingdom of Whiteford (5 villages)" */
+function kingdomHtml(k: BandView['kingdom']): string {
+  if (!k) return '';
+  const n = k.members;
+  const v = VILLAGE(k.place);
+  return `<div>${esc(k.capital
+    ? T(`Столица на царство ${v}`, `Capital of the Kingdom of ${v}`, `Hauptstadt des Königreichs ${v}`)
+    : T(`Част от царство ${v}`, `Part of the Kingdom of ${v}`, `Teil des Königreichs ${v}`))} (${n} ${T(n === 1 ? 'село' : 'села', n === 1 ? 'village' : 'villages', n === 1 ? 'Dorf' : 'Dörfer')})</div>`;
+}
 function showBand(b: BandView) {
   const members = people.filter((p) => p[4] === b.id);
   const kidsN = members.filter((p) => p[5] < 12).length;
@@ -657,6 +667,7 @@ function showBand(b: BandView) {
     <h2><span class="dot" style="background:#${b.color.toString(16).padStart(6, '0')}"></span> ${esc(b.settlementName ? VILLAGE(b.settlementName) : B(b.name))}</h2>
     <div class="muted">${b.settlementName ? `${esc(B(b.name))} · ` : ''}${T('от', 'since', 'seit')} ${fmtYear(b.founded)} · ${b.settled ? T('уседнали', 'settled', 'sesshaft') : T('скитат по земята', 'wandering the land', 'ziehen durchs Land')}</div>
     ${b.chief ? `<div>${esc(CHIEF(b.chief.title, isWoman(b.chief.name)))}: <a href="#" data-person="${b.chief.id}">${esc(P(b.chief.name))}</a></div>` : ''}
+    ${kingdomHtml(b.kingdom)}
     ${originHtml(b.founder, b.from)}
     <div class="kpis"><div><span>${T('Хора', 'People', 'Menschen')}</span><b>${b.size}</b></div><div><span>${T('Деца', 'Children', 'Kinder')}</span><b>${kidsN}</b></div><div><span>${T('Запаси', 'Food', 'Vorräte')}</span><b>${b.food}</b></div></div>
     <h3>${T('Какво правят сега', 'What they are doing', 'Was sie gerade tun')}</h3><ul class="deeds">${[...tasks].sort((a, c) => c[1] - a[1]).map(([t, n]) => `<li>${n} ${esc(t)}</li>`).join('')}</ul>

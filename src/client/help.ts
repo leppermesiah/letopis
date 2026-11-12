@@ -7,6 +7,12 @@ interface Release { v: string; items: [string, string, string][] } // [bg, en, d
 
 /** newest first; a new version gets its own entry here */
 export const CHANGELOG: Release[] = [
+  { v: '1.35', items: [
+    ['Желязна епоха: желязо, азбука, пристанище, царство, монети, писани закони, театър, медицина, акведукт, библиотека, водна мелница, свод и бетон.', 'Iron Age: iron, alphabet, harbour, kingdom, coins, written laws, theatre, medicine, aqueduct, library, watermill, arch and concrete.', 'Eisenzeit: Eisen, Alphabet, Hafen, Königreich, Münzen, geschriebene Gesetze, Theater, Heilkunde, Aquädukt, Bibliothek, Wassermühle, Gewölbe und Beton.'],
+    ['Царства: селата се обединяват мирно под един цар, а столицата получава дворец.', 'Kingdoms: villages unite peacefully under one king, and the capital gets a palace.', 'Königreiche: Dörfer schließen sich friedlich unter einem König zusammen, und die Hauptstadt bekommt einen Palast.'],
+    ['Градовете растат: къщи с двор, театър, училище, акведукт, фар и нови стени с бойници.', 'Towns grow: courtyard houses, a theatre, a school, an aqueduct, a lighthouse and new walls with battlements.', 'Die Städte wachsen: Häuser mit Innenhof, ein Theater, eine Schule, ein Aquädukt, ein Leuchtturm und neue Mauern mit Zinnen.'],
+    ['Нови хора: ковач на желязо, каменоделец, лечителка, актьор, учител с деца, търговец с муле, царят и пазач с ризница.', 'New people: an iron smith, a stonemason, a healer, an actor, a teacher with children, a trader with a mule, the king and a guard in chain mail.', 'Neue Menschen: ein Eisenschmied, ein Steinmetz, eine Heilerin, ein Schauspieler, ein Lehrer mit Kindern, ein Händler mit Maultier, der König und ein Wächter im Kettenhemd.'],
+  ] },
   { v: '1.34', items: [
     ['Бутон „?“ до избора на език: новостите на всяка версия и кратка помощ.', 'A “?” button next to the language selector: what is new in each version and a short help.', 'Ein „?“-Knopf neben der Sprachauswahl: Neuigkeiten jeder Version und eine kurze Hilfe.'],
   ] },

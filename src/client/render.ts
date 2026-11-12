@@ -183,6 +183,8 @@ export class WorldRenderer {
   roadVersion = 0;
   /** what every band knows (tech ids), for the work people show */
   bandTech = new Map<number, Set<string>>();
+  /** capitals of kingdoms: their chief walks as a king */
+  capitals = new Set<number>();
   fogLayer = new Container();
   campLayer = new Container();
   peopleLayer = new Container();
@@ -859,8 +861,10 @@ export class WorldRenderer {
   updateBands(bands: BandView[], kids: boolean) {
     const seen = new Set<number>();
     this.bandTech.clear();
+    this.capitals.clear();
     for (const b of bands) {
       seen.add(b.id);
+      if (b.kingdom?.capital) this.capitals.add(b.id);
       this.bandTech.set(b.id, new Set(b.techIds));
       let c = this.camps.get(b.id);
       if (!c) {
@@ -1321,6 +1325,8 @@ export class PersonSprite {
 
   /** the chief: young with a dark beard or none, old with a white beard (sheets S-V) */
   private chiefPose(now: number, walking: boolean): string | null {
+    // the chief of a capital is a king: crown, fur cloak and a staff (sheet AW)
+    if (this.r.capitals.has(this.band) && this.r.atlas.has('king0')) return walking ? `king${Math.floor(now / 160 + this.seed) % 4}` : 'king0';
     const look = hash(this.id, 41) < 0.5 ? 'chiefA' : 'chiefB';
     const age = this.age >= 50 ? 'o' : 'y';
     const base = `${look}_${age}_${walking ? 'walk' : 'idle'}`;
@@ -1344,7 +1350,9 @@ export class PersonSprite {
       if (task === 'chop') return loop('carry', 8, 110);
       // bronze age: some men ride, some take a cart to the neighbours
       if (man && knows('horse') && hash(this.id, 53) < 0.2) return loop('rider', 4, 160);
-      if (man && knows('trade') && hash(this.id, 51) < 0.2) return loop('trader', 4, 170);
+      if (man && knows('trade') && hash(this.id, 51) < 0.2) return (knows('coins') ? loop('trader2', 4, 170) : null) ?? loop('trader', 4, 170);
+      // iron age: a teacher walks with two children, reading a scroll
+      if (!this.female && this.age >= 35 && knows('library') && hash(this.id, 63) < 0.12) return loop('teacher', 4, 180);
       return null;
     }
     if (this.r.nightNow && task !== 'scout') {
@@ -1370,8 +1378,11 @@ export class PersonSprite {
       case 'craft':
         if (!this.female) {
           if (knows('writing') && hash(this.id, 57) < 0.25) return loop('scribe', 4, 600);
-          return (knows('bronze') ? loop('smith', 4, 260) : null) ?? loop('knap', 4, 300);
+          if (knows('theatre') && hash(this.id, 61) < 0.1) return loop('actor', 4, 500);
+          if ((knows('arch') || knows('aqueduct')) && hash(this.id, 59) < 0.3) return loop('mason', 4, 300);
+          return (knows('iron') ? loop('ismith', 4, 280) : null) ?? (knows('bronze') ? loop('smith', 4, 260) : null) ?? loop('knap', 4, 300);
         }
+        if (knows('medicine') && hash(this.id, 59) < 0.3) return loop('healer', 4, 420);
         if (knows('wheel') && hash(this.id, 55) < 0.5) return loop('wheelpot', 4, 420);
         return knows('weaving') && knows('agriculture') ? loop('weaver', 4, 380) : null;
       case 'farm': return man && knows('plough') ? loop('plougher', 4, 260) : null;
@@ -1381,7 +1392,9 @@ export class PersonSprite {
 
   /** guards (and the bodyguard) wear the best gear of their time: bronze once the band knows it */
   private guardKit(): string {
-    return this.r.bandTech.get(this.band)?.has('bronze') && this.r.atlas.has('bgwalk0') ? 'bg' : 'g';
+    const t = this.r.bandTech.get(this.band);
+    if (t?.has('iron') && this.r.atlas.has('igwalk0')) return 'ig';
+    return t?.has('bronze') && this.r.atlas.has('bgwalk0') ? 'bg' : 'g';
   }
 
   private walkPose(now: number): string | null {
@@ -1519,7 +1532,32 @@ const PROPS: [string, string, boolean | null][] = [
   ['walls', 'gate', true],
   ['trade', 'market', true],
   ['calendar', 'statue', true],
+  // iron age (sheets AS-AU)
+  ['iron', 'charcoal', true],
+  ['iron', 'bloomery', true],
+  ['iron', 'ianvil', true],
+  ['iron', 'irack', null],
+  ['alphabet', 'scrolls', true],
+  ['harbor', 'warehouse', true],
+  ['harbor', 'lighthouse', true],
+  ['kingdom', 'milestone', true],
+  ['coins', 'mint', true],
+  ['coins', 'chest', true],
+  ['coins', 'amphorae', true],
+  ['coins', 'press', true],
+  ['laws', 'stele', true],
+  ['medicine', 'herbtable', true],
+  ['medicine', 'beehives', true],
+  ['aqueduct', 'aqueduct', true],
+  ['aqueduct', 'fountain', true],
+  ['watermill', 'mill0', true],
+  ['arch', 'crane', true],
+  ['arch', 'blocks', true],
 ];
+/** what iron replaces: the bronze workshop goes, the walls get battlements */
+const IRON_DROPS = new Set(['ore', 'furnace', 'mould', 'anvil', 'toolrack', 'tablets']);
+const IRON_SWAPS: Record<string, string> = { tower: 'itower', gate: 'igate' };
+const WALL_PROPS = new Set(['tower', 'gate', 'itower', 'igate']);
 
 export class CampSprite {
   r: WorldRenderer;
@@ -1641,14 +1679,22 @@ export class CampSprite {
     const techs = new Set(b.techIds ?? b.techs);
     let props = PROPS.filter(([tech, sp, settled]) => techs.has(tech) && (settled === null || settled === b.settled) && this.r.atlas.has(sp)).map(([, s]) => s);
     // a big village keeps only its newest things around it (later techs are later in the list)
-    if (props.length > 12) props = props.slice(-12);
+    const iron = techs.has('iron') && this.r.atlas.has('villab3');
+    if (iron) props = props.filter((p) => !IRON_DROPS.has(p)).map((p) => IRON_SWAPS[p] ?? p);
+    // the walls always stay; of the rest only the newest things (later techs are later in the list)
+    const walls = props.filter((p) => WALL_PROPS.has(p));
+    const rest = props.filter((p) => !WALL_PROPS.has(p));
+    props = [...walls, ...rest.slice(-(12 - walls.length))];
     // walls make a village a town: stone houses, and a temple once it keeps a calendar
     const town = b.dwelling === 'house' && techs.has('walls') && this.r.atlas.has('townb3');
+    // iron age towns: courtyard houses, the king's palace in a capital, a theatre and a school
+    const capital = !!b.kingdom?.capital;
     const cold = this.r.tempAt(b.x, b.y) < 0.35;
-    const key = `${b.dwelling}${town ? 'T' : ''}:${n}:${b.settled}:${cold}:${props.join(',')}:${Math.round(b.x)},${Math.round(b.y)}`;
+    const tkind = `${b.dwelling}${town ? 'T' : ''}${town && iron ? `I${capital ? 'K' : ''}${techs.has('theatre') ? 'h' : ''}${techs.has('library') ? 'l' : ''}` : ''}`;
+    const key = `${tkind}:${n}:${b.settled}:${cold}:${props.join(',')}:${Math.round(b.x)},${Math.round(b.y)}`;
     if (key === this.key) return;
     // homes added since last time are built in four steps; the first look at a camp shows it finished
-    const sameKind = this.key.split(':')[0] === `${b.dwelling}${town ? 'T' : ''}` && this.key !== '';
+    const sameKind = this.key.split(':')[0] === tkind && this.key !== '';
     const builtBefore = sameKind ? this.homeCount : n;
     this.homeCount = n;
     this.key = key;
@@ -1665,7 +1711,12 @@ export class CampSprite {
         case 'tent': name = cold && h < 0.5 ? 'bonehut' : h < 0.2 ? 'leanto' : `tent${k % 2}`; break;
         case 'hut': name = A.has('hutb3') ? 'hutb3' : 'roundhut'; break;
         default:
-          if (town) name = k === 0 && techs.has('calendar') && A.has('templeb3') ? 'templeb3' : 'townb3';
+          if (town && iron) {
+            if (k === 0) name = capital ? 'palaceb3' : techs.has('calendar') ? 'templeb3' : 'villab3';
+            else if (k === 1 && techs.has('theatre')) name = 'theatreb3';
+            else if (k === 2 && techs.has('library')) name = 'schoolb3';
+            else name = h < 0.55 ? 'villab3' : 'townb3';
+          } else if (town) name = k === 0 && techs.has('calendar') && A.has('templeb3') ? 'templeb3' : 'townb3';
           else name = k % 3 === 2 ? 'longhouse' : A.has('houseb3') ? 'houseb3' : 'house';
       }
       const a = (k / n) * Math.PI * 2 + 0.6;
@@ -1677,7 +1728,7 @@ export class CampSprite {
       s.position.set(q.x, q.y);
       s.zIndex = s.y;
       this.homes.addChild(s);
-      if (k >= builtBefore && /^(hut|house|town|temple)b3$/.test(name)) {
+      if (k >= builtBefore && /^(hut|house|town|temple|villa|palace|theatre|school)b3$/.test(name)) {
         this.building.push({ s, base: name.slice(0, -1), t0: Date.now(), flip: s.scale.x < 0 });
         A.set(s, `${name.slice(0, -1)}0`);
         if (h < 0.5) s.scale.x *= -1;

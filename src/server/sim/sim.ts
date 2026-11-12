@@ -19,9 +19,13 @@ export const START_YEAR = -12000;
 const ERA_WHY: Record<number, [string, string]> = {
   1: ['Хората вече не само търсят храна, а я отглеждат.', 'People no longer only search for food, they grow it.'],
   2: ['Медта и калаят се сливат в метал, по-твърд от камъка. Селата растат в градове.', 'Copper and tin melt into a metal harder than stone. Villages grow into towns.'],
+  3: ['Желязото е навсякъде и е по-евтино от бронза. Селата се събират в царства.', 'Iron is everywhere and cheaper than bronze. Villages come together into kingdoms.'],
 };
 /** chance per band and month for an idea whose time has come */
 const GLOBAL_DISCOVERY = 0.0003;
+/** a kingdom holds at most this many towns, all within this distance of the capital */
+const KINGDOM_MAX = 8;
+const KINGDOM_REACH = 32;
 const GENE_KEYS = ['str', 'int', 'cur', 'soc', 'hea', 'lon'] as const;
 type GeneKey = (typeof GENE_KEYS)[number];
 export const GENE_NAMES: Record<GeneKey, string> = {
@@ -73,6 +77,18 @@ export interface Band {
   wood?: number;
   /** nomads: the chief went ahead to look at a new place; the band follows when he gets there */
   scout?: { x: number; y: number; px?: number; py?: number } | null;
+  /** the kingdom this town belongs to (iron age) */
+  kingdom?: number | null;
+}
+
+/** villages that joined under one crown, peacefully: the chief of the capital is the king */
+export interface Kingdom {
+  id: number;
+  /** the capital's name when the kingdom was founded (Bulgarian; the kingdom keeps it) */
+  place: string;
+  capital: number;
+  members: number[];
+  founded: number; // year
 }
 
 /** Everything in here is saved to disk. */
@@ -110,6 +126,9 @@ export interface SimState {
   roads?: string;
   /** village pairs joined by a road, as 'a-b:level' */
   roadPairs?: string[];
+  /** iron age kingdoms (from v1.35) */
+  kingdoms?: Kingdom[];
+  nextKingdomId?: number;
 }
 
 export interface DeadRecord {
@@ -290,6 +309,92 @@ export class Simulation {
     this.roads[i] = lvl;
     this.roadChanges.push(i, lvl);
     if (this.trees[i]) this.setTree(i, 0);
+  }
+
+  // ---------- kingdoms (iron age) ----------
+
+  private kingdomOf(b: Band): Kingdom | undefined {
+    return b.kingdom == null ? undefined : this.s.kingdoms?.find((k) => k.id === b.kingdom);
+  }
+
+  kingdomView(b: Band): BandView['kingdom'] {
+    const k = this.kingdomOf(b);
+    return k ? { id: k.id, place: k.place, capital: k.capital === b.id, members: k.members.length } : null;
+  }
+
+  /** 'царство Бялово' in a sentence, 'Царство Бялово' at its start */
+  private kBg(k: Kingdom, subject = false): string {
+    return `${subject ? 'Царство' : 'царство'} ${k.place}`;
+  }
+  private kEn(k: Kingdom, subject = false): string {
+    return `${subject ? 'The' : 'the'} Kingdom of ${villageEn(k.place)}`;
+  }
+  private kDe(k: Kingdom, c: 'nom' | 'akk' | 'dat' | 'gen', subject = false): string {
+    const art = { nom: 'das', akk: 'das', dat: 'dem', gen: 'des' }[c];
+    return `${subject ? art[0].toUpperCase() + art.slice(1) : art} Königreich${c === 'gen' ? 's' : ''} ${villageDe(k.place)}`;
+  }
+
+  /** once a year: towns that know the crown found kingdoms, kingdoms invite their neighbours, a lost capital moves */
+  private kingdoms() {
+    const ks = (this.s.kingdoms ??= []);
+    for (const k of [...ks]) {
+      k.members = k.members.filter((id) => this.bandById.get(id)?.settled);
+      if (k.members.length === 0) {
+        ks.splice(ks.indexOf(k), 1);
+        this.emit('kingdom', 2, `${this.kBg(k, true)} се разпадна: в него не остана нито едно село.`, undefined, undefined, undefined, [],
+          [`${this.kEn(k, true)} came to an end: not a single village was left in it.`],
+          [`${this.kDe(k, 'nom', true)} ging zu Ende: Kein einziges Dorf ist ihm geblieben.`]);
+        continue;
+      }
+      if (!k.members.includes(k.capital)) {
+        const counts = new Map<number, number>();
+        for (const p of this.s.people) counts.set(p.bandId, (counts.get(p.bandId) ?? 0) + 1);
+        k.capital = [...k.members].sort((x, y) => (counts.get(y) ?? 0) - (counts.get(x) ?? 0))[0];
+        const nc = this.bandById.get(k.capital)!;
+        this.emit('kingdom', 1, `${this.bandLabel(nc, true)} е новата столица на ${this.kBg(k)}.`, undefined, undefined, nc.id, [],
+          [`${this.bandEnLabel(nc, true)} is the new capital of ${this.kEn(k)}.`],
+          [`${this.bDe(nc, 'nom', true)} ist jetzt die Hauptstadt ${this.kDe(k, 'gen')}.`]);
+      }
+    }
+    for (const b of this.s.bands) {
+      if (b.kingdom != null && !ks.some((k) => k.id === b.kingdom && k.members.includes(b.id))) b.kingdom = null;
+    }
+    const towns = this.s.bands.filter((b) => b.settled);
+    // a town that knows the crown joins a kingdom nearby or founds its own
+    for (const b of towns) {
+      if (b.kingdom != null || !this.hasTech(b, 'kingdom')) continue;
+      const near = ks.find((k) => k.members.length < KINGDOM_MAX && dist(this.bandById.get(k.capital)!, b) < KINGDOM_REACH);
+      if (near) { this.joinKingdom(near, b); continue; }
+      const k: Kingdom = { id: (this.s.nextKingdomId = (this.s.nextKingdomId ?? 0) + 1), place: b.settlementName ?? b.name, capital: b.id, members: [b.id], founded: Math.floor(this.year) };
+      ks.push(k);
+      b.kingdom = k.id;
+      const king = b.chiefId ? this.byId.get(b.chiefId) : undefined;
+      if (king) king.deeds.push(`Стана първият цар на ${this.kBg(k)} (${formatYear(this.year)})`);
+      this.emit('kingdom', 2, `${this.bandLabel(b, true)} стана столица на ${this.kBg(k)}.${king ? ` ${this.nameOf(king)} е първият му цар.` : ''}`,
+        `${this.bandLabel(b, true)} вече е столица на цяло царство!`, king?.id, b.id, [],
+        [`${this.bandEnLabel(b, true)} became the capital of ${this.kEn(k)}.${king ? ` ${this.nameEn(king)} is its first king.` : ''}`,
+          `${this.bandEnLabel(b, true)} is now the capital of a whole kingdom!`],
+        [`${this.bDe(b, 'nom', true)} wurde Hauptstadt ${this.kDe(k, 'gen')}.${king ? ` Erster König ist ${this.nameDe(king)}.` : ''}`,
+          `${this.bDe(b, 'nom', true)} ist jetzt die Hauptstadt eines ganzen Königreichs!`]);
+    }
+    // the king invites the towns around: they come to a feast and stay
+    for (const k of ks) {
+      const cap = this.bandById.get(k.capital)!;
+      for (const o of towns) {
+        if (k.members.length >= KINGDOM_MAX) break;
+        if (o.kingdom != null || dist(cap, o) >= KINGDOM_REACH || !this.rng.chance(0.15)) continue;
+        this.joinKingdom(k, o);
+      }
+    }
+  }
+
+  private joinKingdom(k: Kingdom, b: Band) {
+    k.members.push(b.id);
+    b.kingdom = k.id;
+    this.addTech(b, 'kingdom');
+    this.emit('kingdom', 1, `${this.bandLabel(b, true)} прие поканата и стана част от ${this.kBg(k)}.`, undefined, undefined, b.id, [],
+      [`${this.bandEnLabel(b, true)} accepted the invitation and joined ${this.kEn(k)}.`],
+      [`${this.bDe(b, 'nom', true)} nahm die Einladung an und schloss sich ${this.kDe(k, 'dat')} an.`]);
   }
 
   /** once a year villages with carts beat a road to their neighbours; towns with walls pave theirs */
@@ -696,6 +801,7 @@ export class Simulation {
     this.bandDynamics(members);
     this.contact();
     if (this.month === 6) this.buildRoads();
+    if (this.month === 7) this.kingdoms();
     if (this.s.tick % 6 === 0) this.explore();
     this.randomEvents(members);
     this.checkEra();
@@ -745,7 +851,7 @@ export class Simulation {
 
   private work(b: Band, m: Person[]) {
     const t = this.t;
-    const tool = this.hasTech(b, 'bronze') ? 1.5 : this.hasTech(b, 'copper') ? 1.35 : this.hasTech(b, 'stone_tools') ? 1.25 : 1;
+    const tool = this.hasTech(b, 'iron') ? 1.65 : this.hasTech(b, 'bronze') ? 1.5 : this.hasTech(b, 'copper') ? 1.35 : this.hasTech(b, 'stone_tools') ? 1.25 : 1;
     const fire = this.hasTech(b, 'fire') ? 1.1 : 1;
     // carts bring food from farther away
     const R = b.settled ? (this.hasTech(b, 'wheel') ? 5 : 4) : 6;
@@ -805,9 +911,9 @@ export class Simulation {
           if (this.rng.chance(this.hasTech(b, 'spear') ? 0.0002 : 0.0004)) this.die(p, 'загина на лов', m);
           break;
         }
-        case 'fish': got = 1.4 * skill * (this.hasTech(b, 'boats') ? 1.3 : 1) * (this.hasTech(b, 'sailing') ? 1.25 : 1) * (0.7 + season * 0.3); break;
+        case 'fish': got = 1.4 * skill * (this.hasTech(b, 'boats') ? 1.3 : 1) * (this.hasTech(b, 'sailing') ? 1.25 : 1) * (this.hasTech(b, 'harbor') ? 1.15 : 1) * (0.7 + season * 0.3); break;
         case 'farm': {
-          farmWant += 2.4 * this.farmSeason() * skill * tool * (this.hasTech(b, 'plough') ? 1.35 : 1) * (this.hasTech(b, 'calendar') ? 1.1 : 1);
+          farmWant += 2.4 * this.farmSeason() * skill * tool * (this.hasTech(b, 'plough') ? 1.35 : 1) * (this.hasTech(b, 'calendar') ? 1.1 : 1) * (this.hasTech(b, 'watermill') ? 1.12 : 1);
           break;
         }
         case 'herd': got = 1.7 * skill; break;
@@ -945,7 +1051,7 @@ export class Simulation {
       const again = seen ? 1.6 : 1;
       // a first discovery happens somewhere in the world: many bands do not make it come sooner
       const world = seen ? 1 : Math.min(1, 4 / this.s.bands.length);
-      const written = this.hasTech(b, 'writing') ? 1.15 : 1;
+      const written = (this.hasTech(b, 'alphabet') ? 1.3 : this.hasTech(b, 'writing') ? 1.15 : 1) * (this.hasTech(b, 'library') ? 1.2 : 1);
       const chance = written * world * GLOBAL_DISCOVERY * Math.sqrt(tech.base / 0.0025) * this.techPace(tech) * again * crowd * Math.pow(g * 2, 2);
       if (!this.rng.chance(chance)) continue;
       this.addTech(b, tech.id);
@@ -1016,7 +1122,7 @@ export class Simulation {
       const temp = this.t.temp[idx(Math.round(b.cx), Math.round(b.cy))];
       const winter = this.month === 11 || this.month <= 1;
       const coldRisk = winter && temp < 0.4 ? (0.4 - temp) * (this.hasTech(b, 'clothing') ? 0.15 : 1) * (this.hasTech(b, 'fire') ? 0.4 : 1) * 0.02 : 0;
-      const medicine = this.hasTech(b, 'herb_lore') ? 0.8 : 1;
+      const medicine = (this.hasTech(b, 'medicine') ? 0.65 : this.hasTech(b, 'herb_lore') ? 0.8 : 1) * (this.hasTech(b, 'aqueduct') ? 0.85 : 1);
       const settledDisease = b.settled ? 1.4 : 1;
       for (const p of m) {
         const a = this.ageOf(p);
@@ -1204,7 +1310,7 @@ export class Simulation {
       }
       // split: rare, a band has to grow big first
       // a walled town holds more people before some leave to found a new village
-      const limit = b.settled ? (this.hasTech(b, 'walls') ? 210 : 140) : 40 + Math.round(avg(m, (p) => p.genes.soc) * 20);
+      const limit = b.settled ? (this.hasTech(b, 'aqueduct') ? 280 : this.hasTech(b, 'walls') ? 210 : 140) : 40 + Math.round(avg(m, (p) => p.genes.soc) * 20);
       // too many mouths for this land: some leave to find their own
       const crowded = !b.settled && m.length >= 24 && (b.fed ?? 1) < 1.05 && this.rng.chance(0.012);
       if (m.length > limit || crowded) this.split(b, m, members);
@@ -1283,12 +1389,21 @@ export class Simulation {
     b.chiefId = best?.id ?? null;
     if (!best) { b.scout = null; return null; }
     if (had && b.settled) { // nomad bands change elders too often to write each one down
-      this.emit('chief', 1, `${this.nameOf(best)} стана ${this.chiefTitle().toLowerCase()} на ${this.bandLabel(b)}.`,
-        `${this.nameOf(best)} е новият ${this.chiefTitle().toLowerCase()} на ${this.bandLabel(b)}.`, best.id, b.id, [],
-        [`${this.nameEn(best)} became ${chiefEn(this.chiefTitle()).toLowerCase()} of ${this.bandEnLabel(b)}.`],
-        [`${this.nameDe(best)} ist jetzt ${chiefDe(this.chiefTitle(), best.sex === 1)} ${this.bDe(b, 'gen')}.`]);
+      this.emit('chief', 1, `${this.nameOf(best)} стана ${this.chiefTitleOf(b).toLowerCase()} на ${this.bandLabel(b)}.`,
+        `${this.nameOf(best)} е новият ${this.chiefTitleOf(b).toLowerCase()} на ${this.bandLabel(b)}.`, best.id, b.id, [],
+        [`${this.nameEn(best)} became ${chiefEn(this.chiefTitleOf(b)).toLowerCase()} of ${this.bandEnLabel(b)}.`],
+        [`${this.nameDe(best)} ist jetzt ${chiefDe(this.chiefTitleOf(b), best.sex === 1)} ${this.bDe(b, 'gen')}.`]);
     }
     return best;
+  }
+
+  /** the chief of a capital is a king */
+  chiefTitleOf(b: Band | undefined): string {
+    return b && this.isCapital(b) ? 'Цар' : this.chiefTitle();
+  }
+
+  isCapital(b: Band): boolean {
+    return b.kingdom != null && !!this.s.kingdoms?.some((k) => k.id === b.kingdom && k.capital === b.id);
   }
 
   chiefTitle(): string {
@@ -1426,11 +1541,11 @@ export class Simulation {
         const a = bands[i], b = bands[j];
         const d = dist(a, b);
         // horses and carts bring far neighbours together
-        const reach = this.hasTech(a, 'horse') || this.hasTech(b, 'horse') ? 24 : 16;
-        if (d > reach) continue;
+        const reach = this.hasTech(a, 'harbor') && this.hasTech(b, 'harbor') ? 30 : this.hasTech(a, 'horse') || this.hasTech(b, 'horse') ? 24 : 16;
+        if (d > reach && !(a.kingdom != null && a.kingdom === b.kingdom)) continue;
         // traders even out a good and a bad harvest between neighbours
         if (this.hasTech(a, 'trade') && this.hasTech(b, 'trade')) {
-          const give = (a.food - b.food) * 0.05;
+          const give = (a.food - b.food) * (this.hasTech(a, 'coins') && this.hasTech(b, 'coins') ? 0.08 : 0.05);
           a.food -= give;
           b.food += give;
         }
@@ -1446,7 +1561,8 @@ export class Simulation {
         // knowledge travels between neighbours
         const sa = this.techSets.get(a.id)!, sb = this.techSets.get(b.id)!;
         const share = 0.012 * (this.hasTech(a, 'cave_art') || this.hasTech(b, 'cave_art') ? 1.6 : 1)
-          * (this.hasTech(a, 'writing') || this.hasTech(b, 'writing') ? 1.5 : 1);
+          * (this.hasTech(a, 'alphabet') || this.hasTech(b, 'alphabet') ? 1.8 : this.hasTech(a, 'writing') || this.hasTech(b, 'writing') ? 1.5 : 1)
+          * (this.hasTech(a, 'library') || this.hasTech(b, 'library') ? 1.2 : 1) * (this.hasTech(a, 'theatre') || this.hasTech(b, 'theatre') ? 1.1 : 1);
         for (const tech of a.techs) if (!sb.has(tech) && this.canUse(b, tech) && this.rng.chance(share)) {
           this.addTech(b, tech);
           this.emit('learn', 1, `${this.bandLabel(b, true)} научи „${TECH_BY_ID.get(tech)!.name}“ от ${this.bandLabel(a)}.`, undefined, undefined, b.id, this.bRefs(a),
@@ -1579,12 +1695,13 @@ export class Simulation {
       founded: Math.floor(yearOf(b.founded)),
       hasFire: this.hasTech(b, 'fire'),
       dwelling: this.hasTech(b, 'mudbrick') ? 'house' : b.settled ? 'hut' : this.hasTech(b, 'shelter') ? 'tent' : 'none',
+      kingdom: this.kingdomView(b),
     }));
   }
 
   private chiefView(b: Band): BandView['chief'] {
     const c = b.chiefId ? this.byId.get(b.chiefId) : undefined;
-    return c ? { id: c.id, name: this.nameOf(c), title: this.chiefTitle() } : null;
+    return c ? { id: c.id, name: this.nameOf(c), title: this.chiefTitleOf(b) } : null;
   }
 
   personRows(): PersonRow[] {
@@ -1620,7 +1737,7 @@ export class Simulation {
         mother: this.ref(p.motherId), father: this.ref(p.fatherId), partner: this.ref(p.partnerId),
         children: p.children.map((c) => ({ ...(this.ref(c) ?? { id: c, name: '?' }), alive: this.byId.has(c) })),
         deeds: p.deeds, generation: p.gen,
-        title: b && b.chiefId === p.id ? `${this.chiefTitle()} на ${b.settlementName ? `${b.settlementName}` : b.name.replace(/^Родът на /, 'рода на ')}` : null,
+        title: b && b.chiefId === p.id ? `${this.chiefTitleOf(b)} на ${b.settlementName ? `${b.settlementName}` : b.name.replace(/^Родът на /, 'рода на ')}` : null,
       };
     }
     const d = this.lookupDead(id);
