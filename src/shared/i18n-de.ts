@@ -188,6 +188,19 @@ export const TECH_DE: Record<string, { name: string; text: string; kids: string 
   library: { name: 'Bibliothek', text: '{name} {aus band} trug alle Schriftrollen an einem Ort zusammen. Was einmal gelernt ist, gerät nicht mehr in Vergessenheit.', kids: '{name} hat viele Schriftrollen in ein Haus gebracht. Dort kann jeder lesen!' },
   watermill: { name: 'Wassermühle', text: '{name} {aus band} setzte ein Rad in den Fluss und ließ es den Mühlstein drehen. Der Fluss mahlt das Mehl statt der Menschen.', kids: '{name} hat den Fluss ein großes Rad drehen lassen, und das mahlt ganz allein Mehl!' },
   arch: { name: 'Gewölbe und Beton', text: '{name} {aus band} mischte Vulkansand mit Kalk und baute einen Bogen, der sich selbst trägt. Brücken und Kuppeln stehen nun jahrhundertelang.', kids: '{name} hat einen Stein gemacht, den man wie Matsch gießen kann und der dann hart wird!' },
+  heavy_plough: { name: 'Schwerer Pflug', text: '{name} {aus band} gab dem Pflug eine eiserne Schar und Räder und spannte zwei Pferde mit gepolsterten Kummeten davor. Nun lässt sich auch der schwere Lehmboden des Nordens pflügen. Ein neues Zeitalter beginnt.', kids: '{name} hat einen Pflug gebaut, den zwei Pferde durch den schwersten Boden ziehen!' },
+  monastery: { name: 'Kloster', text: '{name} {aus band} gründete ein Kloster beim Dorf. Die Mönche schreiben die alten Bücher ab, pflegen die Kranken und bringen den Kindern das Lesen bei.', kids: '{name} hat ein Kloster gebaut, in dem die Mönche die Bücher hüten und den Kranken helfen.' },
+  knighthood: { name: 'Rittertum', text: '{name} {aus band} schwor vor dem König, die Schwachen und die Reisenden zu schützen. Der erste Ritter erschien zu Pferd, im Kettenhemd, mit einem Schwert, das er nie als Erster zieht.', kids: '{name} ist Ritter geworden: reitet ein großes Pferd und beschützt die Reisenden auf dem Weg!' },
+  three_field: { name: 'Dreifelderwirtschaft', text: '{name} {aus band} teilte die Felder in drei: auf dem einen Winterweizen, auf dem anderen Sommergerste, und das dritte ruht. Der Boden laugt nicht mehr aus.', kids: '{name} hat sich ausgedacht, dass ein Feld jedes dritte Jahr ruht, damit es mehr trägt.' },
+  castle: { name: 'Burg', text: '{Band} errichtete auf dem Hügel über den Häusern eine steinerne Burg. {name} führte die Arbeiten an. In Notzeiten findet das ganze Dorf hinter ihren dicken Mauern Schutz.', kids: '{name} hat eine echte Burg mit Türmen und einer Zugbrücke gebaut!' },
+  paper: { name: 'Papier', text: '{name} {aus band} zerstampfte alte Lumpen in Wasser, schöpfte den Brei mit einem feinen Sieb und ließ ihn trocknen. Papier ist viel billiger als Pergament.', kids: '{name} hat Papier aus alten Lumpen gemacht. Jetzt kann jeder schreiben!' },
+  guilds: { name: 'Zünfte', text: '{name} {aus band} schloss die Meister eines Handwerks zu einer Zunft zusammen. Sie bilden die Lehrlinge aus, achten auf die Qualität und helfen einander in schlechten Jahren.', kids: '{name} hat alle Meister in einer Zunft versammelt. Sie bringen Kindern ihr Handwerk bei!' },
+  gothic: { name: 'Gotische Kirche', text: '{name} {aus band} errichtete eine Kirche mit spitzen Gewölben und hohen Fenstern aus farbigem Glas. Drinnen fällt das Licht in bunten Flecken auf den Boden.', kids: '{name} hat eine Kirche mit bunten Fenstern gebaut, die das Licht in einen Regenbogen verwandeln!' },
+  university: { name: 'Universität', text: '{name} {aus band} lud Gelehrte aus fernen Ländern ein. Sie streiten, schreiben und lehren die Jungen Rechnen, Sternkunde, Recht und Heilkunde. Es ist die erste Universität.', kids: '{name} hat eine Schule für Große gegründet, in der man alles lernen kann!' },
+  windmill: { name: 'Windmühle', text: '{name} {aus band} setzte Segel auf ein hölzernes Rad oben auf dem Hügel. Der Wind dreht den Mühlstein auch dort, wo es keinen Fluss gibt.', kids: '{name} hat den Wind eine große Mühle drehen lassen!' },
+  compass: { name: 'Kompass', text: '{name} {aus band} bemerkte, dass eine magnetisierte Nadel immer nach Norden zeigt. Die Schiffe finden ihren Weg nun auch im Nebel und weit von der Küste.', kids: '{name} hat eine Nadel gefunden, die immer nach Norden zeigt. Die Schiffe verirren sich nicht mehr!' },
+  clock: { name: 'Räderuhr', text: '{name} {aus band} baute eine Uhr aus Zahnrädern und einem Gewicht und brachte sie oben am Turm an. Jetzt weiß das ganze Dorf, wie spät es ist.', kids: '{name} hat eine große Uhr am Turm gebaut. Jetzt wissen alle, wann Mittag ist!' },
+  printing: { name: 'Buchdruck', text: '{name} {aus band} goss Buchstaben aus Metall, setzte sie in einen Rahmen und presste sie auf Papier. An einem Tag werden mehr Seiten gedruckt, als ein Mönch in einem Jahr schreiben kann.', kids: '{name} hat eine Maschine erfunden, die Bücher statt der Menschen schreibt!' },
 };
 
 /** fill a TECH_DE text for a person and a band */
@@ -240,6 +253,19 @@ export const TECH_DESC_DE: Record<string, string> = {
   library: 'Alle Schriftrollen an einem Ort: Wissen geht nicht verloren.',
   watermill: 'Der Fluss dreht den Mühlstein.',
   arch: 'Ein Bogen, der sich selbst trägt, und Stein, den man gießen kann.',
+  heavy_plough: 'Eisen, Räder und ein Kummet: Auch schwerer Boden lässt sich pflügen.',
+  monastery: 'Mönche schreiben die Bücher ab und pflegen die Kranken.',
+  knighthood: 'Ein Eid, die Schwachen und die Reisenden zu schützen.',
+  three_field: 'Drei Felder, eines ruht: Der Boden laugt nicht aus.',
+  castle: 'Eine steinerne Festung auf dem Hügel, Zuflucht für das ganze Dorf.',
+  paper: 'Lumpen, Wasser und ein Sieb: billiges Papier für alle.',
+  guilds: 'Die Meister eines Handwerks lehren und helfen einander.',
+  gothic: 'Spitze Gewölbe und Fenster aus farbigem Glas.',
+  university: 'Gelehrte aus fernen Ländern lehren die Jungen alles.',
+  windmill: 'Der Wind dreht den Mühlstein auch dort, wo es keinen Fluss gibt.',
+  compass: 'Eine Nadel, die immer nach Norden zeigt.',
+  clock: 'Zahnräder am Turm: Alle kennen die Uhrzeit.',
+  printing: 'Metallbuchstaben und eine Presse: Bücher für alle.',
 };
 
 /** a tech by its Bulgarian name (what the server sends) */
@@ -262,6 +288,7 @@ export const ERA_WHY_DE: Record<number, string> = {
   1: 'Die Menschen suchen ihre Nahrung nicht mehr nur, sie bauen sie an.',
   2: 'Kupfer und Zinn verschmelzen zu einem Metall, das härter ist als Stein. Aus Dörfern werden Städte.',
   3: 'Eisen gibt es überall, und es ist billiger als Bronze. Dörfer schließen sich zu Königreichen zusammen.',
+  4: 'Burgen schützen die Dörfer, Klöster bewahren das Wissen, und Wind und Wasser mahlen das Mehl.',
 };
 
 export const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];

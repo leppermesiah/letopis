@@ -1381,6 +1381,12 @@ export class PersonSprite {
       if (task === 'chop') return loop('carry', 8, 110);
       // bronze age: some men ride, some take a cart to the neighbours
       if (man && knows('horse') && hash(this.id, 53) < 0.2) return loop('rider', 4, 160);
+      // middle ages: knights ride, merchants drive covered wagons, minstrels and pilgrims walk the roads
+      if (man && knows('knighthood') && hash(this.id, 53) < 0.12) return loop('knight', 4, 170);
+      if (man && knows('guilds') && hash(this.id, 51) < 0.2) return loop('wagon', 4, 170) ?? loop('trader2', 4, 170);
+      if (man && knows('knighthood') && hash(this.id, 67) < 0.05) return loop('minstrel', 4, 170);
+      if (this.age >= 16 && knows('monastery') && hash(this.id, 69) < 0.04) return loop('pilgrims', 4, 190);
+      if (man && (knows('windmill') || knows('watermill')) && knows('heavy_plough') && hash(this.id, 71) < 0.08) return loop('miller', 4, 160);
       if (man && knows('trade') && hash(this.id, 51) < 0.2) return (knows('coins') ? loop('trader2', 4, 170) : null) ?? loop('trader', 4, 170);
       // iron age: a teacher walks with two children, reading a scroll
       if (!this.female && this.age >= 35 && knows('library') && hash(this.id, 63) < 0.12) return loop('teacher', 4, 180);
@@ -1408,12 +1414,15 @@ export class PersonSprite {
       case 'fish': return !this.female ? loop('spearfish', 4, 340) : null;
       case 'craft':
         if (!this.female) {
+          if (knows('monastery') && hash(this.id, 57) < 0.15) return loop('monk', 4, 600);
           if (knows('writing') && hash(this.id, 57) < 0.25) return loop('scribe', 4, 600);
+          if (knows('guilds') && hash(this.id, 73) < 0.25) return loop('cooper', 4, 300);
           if (knows('theatre') && hash(this.id, 61) < 0.1) return loop('actor', 4, 500);
           if ((knows('arch') || knows('aqueduct')) && hash(this.id, 59) < 0.3) return loop('mason', 4, 300);
           return (knows('iron') ? loop('ismith', 4, 280) : null) ?? (knows('bronze') ? loop('smith', 4, 260) : null) ?? loop('knap', 4, 300);
         }
         if (knows('medicine') && hash(this.id, 59) < 0.3) return loop('healer', 4, 420);
+        if (knows('guilds') && hash(this.id, 55) < 0.5) return loop('spinner', 4, 380);
         if (knows('wheel') && hash(this.id, 55) < 0.5) return loop('wheelpot', 4, 420);
         return knows('weaving') && knows('agriculture') ? loop('weaver', 4, 380) : null;
       case 'farm': return man && knows('plough') ? loop('plougher', 4, 260) : null;
@@ -1424,6 +1433,7 @@ export class PersonSprite {
   /** guards (and the bodyguard) wear the best gear of their time: bronze once the band knows it */
   private guardKit(): string {
     const t = this.r.bandTech.get(this.band);
+    if ((t?.has('knighthood') || t?.has('castle')) && this.r.atlas.has('mgwalk0')) return 'mg';
     if (t?.has('iron') && this.r.atlas.has('igwalk0')) return 'ig';
     return t?.has('bronze') && this.r.atlas.has('bgwalk0') ? 'bg' : 'g';
   }
@@ -1584,11 +1594,37 @@ const PROPS: [string, string, boolean | null][] = [
   ['watermill', 'mill0', true],
   ['arch', 'crane', true],
   ['arch', 'blocks', true],
+  // middle ages (sheets AY-BA)
+  ['heavy_plough', 'hplough', true],
+  ['heavy_plough', 'haycart', true],
+  ['heavy_plough', 'barrow', true],
+  ['monastery', 'lectern', true],
+  ['monastery', 'bell', true],
+  ['knighthood', 'warhorse', true],
+  ['knighthood', 'quintain', true],
+  ['knighthood', 'farrier', true],
+  ['three_field', 'mwell', true],
+  ['paper', 'papervat', true],
+  ['guilds', 'guildsign', true],
+  ['guilds', 'brewery', true],
+  ['guilds', 'tannery', true],
+  ['guilds', 'spinwheel', true],
+  ['guilds', 'markethall', true],
+  ['guilds', 'inn', true],
+  ['knighthood', 'tourney', true],
+  ['windmill', 'windmill0', true],
+  ['compass', 'compass', true],
+  ['compass', 'cog', true],
+  ['clock', 'clocktower', true],
+  ['printing', 'printpress', true],
 ];
+/** what the middle ages replace: the iron age workshop and the ancient market go */
+const MEDIEVAL_DROPS = new Set(['charcoal', 'bloomery', 'mint', 'stele', 'amphorae', 'press', 'herbtable', 'market', 'stall', 'cartfull', 'scrolls', 'statue', 'milestone']);
+const CASTLE_SWAPS: Record<string, string> = { tower: 'ctower', gate: 'cgate', itower: 'ctower', igate: 'cgate' };
 /** what iron replaces: the bronze workshop goes, the walls get battlements */
 const IRON_DROPS = new Set(['ore', 'furnace', 'mould', 'anvil', 'toolrack', 'tablets']);
 const IRON_SWAPS: Record<string, string> = { tower: 'itower', gate: 'igate' };
-const WALL_PROPS = new Set(['tower', 'gate', 'itower', 'igate']);
+const WALL_PROPS = new Set(['tower', 'gate', 'itower', 'igate', 'ctower', 'cgate']);
 
 export class CampSprite {
   r: WorldRenderer;
@@ -1712,6 +1748,9 @@ export class CampSprite {
     // a big village keeps only its newest things around it (later techs are later in the list)
     const iron = techs.has('iron') && this.r.atlas.has('villab3');
     if (iron) props = props.filter((p) => !IRON_DROPS.has(p)).map((p) => IRON_SWAPS[p] ?? p);
+    const medieval = techs.has('heavy_plough') && this.r.atlas.has('timberb3');
+    if (medieval) props = props.filter((p) => !MEDIEVAL_DROPS.has(p));
+    if (medieval && techs.has('castle')) props = props.map((p) => CASTLE_SWAPS[p] ?? p);
     // the walls always stay; of the rest only the newest things (later techs are later in the list)
     const walls = props.filter((p) => WALL_PROPS.has(p));
     const rest = props.filter((p) => !WALL_PROPS.has(p));
@@ -1721,7 +1760,8 @@ export class CampSprite {
     // iron age towns: courtyard houses, the king's palace in a capital, a theatre and a school
     const capital = !!b.kingdom?.capital;
     const cold = this.r.tempAt(b.x, b.y) < 0.35;
-    const tkind = `${b.dwelling}${town ? 'T' : ''}${town && iron ? `I${capital ? 'K' : ''}${techs.has('theatre') ? 'h' : ''}${techs.has('library') ? 'l' : ''}` : ''}`;
+    const tkind = `${b.dwelling}${town ? 'T' : ''}${town && iron ? `I${capital ? 'K' : ''}${techs.has('theatre') ? 'h' : ''}${techs.has('library') ? 'l' : ''}` : ''}`
+      + `${town && medieval ? `M${techs.has('castle') ? 'c' : ''}${techs.has('gothic') ? 'g' : ''}${techs.has('monastery') ? 'm' : ''}` : ''}`;
     const key = `${tkind}:${n}:${b.settled}:${cold}:${props.join(',')}:${Math.round(b.x)},${Math.round(b.y)}`;
     if (key === this.key) return;
     // homes added since last time are built in four steps; the first look at a camp shows it finished
@@ -1742,7 +1782,14 @@ export class CampSprite {
         case 'tent': name = cold && h < 0.5 ? 'bonehut' : h < 0.2 ? 'leanto' : `tent${k % 2}`; break;
         case 'hut': name = A.has('hutb3') ? 'hutb3' : 'roundhut'; break;
         default:
-          if (town && iron) {
+          if (town && medieval) {
+            // the lord's castle (or the king's palace), the church, the monastery, half-timbered houses
+            if (k === 0) name = techs.has('castle') ? 'keepb3' : capital ? 'palaceb3' : 'villab3';
+            else if (k === 1) name = techs.has('gothic') ? 'churchb3' : techs.has('calendar') ? 'templeb3' : 'timberb3';
+            else if (k === 2 && techs.has('monastery')) name = 'abbeyb3';
+            else if (k === 3 && techs.has('university')) name = 'schoolb3';
+            else name = h < 0.65 ? 'timberb3' : 'villab3';
+          } else if (town && iron) {
             if (k === 0) name = capital ? 'palaceb3' : techs.has('calendar') ? 'templeb3' : 'villab3';
             else if (k === 1 && techs.has('theatre')) name = 'theatreb3';
             else if (k === 2 && techs.has('library')) name = 'schoolb3';
@@ -1759,7 +1806,7 @@ export class CampSprite {
       s.position.set(q.x, q.y);
       s.zIndex = s.y;
       this.homes.addChild(s);
-      if (k >= builtBefore && /^(hut|house|town|temple|villa|palace|theatre|school)b3$/.test(name)) {
+      if (k >= builtBefore && /^(hut|house|town|temple|villa|palace|theatre|school|keep|church|timber|abbey)b3$/.test(name)) {
         this.building.push({ s, base: name.slice(0, -1), t0: Date.now(), flip: s.scale.x < 0 });
         A.set(s, `${name.slice(0, -1)}0`);
         if (h < 0.5) s.scale.x *= -1;

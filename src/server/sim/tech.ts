@@ -155,12 +155,53 @@ export const TECHS: Tech[] = [
   { id: 'arch', name: 'Свод и бетон', era: 3, target: -50, prereq: ['aqueduct'], need: null, base: 0.0012, gene: 'str',
     text: '{name} от {band} смеси вулканичен пясък с вар и построи свод, който държи сам себе си. Мостове и куполи вече стоят векове.',
     kids: '{name} направи камък, който се излива като кал и после става твърд!' },
+  // gateway to the Middle Ages
+  { id: 'heavy_plough', name: 'Тежък плуг', era: 4, target: 550, prereq: ['plough', 'iron'], need: null, base: 0.002, gene: 'int',
+    text: '{name} от {band} сложи на плуга железен лемеж и колела и впрегна два коня с меки хамути. Тежката глинеста земя на север вече може да се оре. Започва нова епоха.',
+    kids: '{name} направи плуг, който два коня теглят през най-тежката земя!' },
+  { id: 'monastery', name: 'Манастир', era: 4, target: 600, prereq: ['library', 'writing'], need: null, base: 0.0015, gene: 'int',
+    text: '{name} от {band} основа манастир край селото. Монасите преписват старите книги, лекуват болните и учат децата да четат.',
+    kids: '{name} построи манастир, където монасите пазят книгите и помагат на болните.' },
+  { id: 'knighthood', name: 'Рицарство', era: 4, target: 750, prereq: ['horse', 'iron', 'kingdom'], need: null, base: 0.0015, gene: 'str',
+    text: '{name} от {band} се закле пред царя да пази слабите и пътниците. Първият рицар се появи на кон, в желязна ризница, и с меч, който никога не вдига първи.',
+    kids: '{name} стана рицар: язди голям кон и пази пътниците по пътя!' },
+  { id: 'three_field', name: 'Трипольна система', era: 4, target: 800, prereq: ['heavy_plough', 'calendar'], need: 'grain', base: 0.0015, gene: 'int',
+    text: '{name} от {band} раздели нивите на три: в едната зимно жито, в другата пролетен ечемик, а третата почива. Земята вече не се изтощава.',
+    kids: '{name} измисли нивата да почива всяка трета година, за да ражда повече.' },
+  { id: 'castle', name: 'Замък', era: 4, target: 900, prereq: ['walls', 'arch', 'kingdom'], need: null, base: 0.0015, gene: 'str',
+    text: '{Band} издигна каменен замък на хълма над къщите. {name} поведе строежа. При беда цялото село се прибира зад дебелите му стени.',
+    kids: '{name} построи истински замък с кули и подвижен мост!' },
+  { id: 'paper', name: 'Хартия', era: 4, target: 1050, prereq: ['writing', 'watermill'], need: null, base: 0.0015, gene: 'cur',
+    text: '{name} от {band} натроши стари парцали във вода, загреба кашата с ситна рамка и я изсуши. Хартията е много по-евтина от пергамента.',
+    kids: '{name} направи хартия от стари парцали. Сега всеки може да пише!' },
+  { id: 'guilds', name: 'Гилдии', era: 4, target: 1100, prereq: ['coins', 'laws'], need: null, base: 0.0015, gene: 'soc',
+    text: '{name} от {band} събра майсторите на един занаят в гилдия. Те учат чираците, пазят качеството и си помагат в лоши години.',
+    kids: '{name} събра всички майстори в гилдия. Те учат децата на занаята си!' },
+  { id: 'gothic', name: 'Готически храм', era: 4, target: 1140, prereq: ['arch', 'guilds'], need: null, base: 0.0012, gene: 'cur',
+    text: '{name} от {band} издигна храм с остри сводове и високи прозорци от цветно стъкло. Вътре светлината пада на шарени петна по пода.',
+    kids: '{name} построи храм с цветни прозорци, през които светлината става на дъга!' },
+  { id: 'university', name: 'Университет', era: 4, target: 1150, prereq: ['library', 'monastery'], need: null, base: 0.0012, gene: 'int',
+    text: '{name} от {band} покани учени от далечни земи. Те спорят, пишат и учат младите на смятане, звезди, право и лечение. Това е първият университет.',
+    kids: '{name} основа училище за големи, където се учи всичко!' },
+  { id: 'windmill', name: 'Вятърна мелница', era: 4, target: 1180, prereq: ['watermill', 'sailing'], need: null, base: 0.0015, gene: 'int',
+    text: '{name} от {band} сложи платна на дървено колело на върха на хълма. Вятърът върти воденичния камък и там, където няма река.',
+    kids: '{name} накара вятъра да върти голяма мелница!' },
+  { id: 'compass', name: 'Компас', era: 4, target: 1190, prereq: ['harbor', 'iron'], need: 'fish', base: 0.0015, gene: 'cur',
+    text: '{name} от {band} забеляза, че намагнетизирана игла винаги сочи север. Корабите вече намират пътя и в мъгла, и далеч от брега.',
+    kids: '{name} намери игла, която винаги сочи на север. Корабите вече не се губят!' },
+  { id: 'clock', name: 'Механичен часовник', era: 4, target: 1280, prereq: ['guilds', 'calendar'], need: null, base: 0.0012, gene: 'int',
+    text: '{name} от {band} направи часовник от зъбни колела и тежест и го качи на кулата. Цялото село вече знае колко е часът.',
+    kids: '{name} построи голям часовник на кулата. Сега всички знаят кога е обед!' },
+  { id: 'printing', name: 'Печатна преса', era: 4, target: 1440, prereq: ['paper', 'guilds'], need: null, base: 0.0012, gene: 'int',
+    text: '{name} от {band} отля букви от метал, нареди ги в рамка и ги притисна с преса върху хартия. За един ден се отпечатват повече страници, отколкото монах изписва за година.',
+    kids: '{name} измисли машина, която пише книги вместо хората!' },
 ];
 
 export const TECH_BY_ID = new Map(TECHS.map((t) => [t.id, t]));
 
 /** Era of a set of known techs: the highest era with a defining tech known. */
 export function eraOf(techs: Set<string>): number {
+  if (techs.has('heavy_plough')) return 4;
   if (techs.has('iron')) return 3;
   if (techs.has('bronze')) return 2;
   if (techs.has('agriculture')) return 1;

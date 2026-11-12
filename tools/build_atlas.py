@@ -291,6 +291,30 @@ group('king', cells('AW', (3,)), 'pose', PEOPLE_WPP, 0)
 group('teacher', cells('AW', (4,)), 'pose', PEOPLE_WPP, 0)
 group('igwalk', cells('AX', (1, 2)), 'person', 13.6, 64)
 group('igidle', cells('AX', (3, 4)), 'person', 13.6, 64)
+# middle ages (AY props, AZ castle, BA town, BB workers, BC travellers, BD guard)
+for cid, name, w in (('AY11', 'hplough', 0.07), ('AY12', 'spinwheel', 0.045), ('AY13', 'brewery', 0.05), ('AY14', 'tannery', 0.055),
+                     ('AY21', 'papervat', 0.055), ('AY22', 'lectern', 0.05), ('AY23', 'compass', 0.05), ('AY24', 'printpress', 0.05),
+                     ('AY31', 'bell', 0.05), ('AY32', 'farrier', 0.05), ('AY33', 'guildsign', 0.045), ('AY34', 'mwell', 0.05),
+                     ('AY41', 'warhorse', 0.06), ('AY42', 'quintain', 0.045), ('AY43', 'haycart', 0.055), ('AY44', 'barrow', 0.045),
+                     ('AZ21', 'cwall', 0.085), ('AZ22', 'cwallc', 0.085), ('AZ23', 'cgate', 0.095), ('AZ24', 'ctower', 0.07),
+                     ('BA31', 'guildhall', 0.08), ('BA32', 'markethall', 0.085), ('BA33', 'clocktower', 0.065), ('BA34', 'inn', 0.08),
+                     ('BA41', 'mbridge', 0.08), ('BA42', 'cog', 0.075), ('BA43', 'treadcrane', 0.065), ('BA44', 'tourney', 0.08)):
+    group(name, cid, 'thing', w, 0)
+group('keepb', cells('AZ', (1,)), 'thing', 0.1, 0)        # 0..3: foundation, walls, no roof, done
+group('churchb', cells('AZ', (3,)), 'thing', 0.1, 0)      # 0..3: gothic church
+group('windmill', cells('AZ', (4,)), 'thing', 0.075, 0)   # 4 frames: the sails turn
+group('timberb', cells('BA', (1,)), 'thing', 0.085, 0)    # 0..3: half-timbered house
+group('abbeyb', cells('BA', (2,)), 'thing', 0.1, 0)       # 0..3: monastery
+group('monk', cells('BB', (1,)), 'pose', PEOPLE_WPP, 0)
+group('miller', cells('BB', (2,)), 'pose', PEOPLE_WPP, 0)
+group('cooper', cells('BB', (3,)), 'pose', PEOPLE_WPP, 0)
+group('spinner', cells('BB', (4,)), 'pose', PEOPLE_WPP, 0)
+group('knight', cells('BC', (1,)), 'pose', PEOPLE_WPP, 0)
+group('wagon', cells('BC', (2,)), 'pose', PEOPLE_WPP, 0)
+group('minstrel', cells('BC', (3,)), 'pose', PEOPLE_WPP, 0)
+group('pilgrims', cells('BC', (4,)), 'pose', PEOPLE_WPP, 0)
+group('mgwalk', cells('BD', (1, 2)), 'person', 13.6, 64)
+group('mgidle', cells('BD', (3, 4)), 'person', 13.6, 64)
 # band symbols (white, tinted in game), same order as SYMBOLS in render.ts
 group('sym', 'AQ101 AQ102 AQ103 AQ104 AQ105 AQ106 AQ107 AQ108 AQ109 AQ110 AQ201 AQ202 AQ203 AQ204 AQ205 AQ206 AQ207 AQ208 AQ209 AQ210 AQ301 AQ302 AQ303 AQ304 AQ305 AQ306 AQ307 AQ308 AQ309 AQ310 AQ401 AQ402 AQ403 AQ404 AQ405 AQ406 AQ407 AQ408 AQ409 AQ410 AQ501 AQ502 AQ503 AQ504 AQ505 AQ506 AQ507 AQ508 AQ509 AQ510 AR101 AR102 AR103 AR104 AR105 AR106 AR107 AR108 AR109 AR110 AR201 AR202 AR203 AR204 AR205 AR206 AR207 AR208 AR209 AR210 AR301 AR302 AR303 AR304 AR305 AR306 AR307 AR308 AR309 AR310 AR401 AR402 AR403 AR404 AR405 AR406 AR407 AR408 AR409 AR410 AR501 AR502 AR503 AR504 AR505 AR506 AR507 AR508 AR509 AR510', 'symbol', 6, 64)
 
@@ -502,14 +526,14 @@ def main() -> int:
                 items.append((name, base, 0.5, ay, s))
                 items.append((name + '_c', cloth, 0.5, ay, s))
                 continue
-            if kind == 'pose' and cid[:2] in ('AI', 'AJ', 'AV', 'AW'):
+            if kind == 'pose' and cid[:2] in ('AI', 'AJ', 'AV', 'AW', 'BB', 'BC'):
                 # bronze age linen: only the bright cloth is tinted (grey anvils and stones stay)
-                head = {'AI3': 0.35, 'AJ2': 0.35, 'AJ4': 0.0, 'AW2': 0.0, 'AV3': 0.35}.get(cid[:3], 0.28)
+                head = {'AI3': 0.35, 'AJ2': 0.35, 'AJ4': 0.0, 'AW2': 0.0, 'AV3': 0.35, 'BB1': 0.35, 'BB4': 0.35, 'BC2': 0.0}.get(cid[:3], 0.28)
                 base, cloth = split_cloth(img, head, 0.66)
                 items.append((name, base, 0.5, ay, s))
                 items.append((name + '_c', cloth, 0.5, ay, s))
                 continue
-            if kind == 'person' and cid[:2] in ('AN', 'AO', 'AX'):
+            if kind == 'person' and cid[:2] in ('AN', 'AO', 'AX', 'BD'):
                 # guards: only the light tunic takes the clan colour, the grey wolf fur and the metal stay
                 base, cloth = split_fur(img, 0.3) if cid[:2] == 'AN' else split_cloth(img, 0.3, 0.72, 0.3)
                 items.append((name, base, 0.5, ay, s))

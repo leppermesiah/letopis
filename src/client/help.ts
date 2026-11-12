@@ -18,6 +18,11 @@ const TAG_ORDER: Tag[] = ['breaking', 'new', 'old'];
 
 /** newest first; a new version gets its own entry here */
 export const CHANGELOG: Release[] = [
+  { v: '1.38', items: [
+    ['Средновековие: тежък плуг, манастир, рицарство, трипольна система, замък, хартия, гилдии, готически храм, университет, вятърна мелница, компас, механичен часовник и печатна преса.', 'Middle Ages: heavy plough, monastery, knighthood, three-field system, castle, paper, guilds, Gothic church, university, windmill, compass, mechanical clock and printing press.', 'Mittelalter: schwerer Pflug, Kloster, Rittertum, Dreifelderwirtschaft, Burg, Papier, Zünfte, gotische Kirche, Universität, Windmühle, Kompass, Räderuhr und Buchdruck.'],
+    ['Средновековни градове: замък на хълма, готическа църква, манастир, къщи с дървени греди, вятърна мелница, хан, покрит пазар, часовникова кула и трибуна за турнири.', 'Medieval towns: a castle on the hill, a Gothic church, a monastery, half-timbered houses, a windmill, an inn, a market hall, a clock tower and a tournament stand.', 'Mittelalterliche Städte: eine Burg auf dem Hügel, eine gotische Kirche, ein Kloster, Fachwerkhäuser, eine Windmühle, ein Gasthaus, eine Markthalle, ein Uhrturm und eine Turniertribüne.'],
+    ['Нови хора: рицар на кон, търговец с покрита каруца, менестрел, поклонници, монах, мелничар, бъчвар, предачка и пазач с алебарда.', 'New people: a knight on horseback, a merchant with a covered wagon, a minstrel, pilgrims, a monk, a miller, a cooper, a spinner and a guard with a halberd.', 'Neue Menschen: ein Ritter zu Pferd, ein Händler mit Planwagen, ein Spielmann, Pilger, ein Mönch, ein Müller, ein Böttcher, eine Spinnerin und ein Wächter mit Hellebarde.'],
+  ] },
   { v: '1.37', items: [
     ['Нов раздел „Царства“: всяко царство с царя, столицата и селата му.', 'A new Kingdoms tab: every kingdom with its king, capital and villages.', 'Ein neuer Reiter „Königreiche“: jedes Königreich mit König, Hauptstadt und Dörfern.'],
     ['На картата земята на всяко царство е оцветена в цвета на столицата, а столицата има корона до името.', 'On the map the land of every kingdom is tinted in the colour of its capital, and the capital has a crown by its name.', 'Auf der Karte ist das Land jedes Königreichs in der Farbe seiner Hauptstadt getönt, und die Hauptstadt hat eine Krone neben dem Namen.'],
