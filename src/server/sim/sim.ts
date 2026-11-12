@@ -1091,7 +1091,8 @@ export class Simulation {
   /** ideas come rarely before their time and more and more often after it: keeps the story near the real calendar */
   private techPace(tech: Tech): number {
     const d = (this.year - tech.target) / 250;
-    if (d < 0) return Math.exp(4 * d); // 250 years early: 2%, 500 years: 0.03%
+    // 250 years early: 2%, 500 years: 0.03%; from the middle ages on the prerequisites wait for centuries, so early is rarer still
+    if (d < 0) return Math.exp((tech.era >= 4 ? 6 : 4) * d);
     return Math.min(8, 1 + d * 2);
   }
 

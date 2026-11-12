@@ -18,6 +18,9 @@ const TAG_ORDER: Tag[] = ['breaking', 'new', 'old'];
 
 /** newest first; a new version gets its own entry here */
 export const CHANGELOG: Release[] = [
+  { v: '1.39', items: [
+    ['Средновековните открития вече не идват векове преди историческото си време.', 'Medieval discoveries no longer come centuries before their time in history.', 'Mittelalterliche Entdeckungen kommen nicht mehr Jahrhunderte vor ihrer historischen Zeit.'],
+  ] },
   { v: '1.38', items: [
     ['Средновековие: тежък плуг, манастир, рицарство, трипольна система, замък, хартия, гилдии, готически храм, университет, вятърна мелница, компас, механичен часовник и печатна преса.', 'Middle Ages: heavy plough, monastery, knighthood, three-field system, castle, paper, guilds, Gothic church, university, windmill, compass, mechanical clock and printing press.', 'Mittelalter: schwerer Pflug, Kloster, Rittertum, Dreifelderwirtschaft, Burg, Papier, Zünfte, gotische Kirche, Universität, Windmühle, Kompass, Räderuhr und Buchdruck.'],
     ['Средновековни градове: замък на хълма, готическа църква, манастир, къщи с дървени греди, вятърна мелница, хан, покрит пазар, часовникова кула и трибуна за турнири.', 'Medieval towns: a castle on the hill, a Gothic church, a monastery, half-timbered houses, a windmill, an inn, a market hall, a clock tower and a tournament stand.', 'Mittelalterliche Städte: eine Burg auf dem Hügel, eine gotische Kirche, ein Kloster, Fachwerkhäuser, eine Windmühle, ein Gasthaus, eine Markthalle, ein Uhrturm und eine Turniertribüne.'],
