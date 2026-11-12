@@ -178,3 +178,8 @@ a.ref:hover { border-bottom-style: solid; }
 .card.helpcard h4 { margin: 12px 0 4px; color: var(--accent); font-weight: 600; }
 .help { margin: 0; padding-left: 20px; line-height: 1.5; }
 .help li { margin: 2px 0; }
+/* "what's new": breaking changes and new-world-only notes on top of each version */
+.release .tag { display: inline-block; font-size: 0.75em; font-weight: 600; padding: 0 6px; border-radius: 8px; margin-right: 2px; vertical-align: 1px; }
+.release .tag.breaking { background: #b3261e; color: #fff; }
+.release .tag.new { background: #c27c0e; color: #fff; }
+.release .tag.old { background: #3b5b8c; color: #fff; }

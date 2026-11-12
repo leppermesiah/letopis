@@ -3,10 +3,24 @@
 
 import { L3, T } from './lang';
 
-interface Release { v: string; items: [string, string, string][] } // [bg, en, de]
+/** breaking: needs action or breaks something old; new: only in a newly started world; old: how an existing world takes it */
+type Tag = 'breaking' | 'new' | 'old';
+/** [bg, en, de, tag]; tagged items always come first in their version */
+type Item = [string, string, string, Tag?];
+interface Release { v: string; items: Item[] }
+
+const TAGS: Record<Tag, [string, string, string]> = {
+  breaking: ['Несъвместимо', 'Breaking', 'Inkompatibel'],
+  new: ['Само за нови светове', 'New worlds only', 'Nur für neue Welten'],
+  old: ['В съществуващ свят', 'In an existing world', 'In einer bestehenden Welt'],
+};
+const TAG_ORDER: Tag[] = ['breaking', 'new', 'old'];
 
 /** newest first; a new version gets its own entry here */
 export const CHANGELOG: Release[] = [
+  { v: '1.36', items: [
+    ['В новостите важните бележки са най-отгоре, с цветен етикет: несъвместими промени, неща само за нови светове и как ги приема съществуващ свят.', 'In “What’s new”, the important notes come first, with a coloured label: breaking changes, things for new worlds only, and how an existing world takes a change.', 'In den Neuigkeiten stehen wichtige Hinweise oben, mit einem farbigen Etikett: inkompatible Änderungen, Dinge nur für neue Welten und wie eine bestehende Welt eine Änderung übernimmt.'],
+  ] },
   { v: '1.35', items: [
     ['Желязна епоха: желязо, азбука, пристанище, царство, монети, писани закони, театър, медицина, акведукт, библиотека, водна мелница, свод и бетон.', 'Iron Age: iron, alphabet, harbour, kingdom, coins, written laws, theatre, medicine, aqueduct, library, watermill, arch and concrete.', 'Eisenzeit: Eisen, Alphabet, Hafen, Königreich, Münzen, geschriebene Gesetze, Theater, Heilkunde, Aquädukt, Bibliothek, Wassermühle, Gewölbe und Beton.'],
     ['Царства: селата се обединяват мирно под един цар, а столицата получава дворец.', 'Kingdoms: villages unite peacefully under one king, and the capital gets a palace.', 'Königreiche: Dörfer schließen sich friedlich unter einem König zusammen, und die Hauptstadt bekommt einen Palast.'],
@@ -19,7 +33,7 @@ export const CHANGELOG: Release[] = [
   { v: '1.33', items: [
     ['Немски език. Изборът на език вече е БГ / EN / DE.', 'German. The language selector now offers БГ / EN / DE.', 'Deutsch. Die Sprachauswahl bietet jetzt БГ / EN / DE.'],
     ['На английски и немски хората, селата и родовете имат свои местни имена, а не преписани български.', 'In English and German, people, villages and clans have names of their own instead of transliterated Bulgarian ones.', 'Auf Englisch und Deutsch tragen Menschen, Dörfer und Clans eigene Namen statt umgeschriebener bulgarischer.'],
-    ['Летописът се пише и на немски. По-старите записи се показват на английски.', 'The chronicle is also written in German. Older entries are shown in English.', 'Die Chronik wird auch auf Deutsch geschrieben. Ältere Einträge erscheinen auf Englisch.'],
+    ['Летописът се пише и на немски. Записите отпреди 1.33 нямат немски и се показват на английски, със старите имена.', 'The chronicle is also written in German. Entries from before 1.33 have no German and are shown in English, with the old names.', 'Die Chronik wird auch auf Deutsch geschrieben. Einträge aus der Zeit vor 1.33 gibt es nicht auf Deutsch; sie erscheinen auf Englisch, mit den alten Namen.', 'old'],
   ] },
   { v: '1.32', items: [
     ['Откритията са подредени по епохи, всяка в своя карта с брояч.', 'Discoveries are grouped by age, each in its own card with a counter.', 'Die Entdeckungen sind nach Zeitaltern geordnet, jedes in einer eigenen Karte mit Zähler.'],
@@ -27,6 +41,7 @@ export const CHANGELOG: Release[] = [
   ] },
   { v: '1.29', items: [
     ['199 нови имена на родовете, всяко със свой символ на знамето.', '199 new clan names, each with its own symbol on the banner.', '199 neue Clannamen, jeder mit einem eigenen Zeichen auf dem Banner.'],
+    ['Новите имена получават само новите родове. Родовете, които вече ги има, си пазят старите имена.', 'Only new clans get the new names. Clans that already exist keep their old ones.', 'Nur neue Clans bekommen die neuen Namen. Bestehende Clans behalten ihre alten.', 'old'],
   ] },
   { v: '1.28', items: [
     ['100 нови символа на родовете.', '100 new clan symbols.', '100 neue Clanzeichen.'],
@@ -84,6 +99,12 @@ export function hasNews(): boolean {
   return seenVersion() !== CHANGELOG[0].v;
 }
 
+const rank = (it: Item) => (it[3] ? TAG_ORDER.indexOf(it[3]) : TAG_ORDER.length);
+function itemHtml(it: Item): string {
+  const tag = it[3] ? `<span class="tag ${it[3]}">${L3(...TAGS[it[3]])}</span> ` : '';
+  return `<li${it[3] ? ` class="${it[3]}"` : ''}>${tag}${L3(it[0], it[1], it[2])}</li>`;
+}
+
 /** the whole window; opening it marks the newest version as read */
 export function helpWindowHtml(): string {
   const fresh = hasNews();
@@ -91,7 +112,7 @@ export function helpWindowHtml(): string {
   const title = (v: string) => L3(`Какво ново във версия ${v}`, `What's new in v. ${v}`, `Neu in Version ${v}`);
   const releases = CHANGELOG.map((r, i) => `<details class="release"${i === 0 && fresh ? ' open' : ''}>
       <summary>${title(r.v)}</summary>
-      <ul>${r.items.map((it) => `<li>${L3(...it)}</li>`).join('')}</ul>
+      <ul>${[...r.items].sort((a, b) => rank(a) - rank(b)).map(itemHtml).join('')}</ul>
     </details>`).join('');
   return `<h2>${T('Летопис', 'Letopis', 'Letopis')}</h2><div class="releases">${releases}</div>${helpHtml()}`;
 }
