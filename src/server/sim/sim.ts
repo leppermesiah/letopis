@@ -26,6 +26,8 @@ const GLOBAL_DISCOVERY = 0.0003;
 /** a kingdom holds at most this many towns, all within this distance of the capital */
 const KINGDOM_MAX = 8;
 const KINGDOM_REACH = 32;
+/** people a town needs before it can found a kingdom */
+const KINGDOM_FOUNDER = 250;
 const GENE_KEYS = ['str', 'int', 'cur', 'soc', 'hea', 'lon'] as const;
 type GeneKey = (typeof GENE_KEYS)[number];
 export const GENE_NAMES: Record<GeneKey, string> = {
@@ -360,11 +362,13 @@ export class Simulation {
       if (b.kingdom != null && !ks.some((k) => k.id === b.kingdom && k.members.includes(b.id))) b.kingdom = null;
     }
     const towns = this.s.bands.filter((b) => b.settled);
-    // a town that knows the crown joins a kingdom nearby or founds its own
+    const size = new Map<number, number>();
+    for (const p of this.s.people) size.set(p.bandId, (size.get(p.bandId) ?? 0) + 1);
+    // now and then a big walled town that knows the crown and has no king nearby founds a kingdom; the rest wait for an invitation
     for (const b of towns) {
-      if (b.kingdom != null || !this.hasTech(b, 'kingdom')) continue;
-      const near = ks.find((k) => k.members.length < KINGDOM_MAX && dist(this.bandById.get(k.capital)!, b) < KINGDOM_REACH);
-      if (near) { this.joinKingdom(near, b); continue; }
+      if (b.kingdom != null || !this.hasTech(b, 'kingdom') || !this.hasTech(b, 'walls')) continue;
+      if ((size.get(b.id) ?? 0) < KINGDOM_FOUNDER || !this.rng.chance(0.06)) continue;
+      if (ks.some((k) => dist(this.bandById.get(k.capital)!, b) < KINGDOM_REACH * 1.25)) continue;
       const k: Kingdom = { id: (this.s.nextKingdomId = (this.s.nextKingdomId ?? 0) + 1), place: b.settlementName ?? b.name, capital: b.id, members: [b.id], founded: Math.floor(this.year) };
       ks.push(k);
       b.kingdom = k.id;
@@ -382,7 +386,7 @@ export class Simulation {
       const cap = this.bandById.get(k.capital)!;
       for (const o of towns) {
         if (k.members.length >= KINGDOM_MAX) break;
-        if (o.kingdom != null || dist(cap, o) >= KINGDOM_REACH || !this.rng.chance(0.15)) continue;
+        if (o.kingdom != null || dist(cap, o) >= KINGDOM_REACH || !this.rng.chance(0.02)) continue;
         this.joinKingdom(k, o);
       }
     }
