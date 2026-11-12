@@ -8,6 +8,7 @@ import { ERAS_BG, ERAS_EN, TECH_DESC, TECH_LIST } from '../shared/i18n';
 import { ERAS_DE, TECH_DESC_DE, bandTextCaseDe } from '../shared/i18n-de';
 import { isWoman } from '../shared/people-l10n';
 import type { Lang } from '../shared/i18n';
+import { hasNews, helpWindowHtml } from './help';
 import {
   B, BL, CAUSE, CHIEF, DE, DEED, EN, ERA, L3, LANG, LOCALE, GENE, HERO, P, SECRET_KIND, T, TASK, TECH, TECH_ID, TITLE, VILLAGE, fmtYear, monthName, num, refName, setLang, translatePage,
 } from './lang';
@@ -525,6 +526,7 @@ function openCard(html: string, beside = false, extra = '') {
   $('#card').hidden = false;
   $('#card').classList.toggle('beside', beside);
   $('#card').classList.toggle('wide', extra === 'wide');
+  $('#card').classList.toggle('helpcard', extra === 'help');
   if (!beside) { follow = null; r.select(null); ($('#card') as HTMLElement).style.cssText = ''; }
 }
 function closeCard() {
@@ -736,6 +738,14 @@ const langSel = $('#langSel') as HTMLSelectElement;
 langSel.value = LANG;
 langSel.title = T('Език', 'Language', 'Sprache');
 langSel.onchange = () => setLang(langSel.value as Lang);
+
+// "?": what is new and a short help; a dot on it while a new version is unread
+const helpBtn = $('#helpBtn');
+helpBtn.classList.toggle('news', hasNews());
+helpBtn.onclick = () => {
+  openCard(helpWindowHtml(), false, 'help');
+  helpBtn.classList.remove('news');
+};
 $('#sideHandle').onclick = toggleSide;
 
 // ---------- frame loop ----------

@@ -28,6 +28,9 @@ body.kids { --fs: 18px; --side-w: 420px; }
 .btn[aria-pressed='true'] { background: var(--accent); color: #1a1206; border-color: var(--accent); }
 .btn.lang { appearance: none; -webkit-appearance: none; padding: 8px 14px; text-align: center; }
 .btn.lang option { color: #111; background: #fff; }
+.btn.help { position: relative; font-size: 17px; font-weight: 600; }
+/* a new version that has not been read yet */
+.btn.help.news::after { content: ''; position: absolute; top: 2px; right: 2px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--panel-solid); }
 .btn.round { width: 38px; height: 38px; padding: 0; font-size: 20px; line-height: 1; }
 .btn.ghost { background: transparent; width: 100%; margin: 8px 0 16px; }
 
@@ -162,3 +165,16 @@ a.ref:hover { border-bottom-style: solid; }
 .secrets li.found b { color: var(--accent-2); font-weight: 600; }
 
 .person-head .title { color: var(--accent); font-weight: 600; }
+
+/* the "?" window: one line per version that opens and closes, then the help */
+.card.helpcard { width: min(600px, calc(100vw - 32px)); }
+.releases { margin: 10px 0 4px; }
+.release { border: 1px solid var(--line); border-radius: 10px; margin: 0 0 8px; background: rgba(255, 255, 255, 0.03); }
+.release summary { cursor: pointer; padding: 9px 12px; color: var(--accent-2); font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
+.release summary::-webkit-details-marker { display: none; }
+.release summary::after { content: '▾'; color: var(--muted); transition: transform 0.15s; }
+.release[open] summary::after { transform: rotate(180deg); }
+.release ul { margin: 0; padding: 0 14px 10px 32px; line-height: 1.5; }
+.card.helpcard h4 { margin: 12px 0 4px; color: var(--accent); font-weight: 600; }
+.help { margin: 0; padding-left: 20px; line-height: 1.5; }
+.help li { margin: 2px 0; }

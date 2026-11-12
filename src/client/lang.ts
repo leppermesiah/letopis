@@ -119,4 +119,5 @@ export function translatePage() {
   set('#kidsBtn', t('Kids mode', 'Kindermodus'), t('Bigger letters and explanations for children', 'Größere Schrift und Erklärungen für Kinder'));
   set('#sideToggle', t('Panel', 'Leiste'), t('Hide or show the chronicle', 'Chronik ein- oder ausblenden'));
   set('#cardClose', undefined, t('Close', 'Schließen'));
+  set('#helpBtn', undefined, t('What is new and help', 'Neuigkeiten und Hilfe'));
 }
