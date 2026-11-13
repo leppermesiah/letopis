@@ -112,9 +112,17 @@ function seenVersion(): string | null {
   try { return localStorage.getItem(SEEN_KEY); } catch { return null; }
 }
 
-/** a version the viewer has not opened yet: the "?" button shows a dot */
+/** the newest version plus a short hash of its text, so a line added to the same version counts as news too */
+function newsKey(): string {
+  const text = CHANGELOG[0].items.map((it) => it[0]).join('|');
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0;
+  return `${CHANGELOG[0].v}#${(h >>> 0).toString(36)}`;
+}
+
+/** a version (or a new line in it) the viewer has not opened yet: the "?" button shows a dot */
 export function hasNews(): boolean {
-  return seenVersion() !== CHANGELOG[0].v;
+  return seenVersion() !== newsKey();
 }
 
 const rank = (it: Item) => (it[4] ? TAG_ORDER.indexOf(it[4]) : TAG_ORDER.length);
@@ -127,7 +135,7 @@ function itemHtml(it: Item): string {
 /** the whole window; opening it marks the newest version as read */
 export function helpWindowHtml(): string {
   const fresh = hasNews();
-  try { localStorage.setItem(SEEN_KEY, CHANGELOG[0].v); } catch { /* private mode */ }
+  try { localStorage.setItem(SEEN_KEY, newsKey()); } catch { /* private mode */ }
   const title = (v: string) => L3(`Какво ново във версия ${v}`, `What's new in v. ${v}`, `Neu in Version ${v}`);
   const releases = CHANGELOG.map((r, i) => `<details class="release"${i === 0 && fresh ? ' open' : ''}>
       <summary>${title(r.v)}</summary>
