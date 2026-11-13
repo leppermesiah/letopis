@@ -212,7 +212,7 @@ const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 /** "Вълчи зъб III" -> ["Вълчи зъб", " III"], or null if it is not one of these names */
 export function clanBase(name: string): [string, string] | null {
   if (CLAN_EN.has(name)) return [name, ''];
-  const m = / ([IVX]+)$/.exec(name);
+  const m = / ([IVX]+|\d+)$/.exec(name);
   return m && CLAN_EN.has(name.slice(0, m.index)) ? [name.slice(0, m.index), m[0]] : null;
 }
 export const romanNum = (n: number) => (n < ROMAN.length ? ROMAN[n] : String(n));

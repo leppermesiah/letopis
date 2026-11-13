@@ -147,6 +147,32 @@ export const TECH_EN: Record<string, { name: string; text: string; kids: string 
   library: { name: 'Library', text: '{name} of {band} gathered all the scrolls in one place. What is learned once is no longer forgotten.', kids: '{name} put lots of scrolls in one house. Everyone can read there!' },
   watermill: { name: 'Watermill', text: '{name} of {band} put a wheel in the river and made it turn the millstone. The river grinds the flour instead of people.', kids: '{name} got the river to turn a big wheel, and it grinds flour all by itself!' },
   arch: { name: 'Arch and Concrete', text: '{name} of {band} mixed volcanic sand with lime and built an arch that holds itself up. Bridges and domes now stand for centuries.', kids: '{name} made a stone you can pour like mud, and then it turns hard!' },
+  heavy_plough: { name: 'Heavy Plough', text: '{name} of {band} gave the plough an iron share and wheels and hitched two horses in padded collars. The heavy clay of the north can now be ploughed. A new age begins.', kids: '{name} made a plough that two horses pull through the heaviest soil!' },
+  monastery: { name: 'Monastery', text: '{name} of {band} founded a monastery near the village. The monks copy the old books, care for the sick and teach the children to read.', kids: '{name} built a monastery where the monks look after the books and help the sick.' },
+  knighthood: { name: 'Knighthood', text: '{name} of {band} swore before the king to protect the weak and the travellers. The first knight appeared on horseback, in iron mail, with a sword he never draws first.', kids: '{name} became a knight: rides a big horse and keeps travellers safe on the road!' },
+  three_field: { name: 'Three-Field System', text: '{name} of {band} split the fields in three: winter wheat in one, spring barley in another, and the third rests. The soil no longer wears out.', kids: '{name} came up with letting a field rest every third year, so it grows more.' },
+  castle: { name: 'Castle', text: '{Band} raised a stone castle on the hill above the houses. {name} led the work. In times of trouble the whole village takes shelter behind its thick walls.', kids: '{name} built a real castle with towers and a drawbridge!' },
+  paper: { name: 'Paper', text: '{name} of {band} pounded old rags in water, scooped the pulp up with a fine frame and dried it. Paper is far cheaper than parchment.', kids: '{name} made paper out of old rags. Now everyone can write!' },
+  guilds: { name: 'Guilds', text: '{name} of {band} brought the masters of one craft together in a guild. They train the apprentices, keep up the quality and help each other in bad years.', kids: '{name} brought all the masters together in a guild. They teach children their craft!' },
+  gothic: { name: 'Gothic Church', text: '{name} of {band} raised a church with pointed vaults and tall windows of coloured glass. Inside, the light falls in bright patches on the floor.', kids: '{name} built a church with coloured windows that turn the light into a rainbow!' },
+  university: { name: 'University', text: '{name} of {band} invited scholars from distant lands. They argue, write and teach the young arithmetic, the stars, law and medicine. It is the first university.', kids: '{name} founded a school for grown-ups where you can learn everything!' },
+  windmill: { name: 'Windmill', text: '{name} of {band} put sails on a wooden wheel on top of the hill. The wind turns the millstone even where there is no river.', kids: '{name} got the wind to turn a big mill!' },
+  compass: { name: 'Compass', text: '{name} of {band} noticed that a magnetised needle always points north. Ships now find their way in fog and far from the shore.', kids: '{name} found a needle that always points north. Ships no longer get lost!' },
+  clock: { name: 'Mechanical Clock', text: '{name} of {band} built a clock of gears and a weight and put it up on the tower. Now the whole village knows the time.', kids: '{name} built a big clock on the tower. Now everyone knows when it is lunchtime!' },
+  printing: { name: 'Printing Press', text: '{name} of {band} cast letters in metal, set them in a frame and pressed them onto paper. In one day more pages are printed than a monk can write in a year.', kids: '{name} invented a machine that writes books instead of people!' },
+  caravel: { name: 'Ocean Ship', text: '{name} of {band} built a ship with high sides, three masts and many sails. With the compass it crosses the open sea and comes back. A new age begins.', kids: '{name} built a big ship that sails across the whole sea!' },
+  colonies: { name: 'Colonies', text: '{name} of {band} led a ship with families, seeds and animals to a distant shore. There they founded a new village that remembers where it came from.', kids: '{name} sailed away and founded a new village on a distant shore!' },
+  fireworks: { name: 'Fireworks', text: '{name} of {band} filled paper tubes with black powder. At the feast they flew up high and burst into coloured stars above the village.', kids: '{name} made fireworks, and the sky above the feast lit up in colours!' },
+  potato: { name: 'Potato and Maize', text: 'Ships brought potatoes and maize from distant lands. {name} of {band} was the first to plant them. They grow even where wheat will not.', kids: '{name} planted potatoes that came by ship from far away. Now there is plenty of food!' },
+  banking: { name: 'Banks', text: '{name} of {band} began to keep the money of merchants safe and to lend it to them. Instead of sacks of gold, letters travel along the roads.', kids: '{name} opened a bank where people keep their money!' },
+  newspaper: { name: 'Newspaper', text: 'Every week {name} of {band} prints a sheet with the news from the town and from distant lands. Town criers carry it through the streets.', kids: '{name} made a newspaper: every week everyone hears the news!' },
+  telescope: { name: 'Telescope', text: '{name} of {band} put two ground glasses into a tube and pointed it at the sky. The Moon has mountains, and other worlds circle the far-off stars.', kids: '{name} looked through a tube with glasses and saw mountains on the Moon!' },
+  star_fort: { name: 'Star Fort', text: '{name} of {band} surrounded the town with low, thick walls and pointed bastions like a star. Now the town can keep growing behind them.', kids: '{name} built star-shaped walls around the whole town!' },
+  post: { name: 'Post', text: '{name} of {band} set up stations with rested horses along the roads. A letter reaches the next kingdom in days, not months.', kids: '{name} invented the post: riders carry letters from town to town!' },
+  coffeehouse: { name: 'Coffee House', text: '{name} of {band} opened a coffee house. Merchants, scholars and sailors sit over a cup, read newspapers and argue about everything.', kids: '{name} opened a coffee house where grown-ups talk and read newspapers.' },
+  microscope: { name: 'Microscope', text: '{name} of {band} looked at a drop of water through a small glass and saw thousands of tiny creatures in it. Healers now know that clean water keeps illness away.', kids: '{name} saw a whole world of tiny creatures in one drop of water!' },
+  palace: { name: 'Palace', text: '{name} of {band} built the king a palace with tall windows, a garden with fountains and halls for music and dancing.', kids: '{name} built the king a palace with a garden and fountains!' },
+  academy: { name: 'Academy of Sciences', text: '{name} of {band} gathered the scholars into an academy. They do experiments, measure everything exactly and print their discoveries so anyone can check them.', kids: '{name} brought all the scholars together to do experiments!' },
 };
 export const TECH_BG: Record<string, string> = {
   Огън: 'fire', 'Каменни сечива': 'stone_tools', 'Познание за билките': 'herb_lore', 'Погребални обреди': 'burial', Копие: 'spear',
@@ -156,6 +182,8 @@ export const TECH_BG: Record<string, string> = {
   Мед: 'copper', Рало: 'plough', Колело: 'wheel', Бронз: 'bronze', Платно: 'sailing', Писменост: 'writing', Търговия: 'trade',
   'Крепостни стени': 'walls', Календар: 'calendar', 'Опитомен кон': 'horse',
   Желязо: 'iron', Азбука: 'alphabet', Пристанище: 'harbor', Царство: 'kingdom', Монети: 'coins', 'Писани закони': 'laws', Театър: 'theatre', Медицина: 'medicine', Акведукт: 'aqueduct', Библиотека: 'library', 'Водна мелница': 'watermill', 'Свод и бетон': 'arch',
+  'Тежък плуг': 'heavy_plough', Манастир: 'monastery', Рицарство: 'knighthood', 'Трипольна система': 'three_field', Замък: 'castle', Хартия: 'paper', Гилдии: 'guilds', 'Готически храм': 'gothic', Университет: 'university', 'Вятърна мелница': 'windmill', Компас: 'compass', 'Механичен часовник': 'clock', 'Печатна преса': 'printing',
+  'Океански кораб': 'caravel', 'Колонии': 'colonies', 'Фойерверки': 'fireworks', 'Картоф и царевица': 'potato', 'Банки': 'banking', 'Вестник': 'newspaper', 'Телескоп': 'telescope', 'Звездна крепост': 'star_fort', 'Поща': 'post', 'Кафене': 'coffeehouse', 'Микроскоп': 'microscope', 'Дворец': 'palace', 'Академия на науките': 'academy',
 };
 /** every discovery the game knows, in the order history found them: [id, Bulgarian name, era] */
 export const TECH_LIST: [string, string, number][] = [
@@ -167,6 +195,8 @@ export const TECH_LIST: [string, string, number][] = [
   ['bronze', 'Бронз', 2], ['sailing', 'Платно', 2], ['writing', 'Писменост', 2], ['trade', 'Търговия', 2], ['walls', 'Крепостни стени', 2],
   ['calendar', 'Календар', 2], ['horse', 'Опитомен кон', 2],
   ['iron', 'Желязо', 3], ['alphabet', 'Азбука', 3], ['harbor', 'Пристанище', 3], ['kingdom', 'Царство', 3], ['coins', 'Монети', 3], ['laws', 'Писани закони', 3], ['theatre', 'Театър', 3], ['medicine', 'Медицина', 3], ['aqueduct', 'Акведукт', 3], ['library', 'Библиотека', 3], ['watermill', 'Водна мелница', 3], ['arch', 'Свод и бетон', 3],
+  ['heavy_plough', 'Тежък плуг', 4], ['monastery', 'Манастир', 4], ['knighthood', 'Рицарство', 4], ['three_field', 'Трипольна система', 4], ['castle', 'Замък', 4], ['paper', 'Хартия', 4], ['guilds', 'Гилдии', 4], ['gothic', 'Готически храм', 4], ['university', 'Университет', 4], ['windmill', 'Вятърна мелница', 4], ['compass', 'Компас', 4], ['clock', 'Механичен часовник', 4], ['printing', 'Печатна преса', 4],
+  ['caravel', 'Океански кораб', 5], ['colonies', 'Колонии', 5], ['fireworks', 'Фойерверки', 5], ['potato', 'Картоф и царевица', 5], ['banking', 'Банки', 5], ['newspaper', 'Вестник', 5], ['telescope', 'Телескоп', 5], ['star_fort', 'Звездна крепост', 5], ['post', 'Поща', 5], ['coffeehouse', 'Кафене', 5], ['microscope', 'Микроскоп', 5], ['palace', 'Дворец', 5], ['academy', 'Академия на науките', 5],
 ];
 
 /** a line about each discovery, for the ones still to come: [Bulgarian, English] */
@@ -211,6 +241,32 @@ export const TECH_DESC: Record<string, [string, string]> = {
   library: ['Свитъците на едно място: знанието не се губи.', 'All the scrolls in one place: knowledge is not lost.'],
   watermill: ['Реката върти воденичния камък.', 'The river turns the millstone.'],
   arch: ['Свод, който държи сам себе си, и камък, който се излива.', 'An arch that holds itself up, and stone that can be poured.'],
+  heavy_plough: ['Желязо, колела и конски хамут: орат се и тежките земи.', 'Iron, wheels and a horse collar: even heavy land can be ploughed.'],
+  monastery: ['Монаси преписват книгите и лекуват болните.', 'Monks copy the books and care for the sick.'],
+  knighthood: ['Клетва да се пазят слабите и пътниците.', 'An oath to protect the weak and the travellers.'],
+  three_field: ['Три ниви, една почива: земята не се изтощава.', 'Three fields, one resting: the soil does not wear out.'],
+  castle: ['Каменна крепост на хълма, убежище за цялото село.', 'A stone fortress on the hill, a refuge for the whole village.'],
+  paper: ['Парцали, вода и рамка: евтина хартия за всеки.', 'Rags, water and a frame: cheap paper for everyone.'],
+  guilds: ['Майсторите на един занаят се учат и си помагат.', 'The masters of one craft teach and help each other.'],
+  gothic: ['Остри сводове и прозорци от цветно стъкло.', 'Pointed vaults and windows of coloured glass.'],
+  university: ['Учени от далечни земи учат младите на всичко.', 'Scholars from distant lands teach the young everything.'],
+  windmill: ['Вятърът върти камъка и там, където няма река.', 'The wind turns the millstone even where there is no river.'],
+  compass: ['Игла, която винаги сочи север.', 'A needle that always points north.'],
+  clock: ['Зъбни колела на кулата: всички знаят часа.', 'Gears on the tower: everyone knows the time.'],
+  printing: ['Метални букви и преса: книги за всеки.', 'Metal letters and a press: books for everyone.'],
+  caravel: ['Три мачти и компас: през откритото море.', 'Three masts and a compass: across the open sea.'],
+  colonies: ['Нови села на далечни брегове.', 'New villages on distant shores.'],
+  fireworks: ['Цветни звезди над празника.', 'Coloured stars above the feast.'],
+  potato: ['Нови растения от далечни земи.', 'New crops from distant lands.'],
+  banking: ['Пари на съхранение и заеми за търговците.', 'Money kept safe and loans for merchants.'],
+  newspaper: ['Новините всяка седмица.', 'The news every week.'],
+  telescope: ['Планини на Луната.', 'Mountains on the Moon.'],
+  star_fort: ['Стени като звезда около целия град.', 'Star-shaped walls around the whole town.'],
+  post: ['Конници носят писмата от град на град.', 'Riders carry letters from town to town.'],
+  coffeehouse: ['Чаша кафе, вестник и спор.', 'A cup of coffee, a newspaper and an argument.'],
+  microscope: ['Цял свят в една капка вода.', 'A whole world in one drop of water.'],
+  palace: ['Дворец с градина и фонтани.', 'A palace with a garden and fountains.'],
+  academy: ['Учените правят опити и печатат откритията си.', 'Scholars do experiments and print their findings.'],
 };
 
 /** a tech by its Bulgarian name (what the server sends) */
@@ -292,6 +348,8 @@ export function deedEn(d: string): string {
   if ((m = /^Преоткри „(.+)“ за своя род$/.exec(d))) return `Rediscovered “${techEn(m[1])}” for the clan`;
   if ((m = /^Доживя до 70 години \((.+)\)$/.exec(d))) return `Lived to 70 (${yearsInTextEn(m[1])})`;
   if ((m = /^Стана първият цар на царство (.+) \((.+)\)$/.exec(d))) return `Became the first king of the Kingdom of ${villageEn(m[1])} (${yearsInTextEn(m[2])})`;
+  if ((m = /^Отплава с кораб и основа колония на далечен бряг \((.+)\)$/.exec(d))) return `Sailed away and founded a colony on a distant shore (${yearsInTextEn(m[1])})`;
+  if ((m = /^Царска сватба с (принцесата|принца) на царство (.+) \((.+)\)$/.exec(d))) return `Royal wedding with the ${m[1] === 'принца' ? 'prince' : 'princess'} of the Kingdom of ${villageEn(m[2])} (${yearsInTextEn(m[3])})`;
   if ((m = /^Основа (.+) и стана негов (\S+) \((.+)\)$/.exec(d))) return `Founded the ${bandEn(m[1])} and became its ${chiefEn(m[2]).toLowerCase()} (${yearsInTextEn(m[3])})`;
   if ((m = /^Поведе лова на (.+)$/.exec(d))) return `Led the hunt for ${BEAST_EN[m[1]] ?? m[1]}`;
   return yearsInTextEn(d);

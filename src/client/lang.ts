@@ -108,7 +108,7 @@ export function translatePage() {
   }
   set('#sideHandle', undefined, t('Hide or show the panel', 'Seitenleiste ein- oder ausblenden'));
   const tabs: Record<string, [string, string]> = {
-    chronicle: ['Chronicle', 'Chronik'], discoveries: ['Discoveries', 'Entdeckungen'], bands: ['Clans', 'Clans'], heroes: ['People', 'Personen'],
+    chronicle: ['Chronicle', 'Chronik'], discoveries: ['Discoveries', 'Entdeckungen'], bands: ['Clans', 'Clans'], kingdoms: ['Kingdoms', 'Königreiche'], heroes: ['People', 'Personen'],
     stats: ['Statistics', 'Statistik'], secrets: ['Secrets', 'Geheimnisse'],
   };
   for (const [k, [en, de]] of Object.entries(tabs)) set(`.tab[data-tab="${k}"]`, t(en, de));

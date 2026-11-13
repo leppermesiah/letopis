@@ -183,3 +183,13 @@ a.ref:hover { border-bottom-style: solid; }
 .release .tag.breaking { background: #b3261e; color: #fff; }
 .release .tag.new { background: #c27c0e; color: #fff; }
 .release .tag.old { background: #3b5b8c; color: #fff; }
+.release .kind { font-size: 0.85em; }
+.release .kind.fix { color: #66bb6a; }
+.release .kind.add { color: #c27c0e; }
+/* the Kingdoms tab */
+.kingdoms { list-style: none; margin: 0; padding: 0; }
+.kingdoms li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 4px; border-bottom: 1px solid var(--line); }
+.kingdoms li .dot { margin-top: 6px; flex: none; }
+.kingdoms li > div > div { margin-top: 2px; }
+.kingdoms a { color: var(--accent-2); text-decoration: none; }
+.kingdoms a:hover { text-decoration: underline; }

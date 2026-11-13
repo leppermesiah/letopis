@@ -20,6 +20,8 @@ const ERA_WHY: Record<number, [string, string]> = {
   1: ['Хората вече не само търсят храна, а я отглеждат.', 'People no longer only search for food, they grow it.'],
   2: ['Медта и калаят се сливат в метал, по-твърд от камъка. Селата растат в градове.', 'Copper and tin melt into a metal harder than stone. Villages grow into towns.'],
   3: ['Желязото е навсякъде и е по-евтино от бронза. Селата се събират в царства.', 'Iron is everywhere and cheaper than bronze. Villages come together into kingdoms.'],
+  4: ['Замъци пазят селата, манастирите пазят знанието, а вятърът и водата мелят брашното.', 'Castles guard the villages, monasteries guard knowledge, and wind and water grind the flour.'],
+  5: ['Корабите прекосяват откритото море, на далечни брегове никнат нови села, а вестниците разнасят новините.', 'Ships cross the open sea, new villages spring up on distant shores, and newspapers carry the news.'],
 };
 /** chance per band and month for an idea whose time has come */
 const GLOBAL_DISCOVERY = 0.0003;
@@ -28,6 +30,9 @@ const KINGDOM_MAX = 8;
 const KINGDOM_REACH = 32;
 /** people a town needs before it can found a kingdom */
 const KINGDOM_FOUNDER = 250;
+/** kings marry their children to neighbouring royal houses this far apart; allied realms may later unite up to this many towns */
+const ALLY_REACH = 90;
+const UNION_MAX = 16;
 const GENE_KEYS = ['str', 'int', 'cur', 'soc', 'hea', 'lon'] as const;
 type GeneKey = (typeof GENE_KEYS)[number];
 export const GENE_NAMES: Record<GeneKey, string> = {
@@ -81,6 +86,8 @@ export interface Band {
   scout?: { x: number; y: number; px?: number; py?: number } | null;
   /** the kingdom this town belongs to (iron age) */
   kingdom?: number | null;
+  /** founded by settlers who came over the sea (from v1.40) */
+  colony?: boolean;
 }
 
 /** villages that joined under one crown, peacefully: the chief of the capital is the king */
@@ -91,6 +98,8 @@ export interface Kingdom {
   capital: number;
   members: number[];
   founded: number; // year
+  /** royal weddings: ally kingdom id -> the year they became allies (from v1.40) */
+  allies?: Record<number, number>;
 }
 
 /** Everything in here is saved to disk. */
@@ -321,7 +330,9 @@ export class Simulation {
 
   kingdomView(b: Band): BandView['kingdom'] {
     const k = this.kingdomOf(b);
-    return k ? { id: k.id, place: k.place, capital: k.capital === b.id, members: k.members.length } : null;
+    if (!k) return null;
+    const allies = Object.keys(k.allies ?? {}).map((id) => this.s.kingdoms?.find((o) => o.id === +id)?.place).filter((x): x is string => !!x);
+    return { id: k.id, place: k.place, capital: k.capital === b.id, members: k.members.length, color: this.bandById.get(k.capital)?.color ?? b.color, founded: k.founded, allies };
   }
 
   /** 'царство Бялово' in a sentence, 'Царство Бялово' at its start */
@@ -343,6 +354,7 @@ export class Simulation {
       k.members = k.members.filter((id) => this.bandById.get(id)?.settled);
       if (k.members.length === 0) {
         ks.splice(ks.indexOf(k), 1);
+        for (const o of ks) if (o.allies) delete o.allies[k.id];
         this.emit('kingdom', 2, `${this.kBg(k, true)} се разпадна: в него не остана нито едно село.`, undefined, undefined, undefined, [],
           [`${this.kEn(k, true)} came to an end: not a single village was left in it.`],
           [`${this.kDe(k, 'nom', true)} ging zu Ende: Kein einziges Dorf ist ihm geblieben.`]);
@@ -388,6 +400,97 @@ export class Simulation {
         if (k.members.length >= KINGDOM_MAX) break;
         if (o.kingdom != null || dist(cap, o) >= KINGDOM_REACH || !this.rng.chance(0.02)) continue;
         this.joinKingdom(k, o);
+      }
+    }
+    this.royalWeddings(ks);
+    this.unions(ks);
+  }
+
+  /** the king's children and grandchildren */
+  private royalBlood(cap: Band): Set<number> {
+    const king = cap.chiefId ? this.byId.get(cap.chiefId) : undefined;
+    const blood = new Set<number>(king?.children ?? []);
+    for (const c of king?.children ?? []) for (const g of this.byId.get(c)?.children ?? []) blood.add(g);
+    return blood;
+  }
+
+  /** children and grandchildren of the king who live in the capital and are free to marry */
+  private heirs(k: Kingdom, sex: 0 | 1): Person[] {
+    const cap = this.bandById.get(k.capital);
+    if (!cap) return [];
+    const blood = this.royalBlood(cap);
+    const out: Person[] = [];
+    for (const id of blood) {
+      const p = this.byId.get(id);
+      if (p && p.sex === sex && p.bandId === cap.id && !p.partnerId && this.ageOf(p) >= 16 && this.ageOf(p) <= 35) out.push(p);
+    }
+    return out;
+  }
+
+  /** now and then two neighbouring kings marry their children to each other, and the realms become allies */
+  private royalWeddings(ks: Kingdom[]) {
+    for (let i = 0; i < ks.length; i++) {
+      for (let j = i + 1; j < ks.length; j++) {
+        const a = ks[i], b = ks[j];
+        if (a.allies?.[b.id] != null) continue;
+        const ca = this.bandById.get(a.capital), cb = this.bandById.get(b.capital);
+        if (!ca || !cb || dist(ca, cb) > ALLY_REACH || !this.rng.chance(0.1)) continue;
+        // a prince of one house and a princess of the other; she moves to his court
+        const pairs: [Kingdom, Person, Kingdom, Person][] = [];
+        const pa = this.heirs(a, 0), qb = this.heirs(b, 1), pb = this.heirs(b, 0), qa = this.heirs(a, 1);
+        if (pa.length && qb.length) pairs.push([a, this.rng.pick(pa), b, this.rng.pick(qb)]);
+        if (pb.length && qa.length) pairs.push([b, this.rng.pick(pb), a, this.rng.pick(qa)]);
+        if (!pairs.length) continue;
+        const [hk, groom, wk, bride] = this.rng.pick(pairs);
+        groom.partnerId = bride.id;
+        bride.partnerId = groom.id;
+        bride.bandId = hk.capital;
+        bride.x = groom.x; bride.y = groom.y;
+        (a.allies ??= {})[b.id] = Math.floor(this.year);
+        (b.allies ??= {})[a.id] = Math.floor(this.year);
+        const y = formatYear(this.year);
+        groom.deeds.push(`Царска сватба с принцесата на ${this.kBg(wk)} (${y})`);
+        bride.deeds.push(`Царска сватба с принца на ${this.kBg(hk)} (${y})`);
+        const g = this.bandById.get(hk.capital)!;
+        this.emit('wedding', 2, `Царска сватба: принц ${this.nameOf(groom)} от ${this.kBg(hk)} и принцеса ${this.nameOf(bride)} от ${this.kBg(wk)}. Двете царства вече са съюзници.`,
+          `Голяма царска сватба! ${this.nameOf(groom)} и ${this.nameOf(bride)} се ожениха, а двете царства станаха приятели.`, groom.id, g.id, [this.pRef(bride)],
+          [`A royal wedding: Prince ${this.nameEn(groom)} of ${this.kEn(hk)} and Princess ${this.nameEn(bride)} of ${this.kEn(wk)}. The two kingdoms are now allies.`,
+            `A big royal wedding! ${this.nameEn(groom)} and ${this.nameEn(bride)} got married, and the two kingdoms became friends.`],
+          [`Königliche Hochzeit: Prinz ${this.nameDe(groom)} aus ${this.kDe(hk, 'dat')} und Prinzessin ${this.nameDe(bride)} aus ${this.kDe(wk, 'dat')}. Die beiden Königreiche sind jetzt verbündet.`,
+            `Eine große königliche Hochzeit! ${this.nameDe(groom)} und ${this.nameDe(bride)} haben geheiratet, und die beiden Königreiche sind jetzt Freunde.`]);
+      }
+    }
+  }
+
+  /** realms allied for a generation sometimes become one: the smaller joins the bigger, peacefully */
+  private unions(ks: Kingdom[]) {
+    for (const a of [...ks]) {
+      for (const [bid, since] of Object.entries(a.allies ?? {})) {
+        const b = ks.find((k) => k.id === +bid);
+        if (!b || !ks.includes(a) || this.year - since < 25 || a.members.length < b.members.length) continue;
+        if (a.members.length + b.members.length > UNION_MAX || !this.rng.chance(0.015)) continue;
+        for (const id of b.members) {
+          const t = this.bandById.get(id);
+          if (!t) continue;
+          t.kingdom = a.id;
+          a.members.push(id);
+        }
+        ks.splice(ks.indexOf(b), 1);
+        for (const o of ks) {
+          if (!o.allies?.[b.id]) continue;
+          if (o !== a) o.allies[a.id] ??= o.allies[b.id];
+          delete o.allies[b.id];
+        }
+        if (a.allies) delete a.allies[a.id];
+        for (const [oid, y] of Object.entries(b.allies ?? {})) if (+oid !== a.id) (a.allies ??= {})[+oid] ??= y;
+        const cap = this.bandById.get(a.capital)!;
+        this.emit('kingdom', 3, `${this.kBg(b, true)} се присъедини към ${this.kBg(a)}. Двата царски рода отдавна са сродени и вече са едно царство.`,
+          `${this.kBg(b, true)} и ${this.kBg(a)} вече са едно голямо царство!`, undefined, cap.id, [],
+          [`${this.kEn(b, true)} joined ${this.kEn(a)}. The two royal houses had long been related and are now one kingdom.`,
+            `${this.kEn(b, true)} and ${this.kEn(a)} are now one big kingdom!`],
+          [`${this.kDe(b, 'nom', true)} schloss sich ${this.kDe(a, 'dat')} an. Die beiden Königshäuser waren schon lange verwandt und sind jetzt ein Königreich.`,
+            `${this.kDe(b, 'nom', true)} und ${this.kDe(a, 'nom')} sind jetzt ein großes Königreich!`]);
+        break;
       }
     }
   }
@@ -449,15 +552,23 @@ export class Simulation {
       const R = b.settled ? 3 : 1, cx = Math.round(b.cx), cy = Math.round(b.cy);
       for (let y = cy - R; y <= cy + R; y++) for (let x = cx - R; x <= cx + R; x++) if (inBounds(x, y)) blocked.add(idx(x, y));
     }
-    const grow = 1 / (12 * 8); // about 8 years for each stage
-    const seed = 1 / (12 * 15); // a bare spot gets a sapling in about 15 years
+    // villages tend the woods around them (from the New Stone Age): saplings come up and grow three times as fast
+    const tended = new Set<number>();
+    for (const b of this.s.bands) {
+      if (!b.settled) continue;
+      const R = 10, cx = Math.round(b.cx), cy = Math.round(b.cy);
+      for (let y = cy - R; y <= cy + R; y++) for (let x = cx - R; x <= cx + R; x++) if (inBounds(x, y)) tended.add(idx(x, y));
+    }
+    const grow = 1 / (12 * 6); // about 6 years for each stage
+    const seed = 1 / (12 * 10); // a bare spot gets a sapling in about 10 years
     const kinds = this.treeKind, trees = this.trees;
     for (let i = 0; i < kinds.length; i++) {
       if (!kinds[i]) continue;
       const st = trees[i];
+      const k = tended.has(i) ? 3 : 1;
       if (st === 0) {
-        if (this.rng.next() < seed && !blocked.has(i) && !this.roads[i]) this.setTree(i, 1);
-      } else if (st < BIG && this.rng.next() < grow) this.setTree(i, st + 1);
+        if (this.rng.next() < seed * k && !blocked.has(i) && !this.roads[i]) this.setTree(i, 1);
+      } else if (st < BIG && this.rng.next() < grow * k) this.setTree(i, st + 1);
     }
   }
 
@@ -467,7 +578,7 @@ export class Simulation {
     const m = this.month;
     const winter = m === 11 || m <= 1 ? 2 : m === 2 || m === 10 ? 1.4 : 1;
     const fire = this.hasTech(b, 'fire') ? 1.4 : 1;
-    b.wood = (b.wood ?? 0) + (0.08 + n * 0.004) * winter * fire * (b.settled ? 1.3 : 1);
+    b.wood = (b.wood ?? 0) + (0.08 + n * 0.004) * winter * fire * (b.settled ? (this.hasTech(b, 'mudbrick') ? 0.9 : 1.3) : 1);
     const R = b.settled ? 7 : 4;
     const cx = Math.round(b.cx), cy = Math.round(b.cy);
     for (let guard = 0; b.wood >= 1 && guard < 6; guard++) {
@@ -475,13 +586,14 @@ export class Simulation {
       for (let y = cy - R; y <= cy + R; y++) for (let x = cx - R; x <= cx + R; x++) {
         if (!inBounds(x, y)) continue;
         const i = idx(x, y);
-        if (this.trees[i] < 2) continue; // saplings are left to grow
+        if (this.trees[i] < (b.settled ? 3 : 2)) continue; // saplings are left to grow; a village waits for grown trees
         const d = (x - cx) ** 2 + (y - cy) ** 2 + this.rng.next() * 6;
         if (d < bestD && d <= R * R + 6) { bestD = d; best = i; }
       }
       if (best < 0) { b.wood = Math.min(b.wood, 3); break; }
       b.wood -= this.trees[best] - 1;
-      this.setTree(best, 0);
+      // a village cuts the way a coppice is cut: the stump sprouts again
+      this.setTree(best, b.settled ? 1 : 0);
     }
     // a woodcutter is seen at work by the nearest tree (or carrying the log home)
     let near = -1, nd = Infinity;
@@ -917,7 +1029,7 @@ export class Simulation {
         }
         case 'fish': got = 1.4 * skill * (this.hasTech(b, 'boats') ? 1.3 : 1) * (this.hasTech(b, 'sailing') ? 1.25 : 1) * (this.hasTech(b, 'harbor') ? 1.15 : 1) * (0.7 + season * 0.3); break;
         case 'farm': {
-          farmWant += 2.4 * this.farmSeason() * skill * tool * (this.hasTech(b, 'plough') ? 1.35 : 1) * (this.hasTech(b, 'calendar') ? 1.1 : 1) * (this.hasTech(b, 'watermill') ? 1.12 : 1);
+          farmWant += 2.4 * this.farmSeason() * skill * tool * (this.hasTech(b, 'plough') ? 1.35 : 1) * (this.hasTech(b, 'calendar') ? 1.1 : 1) * (this.hasTech(b, 'watermill') ? 1.12 : 1) * (this.hasTech(b, 'heavy_plough') ? 1.15 : 1) * (this.hasTech(b, 'windmill') ? 1.1 : 1) * (this.hasTech(b, 'potato') ? 1.15 : 1);
           break;
         }
         case 'herd': got = 1.7 * skill; break;
@@ -941,7 +1053,7 @@ export class Simulation {
     if (chief) this.lead(b, chief, m);
     prod += (this.harvest(t.plants, b, R, gatherWant, 0.07) + this.harvest(t.game, b, R + 2, huntWant, 0.045)) * craftBonus * fire;
     // the plough turns more land into fields, the calendar sows it at the right time
-    const land = (this.hasTech(b, 'plough') ? 1.4 : 1) * (this.hasTech(b, 'calendar') ? 1.1 : 1);
+    const land = (this.hasTech(b, 'plough') ? 1.4 : 1) * (this.hasTech(b, 'calendar') ? 1.1 : 1) * (this.hasTech(b, 'three_field') ? 1.15 : 1) * (this.hasTech(b, 'potato') ? 1.1 : 1);
     if (farmWant > 0) prod += Math.min(farmWant, this.arable(b) * land * this.farmSeason()) * craftBonus;
     const spoil = this.hasTech(b, 'pottery') ? 0.05 : this.hasTech(b, 'grinding') ? 0.08 : 0.12;
     b.food = Math.max(0, b.food * (1 - spoil) + prod - need);
@@ -1055,7 +1167,8 @@ export class Simulation {
       const again = seen ? 1.6 : 1;
       // a first discovery happens somewhere in the world: many bands do not make it come sooner
       const world = seen ? 1 : Math.min(1, 4 / this.s.bands.length);
-      const written = (this.hasTech(b, 'alphabet') ? 1.3 : this.hasTech(b, 'writing') ? 1.15 : 1) * (this.hasTech(b, 'library') ? 1.2 : 1);
+      const written = (this.hasTech(b, 'alphabet') ? 1.3 : this.hasTech(b, 'writing') ? 1.15 : 1) * (this.hasTech(b, 'library') ? 1.2 : 1)
+        * (this.hasTech(b, 'monastery') ? 1.15 : 1) * (this.hasTech(b, 'university') ? 1.2 : 1) * (this.hasTech(b, 'academy') ? 1.2 : 1);
       const chance = written * world * GLOBAL_DISCOVERY * Math.sqrt(tech.base / 0.0025) * this.techPace(tech) * again * crowd * Math.pow(g * 2, 2);
       if (!this.rng.chance(chance)) continue;
       this.addTech(b, tech.id);
@@ -1088,8 +1201,9 @@ export class Simulation {
 
   /** ideas come rarely before their time and more and more often after it: keeps the story near the real calendar */
   private techPace(tech: Tech): number {
-    const d = (this.year - tech.target) / 250;
-    if (d < 0) return Math.exp(4 * d); // 250 years early: 2%, 500 years: 0.03%
+    const d = (this.year - tech.target) / (tech.era >= 5 ? 90 : 250);
+    // 250 years early: 2%, 500 years: 0.03%; from the middle ages on the prerequisites wait for centuries, so early is rarer still
+    if (d < 0) return Math.exp((tech.era >= 4 ? 6 : 4) * d);
     return Math.min(8, 1 + d * 2);
   }
 
@@ -1126,7 +1240,7 @@ export class Simulation {
       const temp = this.t.temp[idx(Math.round(b.cx), Math.round(b.cy))];
       const winter = this.month === 11 || this.month <= 1;
       const coldRisk = winter && temp < 0.4 ? (0.4 - temp) * (this.hasTech(b, 'clothing') ? 0.15 : 1) * (this.hasTech(b, 'fire') ? 0.4 : 1) * 0.02 : 0;
-      const medicine = (this.hasTech(b, 'medicine') ? 0.65 : this.hasTech(b, 'herb_lore') ? 0.8 : 1) * (this.hasTech(b, 'aqueduct') ? 0.85 : 1);
+      const medicine = (this.hasTech(b, 'medicine') ? 0.65 : this.hasTech(b, 'herb_lore') ? 0.8 : 1) * (this.hasTech(b, 'aqueduct') ? 0.85 : 1) * (this.hasTech(b, 'monastery') ? 0.9 : 1) * (this.hasTech(b, 'microscope') ? 0.85 : 1);
       const settledDisease = b.settled ? 1.4 : 1;
       for (const p of m) {
         const a = this.ageOf(p);
@@ -1243,7 +1357,9 @@ export class Simulation {
   private pairing(members: Map<number, Person[]>) {
     for (const b of this.s.bands) {
       const m = members.get(b.id)!;
-      const single = (p: Person) => !p.partnerId && this.ageOf(p) >= 16 && this.ageOf(p) <= 55;
+      // a king keeps his young children and grandchildren free for a royal wedding with a neighbouring house
+      const royal = this.isCapital(b) ? this.royalBlood(b) : null;
+      const single = (p: Person) => !p.partnerId && this.ageOf(p) >= 16 && this.ageOf(p) <= 55 && !(royal?.has(p.id) && this.ageOf(p) < 28);
       const men = m.filter((p) => p.sex === 0 && single(p));
       for (const man of men) {
         if (!this.rng.chance(0.7)) continue;
@@ -1314,10 +1430,15 @@ export class Simulation {
       }
       // split: rare, a band has to grow big first
       // a walled town holds more people before some leave to found a new village
-      const limit = b.settled ? (this.hasTech(b, 'aqueduct') ? 280 : this.hasTech(b, 'walls') ? 210 : 140) : 40 + Math.round(avg(m, (p) => p.genes.soc) * 20);
+      const limit = b.settled ? (this.hasTech(b, 'star_fort') ? 420 : this.hasTech(b, 'castle') ? 340 : this.hasTech(b, 'aqueduct') ? 280 : this.hasTech(b, 'walls') ? 210 : 140) : 40 + Math.round(avg(m, (p) => p.genes.soc) * 20);
       // too many mouths for this land: some leave to find their own
       const crowded = !b.settled && m.length >= 24 && (b.fed ?? 1) < 1.05 && this.rng.chance(0.012);
       if (m.length > limit || crowded) this.split(b, m, members);
+      // a big harbour town that knows colonies now and then sends a ship of settlers to a far shore
+      else if (b.settled && m.length > limit * 0.6 && this.hasTech(b, 'colonies') && this.rng.chance(0.002)) {
+        const dest = this.colonySite(b);
+        if (dest) this.split(b, m, members, dest);
+      }
     }
     void t;
   }
@@ -1479,7 +1600,23 @@ export class Simulation {
     for (const p of m) p.task = 'travel';
   }
 
-  private split(b: Band, m: Person[], members: Map<number, Person[]>) {
+  /** an empty, good place far over the sea for a colony: another island if there is one */
+  private colonySite(b: Band): { x: number; y: number } | null {
+    const home = this.regions[idx(Math.round(b.cx), Math.round(b.cy))];
+    let best: { x: number; y: number } | null = null, bestS = 0;
+    for (let k = 0; k < 60; k++) {
+      const x = Math.floor(this.rng.range(0, W)), y = Math.floor(this.rng.range(0, H));
+      if (!inBounds(x, y) || Math.hypot(x - b.cx, y - b.cy) < 40) continue;
+      if (this.s.bands.some((o) => Math.hypot(o.cx - x, o.cy - y) < 14)) continue;
+      let sc = this.campScore(x, y, 4, b);
+      if (sc <= 0) continue;
+      if (this.regions[idx(x, y)] !== home) sc *= 1.5;
+      if (sc > bestS) { bestS = sc; best = { x, y }; }
+    }
+    return best;
+  }
+
+  private split(b: Band, m: Person[], members: Map<number, Person[]>, colony?: { x: number; y: number }) {
     // a founding couple leaves with their children and some friends
     // the founder is a man in his prime: he becomes the elder of the new band
     const adults = m.filter((p) => p.sex === 0 && p.id !== b.chiefId && this.ageOf(p) >= 20 && this.ageOf(p) <= 45 && p.partnerId);
@@ -1500,8 +1637,8 @@ export class Simulation {
       }
     }
     // where to go
-    let best: { x: number; y: number } | null = null, bestS = 0;
-    for (let k = 0; k < 30; k++) {
+    let best: { x: number; y: number } | null = colony ?? null, bestS = 0;
+    for (let k = 0; k < (colony ? 0 : 30); k++) {
       const r = this.rng.range(9, b.settled ? 22 : 16);
       const a = this.rng.range(0, Math.PI * 2);
       const x = Math.round(b.cx + Math.cos(a) * r), y = Math.round(b.cy + Math.sin(a) * r);
@@ -1521,6 +1658,8 @@ export class Simulation {
     for (const p of leaving) {
       p.bandId = nb.id;
       p.task = 'travel';
+      // colonists come by ship: they step off on the new shore
+      if (colony) { p.x = nb.cx + this.rng.range(-1.5, 1.5); p.y = nb.cy + this.rng.range(-1.5, 1.5); }
       list.splice(list.indexOf(p), 1);
       newList.push(p);
     }
@@ -1528,6 +1667,18 @@ export class Simulation {
     leader.deeds.push(`Основа ${nb.name} и стана негов ${this.chiefTitle().toLowerCase()} (${formatYear(this.year)})`);
     // no chronicle line: the band's card tells who founded it and where they came from
     if (b.settled && this.hasTech(b, 'agriculture')) this.settleNew(nb);
+    if (colony) {
+      nb.colony = true;
+      const k = this.kingdomOf(b);
+      if (k && nb.settled) { k.members.push(nb.id); nb.kingdom = k.id; }
+      leader.deeds.push(`Отплава с кораб и основа колония на далечен бряг (${formatYear(this.year)})`);
+      this.emit('colony', 2, `Кораб от ${this.bandLabel(b)} прекоси морето. ${this.nameOf(leader)} и ${leaving.size} души основаха на далечен бряг ${this.bandLabel(nb)}.`,
+        `${this.nameOf(leader)} отплава с кораб и основа ново село на далечен бряг!`, leader.id, nb.id, this.bRefs(b),
+        [`A ship from ${this.bandEnLabel(b)} crossed the sea. ${this.nameEn(leader)} and ${leaving.size} people founded ${this.bandEnLabel(nb)} on a distant shore.`,
+          `${this.nameEn(leader)} sailed away and founded a new village on a distant shore!`],
+        [`Ein Schiff ${this.bWith('aus', b)} überquerte das Meer. ${this.nameDe(leader)} und ${leaving.size} Menschen gründeten an einer fernen Küste ${this.bDe(nb, 'akk')}.`,
+          `${this.nameDe(leader)} ist davongesegelt und hat an einer fernen Küste ein neues Dorf gegründet!`]);
+    }
   }
 
   private settleNew(b: Band) {
@@ -1545,11 +1696,11 @@ export class Simulation {
         const a = bands[i], b = bands[j];
         const d = dist(a, b);
         // horses and carts bring far neighbours together
-        const reach = this.hasTech(a, 'harbor') && this.hasTech(b, 'harbor') ? 30 : this.hasTech(a, 'horse') || this.hasTech(b, 'horse') ? 24 : 16;
-        if (d > reach && !(a.kingdom != null && a.kingdom === b.kingdom)) continue;
+        const reach = this.hasTech(a, 'caravel') && this.hasTech(b, 'caravel') ? 50 : this.hasTech(a, 'post') && this.hasTech(b, 'post') ? 45 : this.hasTech(a, 'compass') && this.hasTech(b, 'compass') ? 38 : this.hasTech(a, 'harbor') && this.hasTech(b, 'harbor') ? 30 : this.hasTech(a, 'horse') || this.hasTech(b, 'horse') ? 24 : 16;
+        if (d > reach && !(a.kingdom != null && b.kingdom != null && (a.kingdom === b.kingdom || this.kingdomOf(a)?.allies?.[b.kingdom] != null))) continue;
         // traders even out a good and a bad harvest between neighbours
         if (this.hasTech(a, 'trade') && this.hasTech(b, 'trade')) {
-          const give = (a.food - b.food) * (this.hasTech(a, 'coins') && this.hasTech(b, 'coins') ? 0.08 : 0.05);
+          const give = (a.food - b.food) * (this.hasTech(a, 'banking') && this.hasTech(b, 'banking') ? 0.12 : this.hasTech(a, 'guilds') && this.hasTech(b, 'guilds') ? 0.1 : this.hasTech(a, 'coins') && this.hasTech(b, 'coins') ? 0.08 : 0.05);
           a.food -= give;
           b.food += give;
         }
@@ -1566,7 +1717,9 @@ export class Simulation {
         const sa = this.techSets.get(a.id)!, sb = this.techSets.get(b.id)!;
         const share = 0.012 * (this.hasTech(a, 'cave_art') || this.hasTech(b, 'cave_art') ? 1.6 : 1)
           * (this.hasTech(a, 'alphabet') || this.hasTech(b, 'alphabet') ? 1.8 : this.hasTech(a, 'writing') || this.hasTech(b, 'writing') ? 1.5 : 1)
-          * (this.hasTech(a, 'library') || this.hasTech(b, 'library') ? 1.2 : 1) * (this.hasTech(a, 'theatre') || this.hasTech(b, 'theatre') ? 1.1 : 1);
+          * (this.hasTech(a, 'library') || this.hasTech(b, 'library') ? 1.2 : 1) * (this.hasTech(a, 'theatre') || this.hasTech(b, 'theatre') ? 1.1 : 1)
+          * (this.hasTech(a, 'printing') || this.hasTech(b, 'printing') ? 1.6 : this.hasTech(a, 'paper') || this.hasTech(b, 'paper') ? 1.15 : 1)
+          * (this.hasTech(a, 'newspaper') || this.hasTech(b, 'newspaper') ? 1.3 : 1) * (this.hasTech(a, 'coffeehouse') || this.hasTech(b, 'coffeehouse') ? 1.1 : 1);
         for (const tech of a.techs) if (!sb.has(tech) && this.canUse(b, tech) && this.rng.chance(share)) {
           this.addTech(b, tech);
           this.emit('learn', 1, `${this.bandLabel(b, true)} научи „${TECH_BY_ID.get(tech)!.name}“ от ${this.bandLabel(a)}.`, undefined, undefined, b.id, this.bRefs(a),
@@ -1655,6 +1808,70 @@ export class Simulation {
         [`Drought burned the grass around ${this.bandEnLabel(b)}. There is little fruit this year.`],
         [`Eine Dürre verbrannte das Gras rund um ${this.bDe(b, 'akk')}. In diesem Jahr gibt es wenig Früchte.`]);
     }
+    this.seasonEvents();
+  }
+
+  /** the year turning: an early spring, a spring flood, locusts, a rich harvest, a harvest feast */
+  private seasonEvents() {
+    const farmers = () => this.s.bands.filter((b) => b.settled && this.hasTech(b, 'agriculture'));
+    // early spring (March): the snow goes early and the first greens come
+    if (this.month === 2 && this.rng.chance(0.04)) {
+      const b = this.rng.pick(this.s.bands);
+      b.food *= 1.15;
+      this.emit('spring', 1, `Пролетта дойде рано при ${this.bandLabel(b)}. Снегът се стопи, а първите билки поникнаха седмици по-рано.`,
+        `При ${this.bandLabel(b)} пролетта дойде рано. Навсякъде цъфтят цветя!`, undefined, b.id, [],
+        [`Spring came early to ${this.bandEnLabel(b)}. The snow melted and the first herbs came up weeks ahead.`, `Spring came early to ${this.bandEnLabel(b)}. Flowers are blooming everywhere!`],
+        [`Der Frühling kam früh ${this.bWith(b.settled ? 'in' : 'bei', b)}. Der Schnee schmolz, und die ersten Kräuter sprossen Wochen früher.`, `${this.bWith(b.settled ? 'in' : 'bei', b, true)} kam der Frühling früh. Überall blühen Blumen!`]);
+    }
+    // spring flood (April): a village by the water loses part of its fields
+    if (this.month === 3 && this.rng.chance(0.03)) {
+      const wet = farmers().filter((b) => this.areaHas(b, 3, 'fish'));
+      if (wet.length) {
+        const b = this.rng.pick(wet);
+        b.food *= 0.7;
+        this.emit('flood', 1, `Пролетното пълноводие заля нивите на ${this.bandLabel(b)}. Хората спасиха зърното, но сеитбата трябва да започне отначало.`,
+          `Реката преля и заля нивите на ${this.bandLabel(b)}. Всички помагат да се засее наново.`, undefined, b.id, [],
+          [`The spring flood covered the fields of ${this.bandEnLabel(b)}. People saved the grain, but the sowing has to start over.`, `The river overflowed and covered the fields of ${this.bandEnLabel(b)}. Everyone helps to sow again.`],
+          [`Das Frühjahrshochwasser überschwemmte die Felder ${this.bDe(b, 'gen')}. Die Menschen retteten das Korn, aber die Aussaat muss von vorn beginnen.`,
+            `Der Fluss trat über die Ufer und überschwemmte die Felder ${this.bDe(b, 'gen')}. Alle helfen, neu zu säen.`]);
+      }
+    }
+    // locusts (July): rare, a cloud eats a village's fields
+    if (this.month === 6 && this.rng.chance(0.012)) {
+      const f = farmers();
+      if (f.length) {
+        const b = this.rng.pick(f);
+        b.food *= 0.6;
+        this.emit('locusts', 1, `Облак скакалци се спусна над нивите на ${this.bandLabel(b)}. За един ден от житото останаха само стъбла.`,
+          `Хиляди скакалци изядоха житото на ${this.bandLabel(b)}. Догодина ще е по-добре!`, undefined, b.id, [],
+          [`A cloud of locusts came down on the fields of ${this.bandEnLabel(b)}. In one day only stalks were left of the wheat.`, `Thousands of locusts ate the wheat of ${this.bandEnLabel(b)}. Next year will be better!`],
+          [`Eine Wolke Heuschrecken fiel über die Felder ${this.bDe(b, 'gen')} her. An einem einzigen Tag blieben vom Weizen nur die Halme.`,
+            `Tausende Heuschrecken haben den Weizen ${this.bDe(b, 'gen')} gefressen. Nächstes Jahr wird es besser!`]);
+      }
+    }
+    // a rich harvest (September)
+    if (this.month === 8 && this.rng.chance(0.06)) {
+      const f = farmers();
+      if (f.length) {
+        const b = this.rng.pick(f);
+        b.food *= 1.3;
+        this.emit('harvest', 1, `Богата реколта при ${this.bandLabel(b)}. Хамбарите са пълни догоре, а зърното ще стигне и за съседите.`,
+          `При ${this.bandLabel(b)} житото порасна високо. Хамбарите са пълни!`, undefined, b.id, [],
+          [`A rich harvest for ${this.bandEnLabel(b)}. The granaries are full to the top, with grain to spare for the neighbours.`, `The wheat grew tall at ${this.bandEnLabel(b)}. The granaries are full!`],
+          [`Eine reiche Ernte ${this.bWith('in', b)}. Die Speicher sind bis oben voll, und das Korn reicht auch für die Nachbarn.`, `${this.bWith('in', b, true)} wuchs der Weizen hoch. Die Speicher sind voll!`]);
+      }
+    }
+    // a harvest feast (October): a village that keeps a calendar celebrates the end of the harvest
+    if (this.month === 9 && this.rng.chance(0.04)) {
+      const f = farmers().filter((b) => this.hasTech(b, 'calendar'));
+      if (f.length) {
+        const b = this.rng.pick(f);
+        this.emit('feast', 1, `${this.bandLabel(b, true)} отпразнува края на жътвата с песни и хора край огъня до зори.`,
+          `${this.bandLabel(b, true)} празнува: песни, танци и пита с мед!`, undefined, b.id, [],
+          [`${this.bandEnLabel(b, true)} celebrated the end of the harvest with songs and dancing round the fire until dawn.`, `${this.bandEnLabel(b, true)} is having a feast: songs, dancing and honey bread!`],
+          [`${this.bDe(b, 'nom', true)} feierte das Ende der Ernte mit Liedern und Tänzen am Feuer bis zum Morgengrauen.`, `${this.bDe(b, 'nom', true)} feiert: Lieder, Tänze und Honigbrot!`]);
+      }
+    }
   }
 
   private checkEra() {
@@ -1699,6 +1916,7 @@ export class Simulation {
       founded: Math.floor(yearOf(b.founded)),
       hasFire: this.hasTech(b, 'fire'),
       dwelling: this.hasTech(b, 'mudbrick') ? 'house' : b.settled ? 'hut' : this.hasTech(b, 'shelter') ? 'tent' : 'none',
+      colony: b.colony || undefined,
       kingdom: this.kingdomView(b),
     }));
   }
