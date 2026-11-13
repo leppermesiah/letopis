@@ -963,7 +963,14 @@ export class WorldRenderer {
       l.sort((a, b) => rank(a) - rank(b));
       shown.push(...l.slice(0, PER_BAND));
     }
-    for (const r0 of shown) {
+    // at night people sleep indoors: in a tent camp most of them, in a village of huts or houses everyone but the guards
+    const sleepers = night ? shown.filter((r) => {
+      if (r[0] === this.selectedId || roles.get(r[0]) === 'guard' || roles.get(r[0]) === 'bodyguard' || TASKS[r[3]] === 'scout') return true;
+      const home = this.camps.get(r[4])?.dwelling;
+      if (home === 'tent') return hash(r[0], 31) < 0.3;
+      return home !== 'hut' && home !== 'house';
+    }) : shown;
+    for (const r0 of sleepers) {
       let r = night ? this.nightRow(r0) : r0;
       // the bodyguard keeps close to the chief while he looks for a new place
       if (roles.get(r0[0]) === 'bodyguard') {
@@ -1654,6 +1661,8 @@ export class CampSprite {
   hasFire = false;
   fireFrame = -1;
   homeCount = 0;
+  /** what the band sleeps in: at night the people go inside */
+  dwelling: BandView['dwelling'] = 'none';
   building: { s: Sprite; base: string; t0: number; flip: boolean }[] = [];
 
   constructor(r: WorldRenderer, b: BandView) {
@@ -1718,6 +1727,7 @@ export class CampSprite {
   }
 
   update(b: BandView, kids: boolean) {
+    this.dwelling = b.dwelling;
     const p = this.r.tileTop(b.x, b.y);
     this.pos = p;
     this.tx = b.x;
