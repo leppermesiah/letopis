@@ -791,6 +791,12 @@ export class WorldRenderer {
     }
   }
 
+  /** sea or lake, not a river */
+  isSea(x: number, y: number): boolean {
+    if (x < 0 || y < 0 || x >= this.info.w || y >= this.info.h) return false;
+    return isWater(this.biome[y * this.info.w + x]);
+  }
+
   /** dry land people can walk on (water and wide rivers block them) */
   walkable(x: number, y: number): boolean {
     if (x < 0 || y < 0 || x >= this.info.w || y >= this.info.h) return false;
@@ -1388,6 +1394,11 @@ export class PersonSprite {
       if (task === 'chop') return loop('carry', 8, 110);
       // bronze age: some men ride, some take a cart to the neighbours
       if (man && knows('horse') && hash(this.id, 53) < 0.2) return loop('rider', 4, 160);
+      // early modern age: coaches, town criers, couples out for a walk, sailors with their sea bags
+      if (man && (knows('post') || knows('palace')) && hash(this.id, 79) < 0.1) { const c = loop('coach', 4, 170); if (c) return c; }
+      if (man && knows('newspaper') && hash(this.id, 81) < 0.06) { const c = loop('crier', 4, 170); if (c) return c; }
+      if (this.age >= 16 && knows('coffeehouse') && hash(this.id, 83) < 0.06) { const c = loop('strollers', 4, 190); if (c) return c; }
+      if (man && knows('caravel') && hash(this.id, 85) < 0.08) { const c = loop('sailors', 4, 170); if (c) return c; }
       // middle ages: knights ride, merchants drive covered wagons, minstrels and pilgrims walk the roads
       if (man && knows('knighthood') && hash(this.id, 53) < 0.12) return loop('knight', 4, 170);
       if (man && knows('guilds') && hash(this.id, 51) < 0.2) return loop('wagon', 4, 170) ?? loop('trader2', 4, 170);
@@ -1421,6 +1432,10 @@ export class PersonSprite {
       case 'fish': return !this.female ? loop('spearfish', 4, 340) : null;
       case 'craft':
         if (!this.female) {
+          if (knows('telescope') && hash(this.id, 87) < 0.1) { const c = loop('astronomer', 4, 600); if (c) return c; }
+          if (knows('newspaper') && hash(this.id, 89) < 0.15) { const c = loop('printer', 4, 350); if (c) return c; }
+          if (knows('telescope') && hash(this.id, 91) < 0.15) { const c = loop('glassblower', 4, 350); if (c) return c; }
+          if (knows('caravel') && hash(this.id, 93) < 0.15) { const c = loop('sailor', 4, 200); if (c) return c; }
           if (knows('monastery') && hash(this.id, 57) < 0.15) return loop('monk', 4, 600);
           if (knows('writing') && hash(this.id, 57) < 0.25) return loop('scribe', 4, 600);
           if (knows('guilds') && hash(this.id, 73) < 0.25) return loop('cooper', 4, 300);
@@ -1440,6 +1455,7 @@ export class PersonSprite {
   /** guards (and the bodyguard) wear the best gear of their time: bronze once the band knows it */
   private guardKit(): string {
     const t = this.r.bandTech.get(this.band);
+    if ((t?.has('star_fort') || t?.has('caravel')) && this.r.atlas.has('pgwalk0')) return 'pg';
     if ((t?.has('knighthood') || t?.has('castle')) && this.r.atlas.has('mgwalk0')) return 'mg';
     if (t?.has('iron') && this.r.atlas.has('igwalk0')) return 'ig';
     return t?.has('bronze') && this.r.atlas.has('bgwalk0') ? 'bg' : 'g';
@@ -1624,14 +1640,35 @@ const PROPS: [string, string, boolean | null][] = [
   ['compass', 'cog', true],
   ['clock', 'clocktower', true],
   ['printing', 'printpress', true],
+  // early modern age (sheets BE-BH)
+  ['caravel', 'navtable', true],
+  ['caravel', 'cargo', true],
+  ['colonies', 'tradecart', true],
+  ['fireworks', 'fireworks', true],
+  ['potato', 'potatoes', true],
+  ['potato', 'maize', true],
+  ['banking', 'bankchest', true],
+  ['newspaper', 'newspress', true],
+  ['telescope', 'telescope', true],
+  ['telescope', 'glassfurn', true],
+  ['coffeehouse', 'coffee', true],
+  ['microscope', 'microscope', true],
+  ['microscope', 'apothecary', true],
+  ['palace', 'bfountain', true],
+  ['palace', 'sedan', true],
+  ['academy', 'globe', true],
+  ['academy', 'pclock', true],
 ];
+/** what the early modern age replaces: the knights' things, the old crafts and the cog */
+const EARLY_DROPS = new Set(['hplough', 'quintain', 'warhorse', 'tourney', 'farrier', 'papervat', 'lectern', 'haycart', 'barrow', 'cog', 'compass', 'tannery', 'brewery', 'printpress']);
+const STAR_SWAPS: Record<string, string> = { tower: 'sfbastion', itower: 'sfbastion', ctower: 'sfbastion', gate: 'sfgate', igate: 'sfgate', cgate: 'sfgate' };
 /** what the middle ages replace: the iron age workshop and the ancient market go */
 const MEDIEVAL_DROPS = new Set(['charcoal', 'bloomery', 'mint', 'stele', 'amphorae', 'press', 'herbtable', 'market', 'stall', 'cartfull', 'scrolls', 'statue', 'milestone']);
 const CASTLE_SWAPS: Record<string, string> = { tower: 'ctower', gate: 'cgate', itower: 'ctower', igate: 'cgate' };
 /** what iron replaces: the bronze workshop goes, the walls get battlements */
 const IRON_DROPS = new Set(['ore', 'furnace', 'mould', 'anvil', 'toolrack', 'tablets']);
 const IRON_SWAPS: Record<string, string> = { tower: 'itower', gate: 'igate' };
-const WALL_PROPS = new Set(['tower', 'gate', 'itower', 'igate', 'ctower', 'cgate']);
+const WALL_PROPS = new Set(['tower', 'gate', 'itower', 'igate', 'ctower', 'cgate', 'sfbastion', 'sfgate']);
 
 export class CampSprite {
   r: WorldRenderer;
@@ -1664,6 +1701,7 @@ export class CampSprite {
   /** what the band sleeps in: at night the people go inside */
   dwelling: BandView['dwelling'] = 'none';
   building: { s: Sprite; base: string; t0: number; flip: boolean }[] = [];
+  ship: Sprite | null = null;
 
   constructor(r: WorldRenderer, b: BandView) {
     this.r = r;
@@ -1761,6 +1799,12 @@ export class CampSprite {
     const medieval = techs.has('heavy_plough') && this.r.atlas.has('timberb3');
     if (medieval) props = props.filter((p) => !MEDIEVAL_DROPS.has(p));
     if (medieval && techs.has('castle')) props = props.map((p) => CASTLE_SWAPS[p] ?? p);
+    const early = medieval && techs.has('caravel') && this.r.atlas.has('brickb3');
+    if (early) props = props.filter((p) => !EARLY_DROPS.has(p));
+    if (early && techs.has('star_fort')) props = props.map((p) => STAR_SWAPS[p] ?? p);
+    // a young colony over the sea: a wooden fort, log cabins, the flag and a jetty
+    const colony = !!b.colony && b.dwelling === 'house' && b.size < 80 && this.r.atlas.has('logcabin');
+    if (colony) props = ['colflag', 'jetty', ...props.filter((p) => !WALL_PROPS.has(p))];
     // the walls always stay; of the rest only the newest things (later techs are later in the list)
     const walls = props.filter((p) => WALL_PROPS.has(p));
     const rest = props.filter((p) => !WALL_PROPS.has(p));
@@ -1771,7 +1815,8 @@ export class CampSprite {
     const capital = !!b.kingdom?.capital;
     const cold = this.r.tempAt(b.x, b.y) < 0.35;
     const tkind = `${b.dwelling}${town ? 'T' : ''}${town && iron ? `I${capital ? 'K' : ''}${techs.has('theatre') ? 'h' : ''}${techs.has('library') ? 'l' : ''}` : ''}`
-      + `${town && medieval ? `M${techs.has('castle') ? 'c' : ''}${techs.has('gothic') ? 'g' : ''}${techs.has('monastery') ? 'm' : ''}` : ''}`;
+      + `${town && medieval ? `M${techs.has('castle') ? 'c' : ''}${techs.has('gothic') ? 'g' : ''}${techs.has('monastery') ? 'm' : ''}` : ''}`
+      + `${town && early ? `E${['palace', 'telescope', 'banking', 'coffeehouse', 'newspaper', 'post'].map((t) => (techs.has(t) ? t[0] : '')).join('')}` : ''}${colony ? 'C' : ''}`;
     const key = `${tkind}:${n}:${b.settled}:${cold}:${props.join(',')}:${Math.round(b.x)},${Math.round(b.y)}`;
     if (key === this.key) return;
     // homes added since last time are built in four steps; the first look at a camp shows it finished
@@ -1792,7 +1837,19 @@ export class CampSprite {
         case 'tent': name = cold && h < 0.5 ? 'bonehut' : h < 0.2 ? 'leanto' : `tent${k % 2}`; break;
         case 'hut': name = A.has('hutb3') ? 'hutb3' : 'roundhut'; break;
         default:
-          if (town && medieval) {
+          if (colony) name = k === 0 ? 'colfort' : 'logcabin';
+          else if (town && early) {
+            // brick gable houses round the palace (in a capital), the observatory, the bank, the coffee house and the printers
+            if (k === 0) name = capital && techs.has('palace') ? 'baroqueb3' : techs.has('castle') ? 'keepb3' : 'villab3';
+            else if (k === 1) name = techs.has('gothic') ? 'churchb3' : 'brickb3';
+            else if (k === 2 && techs.has('telescope')) name = 'observb3';
+            else if (k === 3 && techs.has('banking')) name = 'bank';
+            else if (k === 4 && techs.has('coffeehouse')) name = 'coffeehouse';
+            else if (k === 5 && techs.has('newspaper')) name = 'printhouse';
+            else if (k === 6) name = capital && techs.has('palace') ? 'opera' : techs.has('post') ? 'townhall' : 'clockshop';
+            else if (k === 7 && this.harbourSpot(b)) name = 'bwarehouse';
+            else name = h < 0.6 ? 'brickb3' : h < 0.85 ? 'timberb3' : 'villab3';
+          } else if (town && medieval) {
             // the lord's castle (or the king's palace), the church, the monastery, half-timbered houses
             if (k === 0) name = techs.has('castle') ? 'keepb3' : capital ? 'palaceb3' : 'villab3';
             else if (k === 1) name = techs.has('gothic') ? 'churchb3' : techs.has('calendar') ? 'templeb3' : 'timberb3';
@@ -1816,7 +1873,7 @@ export class CampSprite {
       s.position.set(q.x, q.y);
       s.zIndex = s.y;
       this.homes.addChild(s);
-      if (k >= builtBefore && /^(hut|house|town|temple|villa|palace|theatre|school|keep|church|timber|abbey)b3$/.test(name)) {
+      if (k >= builtBefore && /^(hut|house|town|temple|villa|palace|theatre|school|keep|church|timber|abbey|baroque|observ|brick)b3$/.test(name)) {
         this.building.push({ s, base: name.slice(0, -1), t0: Date.now(), flip: s.scale.x < 0 });
         A.set(s, `${name.slice(0, -1)}0`);
         if (h < 0.5) s.scale.x *= -1;
@@ -1833,7 +1890,29 @@ export class CampSprite {
       s.zIndex = s.y;
       this.homes.addChild(s);
     });
+    // an ocean ship rocks on the water next to a harbour town
+    this.ship = null;
+    const sea = techs.has('caravel') && b.settled && A.has('galleon0') ? this.harbourSpot(b) : null;
+    if (sea) {
+      const s = A.sprite('galleon0');
+      const p = this.r.tileTop(sea.x, sea.y);
+      s.position.set(p.x - this.pos.x, p.y - this.pos.y);
+      s.zIndex = s.y;
+      this.homes.addChild(s);
+      this.ship = s;
+    }
     this.banner.zIndex = this.banner.y;
+  }
+
+  /** open water close to the town: a sea tile 2 to 5 steps away */
+  private harbourSpot(b: BandView): { x: number; y: number } | null {
+    const bx = Math.round(b.x), by = Math.round(b.y);
+    for (let r = 2; r <= 5; r++) {
+      for (const [dx, dy] of [[r, 0], [0, r], [r, r], [-r, r], [r, -r], [-r, 0], [0, -r], [-r, -r]]) {
+        if (this.r.isSea(bx + dx, by + dy)) return { x: bx + dx, y: by + dy };
+      }
+    }
+    return null;
   }
 
   /** the trampled ground of the camp: the middle fully worn, the edge fading into the grass */
@@ -1914,6 +1993,7 @@ export class CampSprite {
         return st < 3;
       });
     }
+    if (this.ship && !this.ship.destroyed) this.r.atlas.set(this.ship, `galleon${Math.floor(now / 400 + this.id) % 4}`);
     const frameNo = this.hasFire ? 1 + (Math.floor(now / 130 + this.id * 7) % 3) : 0;
     if (frameNo !== this.fireFrame) {
       this.fireFrame = frameNo;

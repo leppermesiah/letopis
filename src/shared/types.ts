@@ -110,6 +110,8 @@ export interface BandView {
   founded: number; // year
   hasFire: boolean;
   dwelling: 'none' | 'tent' | 'hut' | 'house';
+  /** settlers came over the sea (early modern age) */
+  colony?: boolean;
   /** iron age: the kingdom of this town (place = its Bulgarian name) */
   kingdom?: { id: number; place: string; capital: boolean; members: number; color: number; founded: number; allies?: string[] } | null;
 }

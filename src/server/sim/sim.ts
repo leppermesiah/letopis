@@ -86,6 +86,8 @@ export interface Band {
   scout?: { x: number; y: number; px?: number; py?: number } | null;
   /** the kingdom this town belongs to (iron age) */
   kingdom?: number | null;
+  /** founded by settlers who came over the sea (from v1.40) */
+  colony?: boolean;
 }
 
 /** villages that joined under one crown, peacefully: the chief of the capital is the king */
@@ -1666,6 +1668,7 @@ export class Simulation {
     // no chronicle line: the band's card tells who founded it and where they came from
     if (b.settled && this.hasTech(b, 'agriculture')) this.settleNew(nb);
     if (colony) {
+      nb.colony = true;
       const k = this.kingdomOf(b);
       if (k && nb.settled) { k.members.push(nb.id); nb.kingdom = k.id; }
       leader.deeds.push(`Отплава с кораб и основа колония на далечен бряг (${formatYear(this.year)})`);
@@ -1913,6 +1916,7 @@ export class Simulation {
       founded: Math.floor(yearOf(b.founded)),
       hasFire: this.hasTech(b, 'fire'),
       dwelling: this.hasTech(b, 'mudbrick') ? 'house' : b.settled ? 'hut' : this.hasTech(b, 'shelter') ? 'tent' : 'none',
+      colony: b.colony || undefined,
       kingdom: this.kingdomView(b),
     }));
   }
