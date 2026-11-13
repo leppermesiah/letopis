@@ -303,7 +303,7 @@ function linkedText(e: ChronicleEntry): string {
 function eventHtml(e: ChronicleEntry): string {
   const icon: Record<string, string> = {
     discovery: '💡', rediscovery: '🔁', settle: '🏘️', colony: '🏘️', split: '🚶', death: '🕯️', twins: '👶', hunt: '🦣',
-    winter: '❄️', secret: '✨', drought: '☀️', extinct: '🌑', lost: '📜', meet: '🤝', learn: '📚', era: '⭐', milestone: '👥', genesis: '🌅', merge: '🔗', marriage: '💞', end: '🌑', kingdom: '👑', spring: '🌸', flood: '🌊', locusts: '🦗', harvest: '🌾', feast: '🎉',
+    winter: '❄️', secret: '✨', drought: '☀️', extinct: '🌑', lost: '📜', meet: '🤝', learn: '📚', era: '⭐', milestone: '👥', genesis: '🌅', merge: '🔗', marriage: '💞', end: '🌑', kingdom: '👑', spring: '🌸', flood: '🌊', locusts: '🦗', harvest: '🌾', feast: '🎉', wedding: '💍',
   };
   return `<li class="ev imp${e.importance}">
     <span class="ev-icon">${icon[e.kind] ?? '•'}</span>
@@ -671,7 +671,8 @@ function kingdomsHtml(): string {
         <b>👑 ${esc(T(`Царство ${v}`, `Kingdom of ${v}`, `Königreich ${v}`))}</b>
         <div class="muted">${T('от', 'since', 'seit')} ${fmtYear(k.founded)} · ${m.length} ${T(m.length === 1 ? 'село' : 'села', m.length === 1 ? 'village' : 'villages', m.length === 1 ? 'Dorf' : 'Dörfer')} · ${people} ${T('души', 'people', 'Menschen')}</div>
         <div>${T('Цар', 'King', 'König')}: ${king} · ${T('Столица', 'Capital', 'Hauptstadt')}: ${town(cap)}</div>
-        ${others.length ? `<div class="muted">${others.map(town).join(', ')}</div>` : ''}</div></li>`;
+        ${others.length ? `<div class="muted">${others.map(town).join(', ')}</div>` : ''}
+        ${k.allies?.length ? `<div>🤝 ${T('Съюзници', 'Allies', 'Verbündete')}: ${k.allies.map((x) => esc(VILLAGE(x))).join(', ')}</div>` : ''}</div></li>`;
     }).join('')}</ul>`;
 }
 
@@ -682,7 +683,7 @@ function kingdomHtml(k: BandView['kingdom']): string {
   const v = VILLAGE(k.place);
   return `<div>${esc(k.capital
     ? T(`Столица на царство ${v}`, `Capital of the Kingdom of ${v}`, `Hauptstadt des Königreichs ${v}`)
-    : T(`Част от царство ${v}`, `Part of the Kingdom of ${v}`, `Teil des Königreichs ${v}`))} (${n} ${T(n === 1 ? 'село' : 'села', n === 1 ? 'village' : 'villages', n === 1 ? 'Dorf' : 'Dörfer')})</div>`;
+    : T(`Част от царство ${v}`, `Part of the Kingdom of ${v}`, `Teil des Königreichs ${v}`))} (${n} ${T(n === 1 ? 'село' : 'села', n === 1 ? 'village' : 'villages', n === 1 ? 'Dorf' : 'Dörfer')})</div>${k.allies?.length ? `<div class="muted">🤝 ${T('Съюзници', 'Allies', 'Verbündete')}: ${k.allies.map((x) => esc(VILLAGE(x))).join(', ')}</div>` : ''}`;
 }
 function showBand(b: BandView) {
   const members = people.filter((p) => p[4] === b.id);

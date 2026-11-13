@@ -201,6 +201,19 @@ export const TECH_DE: Record<string, { name: string; text: string; kids: string 
   compass: { name: 'Kompass', text: '{name} {aus band} bemerkte, dass eine magnetisierte Nadel immer nach Norden zeigt. Die Schiffe finden ihren Weg nun auch im Nebel und weit von der Küste.', kids: '{name} hat eine Nadel gefunden, die immer nach Norden zeigt. Die Schiffe verirren sich nicht mehr!' },
   clock: { name: 'Räderuhr', text: '{name} {aus band} baute eine Uhr aus Zahnrädern und einem Gewicht und brachte sie oben am Turm an. Jetzt weiß das ganze Dorf, wie spät es ist.', kids: '{name} hat eine große Uhr am Turm gebaut. Jetzt wissen alle, wann Mittag ist!' },
   printing: { name: 'Buchdruck', text: '{name} {aus band} goss Buchstaben aus Metall, setzte sie in einen Rahmen und presste sie auf Papier. An einem Tag werden mehr Seiten gedruckt, als ein Mönch in einem Jahr schreiben kann.', kids: '{name} hat eine Maschine erfunden, die Bücher statt der Menschen schreibt!' },
+  caravel: { name: 'Hochseeschiff', text: '{name} {aus band} baute ein Schiff mit hohen Bordwänden, drei Masten und vielen Segeln. Mit dem Kompass überquert es das offene Meer und kehrt zurück. Ein neues Zeitalter beginnt.', kids: '{name} hat ein großes Schiff gebaut, das über das ganze Meer segelt!' },
+  colonies: { name: 'Kolonien', text: '{name} {aus band} führte ein Schiff mit Familien, Saatgut und Tieren an eine ferne Küste. Dort gründeten sie ein neues Dorf, das nicht vergisst, woher es kommt.', kids: '{name} ist davongesegelt und hat an einer fernen Küste ein neues Dorf gegründet!' },
+  fireworks: { name: 'Feuerwerk', text: '{name} {aus band} füllte Papierröhrchen mit schwarzem Pulver. Beim Fest flogen sie hoch hinauf und zerplatzten über dem Dorf zu bunten Sternen.', kids: '{name} hat ein Feuerwerk gemacht, und der Himmel über dem Fest leuchtete in allen Farben!' },
+  potato: { name: 'Kartoffel und Mais', text: 'Die Schiffe brachten Kartoffeln und Mais aus fernen Ländern. {name} {aus band} pflanzte sie zuerst an. Sie wachsen auch dort, wo kein Weizen gedeiht.', kids: '{name} hat Kartoffeln gepflanzt, die mit dem Schiff von weit her kamen. Jetzt gibt es genug zu essen!' },
+  banking: { name: 'Banken', text: '{name} {aus band} begann, das Geld der Kaufleute aufzubewahren und ihnen Kredite zu geben. Statt Säcken voll Gold reisen jetzt Briefe über die Straßen.', kids: '{name} hat eine Bank eröffnet, in der die Leute ihr Geld aufbewahren!' },
+  newspaper: { name: 'Zeitung', text: '{name} {aus band} druckt jede Woche ein Blatt mit den Neuigkeiten aus der Stadt und aus fernen Ländern. Ausrufer tragen es durch die Straßen.', kids: '{name} hat eine Zeitung gemacht: Jede Woche erfahren alle die Neuigkeiten!' },
+  telescope: { name: 'Fernrohr', text: '{name} {aus band} setzte zwei geschliffene Gläser in ein Rohr und richtete es zum Himmel. Der Mond hat Berge, und um die fernen Sterne kreisen andere Welten.', kids: '{name} hat durch ein Rohr mit Gläsern geschaut und Berge auf dem Mond gesehen!' },
+  star_fort: { name: 'Sternfestung', text: '{name} {aus band} umgab die Stadt mit niedrigen, dicken Mauern und spitzen Bastionen wie ein Stern. Dahinter kann die Stadt weiter wachsen.', kids: '{name} hat sternförmige Mauern um die ganze Stadt gebaut!' },
+  post: { name: 'Post', text: '{name} {aus band} richtete an den Straßen Stationen mit ausgeruhten Pferden ein. Ein Brief erreicht das Nachbarkönigreich in Tagen statt in Monaten.', kids: '{name} hat die Post erfunden: Reiter bringen Briefe von Stadt zu Stadt!' },
+  coffeehouse: { name: 'Kaffeehaus', text: '{name} {aus band} eröffnete ein Kaffeehaus. Kaufleute, Gelehrte und Seeleute sitzen bei einer Tasse, lesen Zeitung und streiten über alles.', kids: '{name} hat ein Kaffeehaus eröffnet, in dem die Großen reden und Zeitung lesen.' },
+  microscope: { name: 'Mikroskop', text: '{name} {aus band} betrachtete einen Wassertropfen durch ein kleines Glas und sah darin Tausende winziger Lebewesen. Die Heiler wissen jetzt, dass sauberes Wasser vor Krankheiten schützt.', kids: '{name} hat in einem einzigen Wassertropfen eine ganze Welt winziger Lebewesen gesehen!' },
+  palace: { name: 'Palast', text: '{name} {aus band} baute dem König einen Palast mit hohen Fenstern, einem Garten mit Springbrunnen und Sälen für Musik und Tanz.', kids: '{name} hat dem König einen Palast mit Garten und Springbrunnen gebaut!' },
+  academy: { name: 'Akademie der Wissenschaften', text: '{name} {aus band} versammelte die Gelehrten in einer Akademie. Sie machen Versuche, messen alles genau und drucken ihre Entdeckungen, damit jeder sie prüfen kann.', kids: '{name} hat alle Gelehrten zusammengebracht, um Versuche zu machen!' },
 };
 
 /** fill a TECH_DE text for a person and a band */
@@ -266,6 +279,19 @@ export const TECH_DESC_DE: Record<string, string> = {
   compass: 'Eine Nadel, die immer nach Norden zeigt.',
   clock: 'Zahnräder am Turm: Alle kennen die Uhrzeit.',
   printing: 'Metallbuchstaben und eine Presse: Bücher für alle.',
+  caravel: 'Drei Masten und ein Kompass: über das offene Meer.',
+  colonies: 'Neue Dörfer an fernen Küsten.',
+  fireworks: 'Bunte Sterne über dem Fest.',
+  potato: 'Neue Pflanzen aus fernen Ländern.',
+  banking: 'Geld sicher verwahrt und Kredite für Kaufleute.',
+  newspaper: 'Jede Woche die Neuigkeiten.',
+  telescope: 'Berge auf dem Mond.',
+  star_fort: 'Sternförmige Mauern um die ganze Stadt.',
+  post: 'Reiter bringen Briefe von Stadt zu Stadt.',
+  coffeehouse: 'Eine Tasse Kaffee, eine Zeitung und ein Streit.',
+  microscope: 'Eine ganze Welt in einem Wassertropfen.',
+  palace: 'Ein Palast mit Garten und Springbrunnen.',
+  academy: 'Gelehrte machen Versuche und drucken ihre Ergebnisse.',
 };
 
 /** a tech by its Bulgarian name (what the server sends) */
@@ -289,6 +315,7 @@ export const ERA_WHY_DE: Record<number, string> = {
   2: 'Kupfer und Zinn verschmelzen zu einem Metall, das härter ist als Stein. Aus Dörfern werden Städte.',
   3: 'Eisen gibt es überall, und es ist billiger als Bronze. Dörfer schließen sich zu Königreichen zusammen.',
   4: 'Burgen schützen die Dörfer, Klöster bewahren das Wissen, und Wind und Wasser mahlen das Mehl.',
+  5: 'Schiffe überqueren das offene Meer, an fernen Küsten entstehen neue Dörfer, und Zeitungen bringen die Neuigkeiten.',
 };
 
 export const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
@@ -382,6 +409,8 @@ export function deedDe(d: string): string {
   if ((m = /^Преоткри „(.+)“ за своя род$/.exec(d))) return `Entdeckte „${techDe(m[1])}“ für den eigenen Clan neu`;
   if ((m = /^Доживя до 70 години \((.+)\)$/.exec(d))) return `Wurde 70 Jahre alt (${yearsInTextDe(m[1])})`;
   if ((m = /^Стана първият цар на царство (.+) \((.+)\)$/.exec(d))) return `Wurde der erste König des Königreichs ${villageDe(m[1])} (${yearsInTextDe(m[2])})`;
+  if ((m = /^Отплава с кораб и основа колония на далечен бряг \((.+)\)$/.exec(d))) return `Segelte davon und gründete eine Kolonie an einer fernen Küste (${yearsInTextDe(m[1])})`;
+  if ((m = /^Царска сватба с (принцесата|принца) на царство (.+) \((.+)\)$/.exec(d))) return `Königliche Hochzeit mit ${m[1] === 'принца' ? 'dem Prinzen' : 'der Prinzessin'} des Königreichs ${villageDe(m[2])} (${yearsInTextDe(m[3])})`;
   if ((m = /^Основа (.+) и стана негов (\S+) \((.+)\)$/.exec(d))) return `Gründete ${bandTextCaseDe(m[1], 'akk')} und stand ihm vor (${yearsInTextDe(m[3])})`;
   if ((m = /^Поведе лова на (.+)$/.exec(d))) return `Führte die Jagd auf ${BEAST_DE[m[1]] ?? m[1]} an`;
   return yearsInTextDe(d);

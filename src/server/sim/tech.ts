@@ -195,12 +195,53 @@ export const TECHS: Tech[] = [
   { id: 'printing', name: 'Печатна преса', era: 4, target: 1440, prereq: ['paper', 'guilds'], need: null, base: 0.0012, gene: 'int',
     text: '{name} от {band} отля букви от метал, нареди ги в рамка и ги притисна с преса върху хартия. За един ден се отпечатват повече страници, отколкото монах изписва за година.',
     kids: '{name} измисли машина, която пише книги вместо хората!' },
+  // gateway to the Early Modern age
+  { id: 'caravel', name: 'Океански кораб', era: 5, target: 1500, prereq: ['compass', 'harbor', 'sailing'], need: 'fish', base: 0.002, gene: 'cur',
+    text: '{name} от {band} построи кораб с високи бордове, три мачти и много платна. С компаса той прекосява открито море и се връща. Започва нова епоха.',
+    kids: '{name} построи голям кораб, който плава през цялото море!' },
+  { id: 'colonies', name: 'Колонии', era: 5, target: 1530, prereq: ['caravel', 'kingdom'], need: null, base: 0.0015, gene: 'cur',
+    text: '{name} от {band} поведе кораб със семейства, семена и добитък към далечен бряг. Там те основаха ново село, което помни откъде е дошло.',
+    kids: '{name} отплава с кораб и основа ново село на далечен бряг!' },
+  { id: 'fireworks', name: 'Фойерверки', era: 5, target: 1550, prereq: ['paper', 'iron'], need: null, base: 0.0012, gene: 'cur',
+    text: '{name} от {band} напълни хартиени тръбички с черен прах. На празника те излетяха високо и пръснаха цветни звезди над селото.',
+    kids: '{name} направи фойерверки и небето над празника светна в цветове!' },
+  { id: 'potato', name: 'Картоф и царевица', era: 5, target: 1570, prereq: ['caravel', 'three_field'], need: 'grain', base: 0.0015, gene: 'int',
+    text: 'Корабите донесоха от далечни земи картофи и царевица. {name} от {band} ги посади пръв. Растат и там, където житото не вирее.',
+    kids: '{name} посади картофи, донесени с кораб отдалеч. Вече има много храна!' },
+  { id: 'banking', name: 'Банки', era: 5, target: 1580, prereq: ['coins', 'guilds'], need: null, base: 0.0015, gene: 'soc',
+    text: '{name} от {band} започна да пази парите на търговците и да им дава заеми. Вместо чували със злато по пътищата пътуват писма.',
+    kids: '{name} отвори банка, където хората пазят парите си!' },
+  { id: 'newspaper', name: 'Вестник', era: 5, target: 1605, prereq: ['printing'], need: null, base: 0.0015, gene: 'soc',
+    text: '{name} от {band} печата всяка седмица лист с новините от града и от далечни земи. Глашатаите ги разнасят по улиците.',
+    kids: '{name} направи вестник: всяка седмица всички научават новините!' },
+  { id: 'telescope', name: 'Телескоп', era: 5, target: 1610, prereq: ['compass', 'university'], need: null, base: 0.0012, gene: 'cur',
+    text: '{name} от {band} сложи две шлифовани стъкла в тръба и я насочи към небето. Луната има планини, а около далечните звезди се въртят други светове.',
+    kids: '{name} погледна през тръба със стъкла и видя планини на Луната!' },
+  { id: 'star_fort', name: 'Звездна крепост', era: 5, target: 1620, prereq: ['castle', 'arch'], need: null, base: 0.0012, gene: 'str',
+    text: '{name} от {band} обгради града с ниски дебели стени с остри бастиони като звезда. Градът вече може да расте и зад тях.',
+    kids: '{name} построи стени с форма на звезда около целия град!' },
+  { id: 'post', name: 'Поща', era: 5, target: 1630, prereq: ['horse', 'newspaper'], need: null, base: 0.0015, gene: 'soc',
+    text: '{name} от {band} нареди станции с отпочинали коне по пътищата. Писмо стига до съседното царство за дни, а не за месеци.',
+    kids: '{name} измисли пощата: конници носят писма от град на град!' },
+  { id: 'coffeehouse', name: 'Кафене', era: 5, target: 1650, prereq: ['caravel', 'guilds'], need: null, base: 0.0015, gene: 'soc',
+    text: '{name} от {band} отвори кафене. Търговци, учени и моряци седят на по чаша, четат вестници и спорят за всичко.',
+    kids: '{name} отвори кафене, където големите си говорят и четат вестници.' },
+  { id: 'microscope', name: 'Микроскоп', era: 5, target: 1670, prereq: ['telescope'], need: null, base: 0.0012, gene: 'cur',
+    text: '{name} от {band} погледна капка вода през малко стъкло и видя в нея хиляди малки живинки. Лечителите вече знаят, че чистата вода пази от болести.',
+    kids: '{name} видя в една капка вода цял свят от мънички живинки!' },
+  { id: 'palace', name: 'Дворец', era: 5, target: 1680, prereq: ['kingdom', 'gothic'], need: null, base: 0.0012, gene: 'soc',
+    text: '{name} от {band} построи за царя дворец с високи прозорци, градина с фонтани и зали за музика и танци.',
+    kids: '{name} построи на царя дворец с градина и фонтани!' },
+  { id: 'academy', name: 'Академия на науките', era: 5, target: 1700, prereq: ['university', 'printing', 'telescope'], need: null, base: 0.0012, gene: 'int',
+    text: '{name} от {band} събра учените в академия. Те правят опити, мерят всичко точно и печатат откритията си, за да ги провери всеки.',
+    kids: '{name} събра всички учени на едно място да правят опити!' },
 ];
 
 export const TECH_BY_ID = new Map(TECHS.map((t) => [t.id, t]));
 
 /** Era of a set of known techs: the highest era with a defining tech known. */
 export function eraOf(techs: Set<string>): number {
+  if (techs.has('caravel')) return 5;
   if (techs.has('heavy_plough')) return 4;
   if (techs.has('iron')) return 3;
   if (techs.has('bronze')) return 2;

@@ -111,7 +111,7 @@ export interface BandView {
   hasFire: boolean;
   dwelling: 'none' | 'tent' | 'hut' | 'house';
   /** iron age: the kingdom of this town (place = its Bulgarian name) */
-  kingdom?: { id: number; place: string; capital: boolean; members: number; color: number; founded: number } | null;
+  kingdom?: { id: number; place: string; capital: boolean; members: number; color: number; founded: number; allies?: string[] } | null;
 }
 
 /** compact person: [id, x*10, y*10, taskIndex, bandId, ageYears, sex(0 m,1 f), chief(1) or not(0)] */
