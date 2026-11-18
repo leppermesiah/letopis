@@ -1713,11 +1713,13 @@ export class PersonSprite {
       this.lens.push(this.lens[i - 1] + Math.hypot(this.path[i].x - this.path[i - 1].x, this.path[i].y - this.path[i - 1].y) * (wet ? 3 : 1));
     }
     this.tile = { x: tx, y: ty };
-    // not everybody sets off at the same moment: each waits a little of their own before going
-    const span = Math.max(400, Math.min(tickMs * 0.85, 12000));
-    const wait = hash(this.id, 211 + (row[3] & 7)) * span * 0.45;
-    this.t0 = performance.now() + wait;
-    this.dur = span - wait;
+    // everybody walks at their own steady pace, so a long way takes longer; and each sets off at their own
+    // moment somewhere in the month, so people come and go all the time instead of all at once
+    const tick = Math.max(800, tickMs);
+    const total = this.lens[this.lens.length - 1] ?? 0;
+    const pace = WALK_SPEED * (0.8 + hash(this.id, 213) * 0.4) * (this.age > 60 ? 0.75 : 1);
+    this.dur = Math.max(400, Math.min(tick * 0.9, (total / pace) * 1000));
+    this.t0 = performance.now() + hash(this.id, 211 + (row[1] & 31) + (row[2] & 31) * 32) * Math.max(0, tick * 0.95 - this.dur);
     this.cloth.tint = color;
     this.age = row[5];
     this.fame = !!row[8];
@@ -1733,7 +1735,8 @@ export class PersonSprite {
 
   frame(now: number) {
     const k = Math.max(0, Math.min(1, (performance.now() - this.t0) / this.dur));
-    const e = k * k * (3 - 2 * k);
+    // a steady walk, only the first and last step a little softer
+    const e = k < 0.05 ? (k * k) / 0.1 : k > 0.95 ? 1 - ((1 - k) * (1 - k)) / 0.1 : k;
     let x = this.to.x, y = this.to.y;
     let afloat: string | null = null;
     const total = this.lens[this.lens.length - 1] ?? 0;
@@ -1766,11 +1769,27 @@ export class PersonSprite {
       y = round.y;
       this.facing = round.face;
     }
-    const walking = !!round || (k > 0 && k < 0.95 && dist > 3);
+    let walking = !!round || (k > 0 && k < 1 && dist > 3);
+    const asleep = this.r.nightNow && TASKS[this.task] !== 'scout';
+    // people with nothing to do do not stand still: they stroll a few steps now and then around where they are
+    const idleTask = TASKS[this.task];
+    if (k >= 1 && !round && !afloat && !asleep && (idleTask === 'rest' || idleTask === 'child' || idleTask === 'elder') && this.role !== 'guard' && this.role !== 'bodyguard' && !this.chief) {
+      const L = 6000 + hash(this.id, 223) * 6000;
+      const tt = (now + this.seed * 997) / L, j = Math.floor(tt), f = tt - j;
+      const spot = (q: number) => ({ x: (hash(this.id, q * 7 + 1) - 0.5) * 28, y: (hash(this.id, q * 7 + 2) - 0.5) * 14 });
+      const a = spot(j - 1), b = spot(j);
+      const m = Math.min(1, f / 0.4);
+      const ramp = Math.min(1, (performance.now() - this.t0 - this.dur) / 2500); // eases in after arriving, no jump
+      x += (a.x + (b.x - a.x) * m) * ramp;
+      y += (a.y + (b.y - a.y) * m) * ramp;
+      if (m < 1 && Math.hypot(b.x - a.x, b.y - a.y) * ramp > 4) {
+        walking = true;
+        if (Math.abs(b.x - a.x) > 1) this.facing = b.x < a.x ? -1 : 1;
+      }
+    }
     this.pos.x = x;
     this.pos.y = y;
     let bob = 0;
-    const asleep = this.r.nightNow && TASKS[this.task] !== 'scout';
     const chiefPose = this.chief && !asleep ? this.chiefPose(now, walking) : null;
     const kit = this.guardKit();
     const own = this.r.atlas.has(`${kit}walk0`);
@@ -1805,6 +1824,9 @@ export class PersonSprite {
     this.c.destroy({ children: true });
   }
 }
+
+/** how fast people walk, in world units per second (a tile is 32 wide) */
+const WALK_SPEED = 16;
 
 /** stone age pose -> the pose with the same meaning on the sheets with the clothes of each age */
 const DRESS: Record<string, string> = {
