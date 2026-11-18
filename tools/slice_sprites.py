@@ -19,7 +19,9 @@ ALPHA_CUT = 128   # below this a pixel is background
 ERODE = 3         # px eaten from the outline: removes the coloured halo the generator leaves
 MIN_PART = 0.04
 # sheets that are not 4x4: letter -> (rows, columns); their cells are named <letter><row><column, two digits>
-GRIDS = {'AQ': (5, 10), 'AR': (5, 10)}   # parts smaller than this share of the biggest part are specks and are dropped
+GRIDS = {'AQ': (5, 10), 'AR': (5, 10)}
+# sheets with clear glass helmets: the magenta seen through the glass becomes a faint light bubble, not a hole
+GLASS = {'CY', 'CZ', 'DB', 'DC'}   # parts smaller than this share of the biggest part are specks and are dropped
 
 
 def find_cuts(mask: np.ndarray, axis: int, n: int = 4, search: int = 60) -> list[int]:
@@ -80,7 +82,7 @@ def dilate(mask: np.ndarray, r: int) -> np.ndarray:
     return ~erode(~mask, r)
 
 
-def clean_cell(rgba: np.ndarray, symbol: bool = False) -> np.ndarray | None:
+def clean_cell(rgba: np.ndarray, symbol: bool = False, glass: bool = False) -> np.ndarray | None:
     mask = rgba[..., 3] >= ALPHA_CUT
     if symbol:
         # thin stamped symbols: no eroding (it eats spears, legs and stars); close the speckles inside instead
@@ -99,12 +101,12 @@ def clean_cell(rgba: np.ndarray, symbol: bool = False) -> np.ndarray | None:
     ys, xs = np.nonzero(keep)
     y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
     out = rgba[y0:y1, x0:x1].copy()
-    out[..., 3] = np.where(keep[y0:y1, x0:x1], 255, 0)
+    out[..., 3] = np.where(keep[y0:y1, x0:x1], out[..., 3] if glass else 255, 0)
     out[out[..., 3] == 0, :3] = 0
     return out
 
 
-def key_magenta(img: np.ndarray) -> np.ndarray:
+def key_magenta(img: np.ndarray, glass: bool = False) -> np.ndarray:
     """Sheets made on a solid #FF00FF background (no real transparency): magenta -> transparent."""
     rgb = img[..., :3].astype(np.int32)
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
@@ -116,6 +118,14 @@ def key_magenta(img: np.ndarray) -> np.ndarray:
     edge = ~magenta & (spill > 30)
     out[edge, 0] = np.clip(r[edge] - spill[edge] // 2, 0, 255)
     out[edge, 2] = np.clip(b[edge] - spill[edge] // 2, 0, 255)
+    if glass:
+        # the flat background has green 0..5; magenta with more green is magenta seen through glass
+        see = magenta & (g > 12)
+        k = np.clip((g - 3) / 242, 0, 1)
+        out[see, 0] = (215 + 40 * k[see]).astype(np.uint8)
+        out[see, 1] = (232 + 23 * k[see]).astype(np.uint8)
+        out[see, 2] = 255
+        out[see, 3] = (130 + 120 * k[see]).astype(np.uint8)
     return out
 
 
@@ -129,7 +139,7 @@ def main() -> int:
             continue  # only the sheets named on the command line
         img = np.array(Image.open(os.path.join(SHEETS, name)).convert('RGBA'))
         if img[..., 3].min() == 255:
-            img = key_magenta(img)
+            img = key_magenta(img, letter in GLASS)
         mask = img[..., 3] >= ALPHA_CUT
         nr, nc = GRIDS.get(letter, (4, 4))
         rows = find_cuts(mask, 0, nr, search=40 if nr > 4 else 60)
@@ -138,7 +148,7 @@ def main() -> int:
             for c in range(nc):
                 cid = f'{letter}{r + 1}{c + 1:02}' if letter in GRIDS else f'{letter}{r + 1}{c + 1}'
                 cell = img[rows[r]:rows[r + 1], cols[c]:cols[c + 1]]
-                sprite = clean_cell(cell, symbol=letter in GRIDS)
+                sprite = clean_cell(cell, symbol=letter in GRIDS, glass=letter in GLASS)
                 if sprite is None:
                     print(f'{cid}: empty', file=sys.stderr)
                     continue

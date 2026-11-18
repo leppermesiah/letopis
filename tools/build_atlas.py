@@ -446,8 +446,22 @@ group('skiffse', cells('CX', (1,)), 'pose', PEOPLE_WPP, 0)
 group('skiffne', cells('CX', (2,)), 'pose', PEOPLE_WPP, 0)
 group('motorse', cells('CX', (3,)), 'pose', PEOPLE_WPP, 0)
 group('motorne', cells('CX', (4,)), 'pose', PEOPLE_WPP, 0)
+# Mars (CY colonists, CZ children and poses, DA domes, DB things and rocks, DC rockets and work); people prefix m9
+group('mdomeb', cells('DA', (1,)), 'thing', 0.085, 0)     # 0..3: a small living dome going up
+group('bigdomeb', cells('DA', (2,)), 'thing', 0.115, 0)   # 0..3: a big town dome going up
+for cid, name, w in (('DA31', 'mgreenhouse', 0.085), ('DA32', 'mlab', 0.075), ('DA33', 'mstore', 0.075), ('DA34', 'mpower', 0.08),
+                     ('DA41', 'mairtower', 0.06), ('DA42', 'mmed', 0.075), ('DA43', 'mschool', 0.075), ('DA44', 'mpad', 0.085),
+                     ('DB11', 'mrocks', 0.04), ('DB12', 'mpillar', 0.045), ('DB13', 'mcrater', 0.05), ('DB14', 'mboulders', 0.04),
+                     ('DB21', 'mrover', 0.045), ('DB22', 'mbigrover', 0.05), ('DB23', 'micedrill', 0.042), ('DB24', 'mdish', 0.042),
+                     ('DB31', 'msolar', 0.05), ('DB32', 'mairmaker', 0.045), ('DB33', 'mcrates', 0.04), ('DB34', 'msuit', 0.035),
+                     ('DB41', 'mplants', 0.042), ('DB42', 'mtank', 0.04), ('DB43', 'mbot', 0.03), ('DB44', 'mcairn', 0.03)):
+    group(name, cid, 'thing', w, 0)
+group('rocketdown', cells('DC', (1,)), 'thing', 0.075, 0)  # 4 frames: comes down and lands
+group('rocketup', cells('DC', (2,)), 'thing', 0.075, 0)    # 4 frames: lifts off
+group('mdrill', cells('DC', (3,)), 'pose', PEOPLE_WPP, 0)
+group('mbotanist', cells('DC', (4,)), 'pose', PEOPLE_WPP, 0)
 # everyday clothes of each age (sheets BS-CD, two per age: adults, then children and more poses); prefix e<era>
-for pre, a, b in (('e2', 'BS', 'BT'), ('e4', 'BU', 'BV'), ('e5', 'BW', 'BX'), ('e6', 'BY', 'BZ'), ('e7', 'CA', 'CB'), ('e8', 'CC', 'CD')):
+for pre, a, b in (('e2', 'BS', 'BT'), ('e4', 'BU', 'BV'), ('e5', 'BW', 'BX'), ('e6', 'BY', 'BZ'), ('e7', 'CA', 'CB'), ('e8', 'CC', 'CD'), ('m9', 'CY', 'CZ')):
     group(pre + 'walk', cells(a, (1,)), 'person', 11, 64)
     group(pre + 'womanwalk', cells(a, (2,)), 'person', 11, 64)
     group(pre + 'oldwalk', cells(a, (3,)), 'person', 10.5, 64)
@@ -668,6 +682,10 @@ def main() -> int:
                 ay = max(0.5, 1 - 0.08 * w0 / h0)
                 if cid[:2] == 'CH' and cid[:4] not in ('CH41', 'CH42'):
                     ay = 0.9  # cars, buses, planes, the helicopter and the truck have no ground patch under them
+                if cid[:2] in ('DB', 'DC') and cid[:4] not in ('DB13',):
+                    ay = 0.9  # Mars: machines, rocks and rockets stand on the bare ground, no patch under them
+                if cid[:2] == 'DA':
+                    ay = max(0.5, 1 - 0.12 * w0 / h0)  # the domes' round base: its middle is a little higher
             if kind == 'symbol':
                 a[..., :3] = 255  # black silhouettes -> white, tinted in game
                 src = Image.fromarray(a)
@@ -676,9 +694,9 @@ def main() -> int:
                 items.append((name, img, 0.5, ay, s))
                 items.append((name + '_t', top_only(img, ay * h), 0.5, ay, s))
                 continue
-            if (kind == 'person' and cid[:2] in ('CA', 'CB', 'CC', 'CD', 'CR')) or (kind == 'pose' and cid[:2] in ('CP', 'CQ')):
+            if (kind == 'person' and cid[:2] in ('CA', 'CB', 'CC', 'CD', 'CR', 'CY', 'CZ')) or (kind == 'pose' and cid[:2] in ('CP', 'CQ', 'DC')):
                 # today and the future: white clothes stay white, only the collar takes the clan colour
-                kid = cid[:2] in ('CB', 'CD') and cid[2] in '123'
+                kid = cid[:2] in ('CB', 'CD', 'CZ') and cid[2] in '123'
                 base, cloth = split_cloth(img, 0.36 if kid else 0.25, upto=0.47 if kid else 0.36)
                 items.append((name, base, 0.5, ay, s))
                 items.append((name + '_c', cloth, 0.5, ay, s))
