@@ -1,6 +1,10 @@
 import { Application } from 'pixi.js';
 import { Atlas, WorldRenderer, iso, TW, TH } from './render';
 import { Soundscape } from './sound';
+import { Music } from './music';
+
+/** quiet music of the age (set up with the sound panel further down) */
+const music = new Music();
 import {
   BandView, ChronicleEntry, Discovery, FamilyTree, GoneBand, TreeNode, PersonDetail, PersonRow, SnapshotMessage, TASKS, TASK_NAMES, TickMessage, WorldInfo, b64decode,
 } from '../shared/types';
@@ -200,6 +204,7 @@ function applyTime(t: TickMessage['time'], population: number) {
   $('#year').textContent = fmtYear(t.year);
   $('#month').textContent = monthName(t.month);
   $('#era').textContent = ERA(t.eraName);
+  music.setEra(t.era, !!BASE);
   const gate = TECH_LIST.find(([id]) => id === ERA_GATE[t.era + 1]);
   $('#nextEra').textContent = gate ? `${T('следва', 'next', 'als Nächstes')}: ${TECH_ID(gate[0], gate[1])}` : '';
   $('#pop').textContent = num(population);
@@ -860,17 +865,57 @@ $('#nightBtn').onclick = () => {
 };
 // sounds of the place under the camera; browsers let them start only after a click or a tap
 const sound = new Soundscape(r);
+// and quiet music of the age; the "Sound" button opens a small panel: each on or off, each with its own volume
 let soundOn = store('letopis.sound', true);
-$('#soundBtn').setAttribute('aria-pressed', String(soundOn));
-const wake = () => { if (soundOn) { sound.on = true; sound.start(); } };
+let musicOn = store('letopis.music', true);
+sound.volume = store('letopis.soundVol', 70) / 100;
+music.volume = store('letopis.musicVol', 60) / 100;
+($('#sfxVol') as HTMLInputElement).value = String(Math.round(sound.volume * 100));
+($('#musicVol') as HTMLInputElement).value = String(Math.round(music.volume * 100));
+const showSound = () => {
+  $('#sfxToggle').setAttribute('aria-pressed', String(soundOn));
+  $('#musicToggle').setAttribute('aria-pressed', String(musicOn));
+  $('#soundBtn').setAttribute('aria-pressed', String(soundOn || musicOn));
+};
+showSound();
+const wake = () => {
+  if (soundOn) { sound.on = true; sound.start(); }
+  if (musicOn) music.start();
+};
 window.addEventListener('pointerdown', wake, { once: true });
 window.addEventListener('keydown', wake, { once: true });
-$('#soundBtn').onclick = () => {
+const soundPanel = $('#soundPanel');
+$('#soundBtn').onclick = (ev) => {
+  ev.stopPropagation();
+  soundPanel.hidden = !soundPanel.hidden;
+  $('#soundBtn').setAttribute('aria-expanded', String(!soundPanel.hidden));
+};
+soundPanel.onclick = (ev) => ev.stopPropagation();
+document.addEventListener('pointerdown', (ev) => {
+  if (!soundPanel.hidden && !(ev.target as HTMLElement).closest('.sound-wrap')) { soundPanel.hidden = true; $('#soundBtn').setAttribute('aria-expanded', 'false'); }
+});
+$('#sfxToggle').onclick = () => {
   soundOn = !soundOn;
   save('letopis.sound', soundOn);
-  $('#soundBtn').setAttribute('aria-pressed', String(soundOn));
   sound.on = soundOn;
   if (soundOn) sound.start(); else sound.stop();
+  showSound();
+};
+$('#musicToggle').onclick = () => {
+  musicOn = !musicOn;
+  save('letopis.music', musicOn);
+  if (musicOn) music.start(); else music.stop();
+  showSound();
+};
+($('#sfxVol') as HTMLInputElement).oninput = (ev) => {
+  const v = Number((ev.target as HTMLInputElement).value);
+  sound.volume = v / 100;
+  save('letopis.soundVol', v);
+};
+($('#musicVol') as HTMLInputElement).oninput = (ev) => {
+  const v = Number((ev.target as HTMLInputElement).value);
+  music.setVolume(v / 100);
+  save('letopis.musicVol', v);
 };
 // the other world: a button to Mars once the first ship has landed there, and back to the Earth
 const planetBtn = $('#planetBtn') as HTMLButtonElement;

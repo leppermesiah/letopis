@@ -116,7 +116,11 @@ export function translatePage() {
   set('#zoomOut', undefined, t('Zoom out', 'Verkleinern'));
   set('#tourBtn', t('Tour', 'Rundflug'), t('The camera wanders the world on its own', 'Die Kamera wandert von selbst durch die Welt'));
   set('#nightBtn', t('Night', 'Nacht'), t('Day and night cycle', 'Wechsel von Tag und Nacht'));
-  set('#soundBtn', t('Sound', 'Ton'), t('The sounds of the place under the camera', 'Die Geräusche des Ortes unter der Kamera'));
+  set('#soundBtn', t('Sound', 'Ton'), t('Music and sounds', 'Musik und Geräusche'));
+  set('#musicToggle', t('Music', 'Musik'), t('Quiet music of the age', 'Leise Musik des Zeitalters'));
+  set('#sfxToggle', t('Sounds', 'Geräusche'), t('The sounds of the place under the camera', 'Die Geräusche des Ortes unter der Kamera'));
+  document.querySelector('#musicVol')?.setAttribute('aria-label', t('Music volume', 'Lautstärke der Musik'));
+  document.querySelector('#sfxVol')?.setAttribute('aria-label', t('Sound volume', 'Lautstärke der Geräusche'));
   set('#kidsBtn', t('Kids mode', 'Kindermodus'), t('Bigger letters and explanations for children', 'Größere Schrift und Erklärungen für Kinder'));
   set('#sideToggle', t('Panel', 'Leiste'), t('Hide or show the chronicle', 'Chronik ein- oder ausblenden'));
   set('#cardClose', undefined, t('Close', 'Schließen'));

@@ -29,6 +29,8 @@ const CALL_GAIN: Record<string, number> = { dog: 0.6, donkey: 0.5, elephant: 0.6
 
 export class Soundscape {
   on = false;
+  /** 0..1, from the slider in the sound panel */
+  volume = 1;
   private a: AudioContext | null = null;
   private master!: GainNode;
   private beds: Partial<Record<Bed, GainNode>> = {};
@@ -120,7 +122,7 @@ export class Soundscape {
     // up high the sounds blur: the clear calls go first, the soft beds last
     const bed = near ** 0.7, clear = near ** 1.6;
     const set = (name: Bed, v: number) => this.beds[name]?.gain.setTargetAtTime(v, now, 0.6);
-    this.master.gain.setTargetAtTime(0.8, now, 0.5);
+    this.master.gain.setTargetAtTime(0.8 * this.volume, now, 0.5);
     set('river', Math.min(1, m.water * 2) * 0.35 * bed);
     set('sea', Math.min(1, m.sea * 1.5) * 0.3 * bed);
     const green = mars ? 0 : m.land * (0.4 + 0.6 * m.forest);
