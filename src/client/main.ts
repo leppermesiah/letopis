@@ -921,13 +921,15 @@ $('#musicToggle').onclick = () => {
   save('letopis.musicVol', v);
 };
 // in the Android app nothing plays while the app is in the background
+// (the app calls letopisHold itself, the web view does not always say the page is hidden)
+const hold = (hidden: boolean) => {
+  music.hold(hidden);
+  if (hidden) sound.stop();
+  else if (soundOn) sound.start();
+};
 if ((window as unknown as { LetopisApp?: unknown }).LetopisApp) {
-  document.addEventListener('visibilitychange', () => {
-    const hidden = document.hidden;
-    music.hold(hidden);
-    if (hidden) sound.stop();
-    else if (soundOn) sound.start();
-  });
+  (window as unknown as { letopisHold: typeof hold }).letopisHold = hold;
+  document.addEventListener('visibilitychange', () => hold(document.hidden));
 }
 // the other world: a button to Mars once the first ship has landed there, and back to the Earth
 const planetBtn = $('#planetBtn') as HTMLButtonElement;
