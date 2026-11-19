@@ -55,6 +55,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        web.evaluateJavascript("window.letopisHold && letopisHold(true)", null);
         web.onPause();
     }
 
@@ -62,6 +63,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         web.onResume();
+        web.evaluateJavascript("window.letopisHold && letopisHold(false)", null);
     }
 
     @Override
