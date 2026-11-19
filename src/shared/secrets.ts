@@ -52,14 +52,17 @@ export const SECRET_KINDS: SecretKind[] = [
 
 export interface SecretSpot { k: number; kind: number; x: number; y: number }
 
-export function secretSpots(seed: number, w: number, h: number, biome: Uint8Array, river: Uint8Array): SecretSpot[] {
-  const rng = new Rng((seed ^ 0x5ec2e7) >>> 0);
+/** round: every May the secrets move to new places (the year of that May); taken: tiles with houses, walls or fields; before: last year's places */
+export function secretSpots(seed: number, w: number, h: number, biome: Uint8Array, river: Uint8Array, round = 0,
+  taken: (x: number, y: number) => boolean = () => false, before: SecretSpot[] = []): SecretSpot[] {
+  const rng = new Rng((seed ^ 0x5ec2e7 ^ Math.imul(round, 0x9e3779b1)) >>> 0);
   const out: SecretSpot[] = [];
   // never on lasting snow or frozen tundra, nor right at their edge: there they could never be seen
   const icy = (i: number) => biome[i] === Biome.Snow || biome[i] === Biome.Tundra;
   const dry = (i: number) => {
     if (isWater(biome[i]) || river[i] >= RIVER_WATER || icy(i)) return false;
     const x = i % w, y = (i - x) / w;
+    if (taken(x, y)) return false;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       const nx = x + dx, ny = y + dy;
       if (nx >= 0 && ny >= 0 && nx < w && ny < h && icy(ny * w + nx)) return false;
@@ -75,6 +78,8 @@ export function secretSpots(seed: number, w: number, h: number, biome: Uint8Arra
       const i = y * w + x;
       if (!dry(i) || (a < 300 && !likes.includes(biome[i]))) continue;
       if (out.some((s) => Math.abs(s.x - x) + Math.abs(s.y - y) < 8)) continue;
+      // never where a secret lay last year
+      if (before.some((s) => Math.abs(s.x - x) + Math.abs(s.y - y) < 8)) continue;
       spot = { k, kind, x: x + rng.range(-0.3, 0.3), y: y + rng.range(-0.3, 0.3) };
     }
     if (spot) out.push(spot);

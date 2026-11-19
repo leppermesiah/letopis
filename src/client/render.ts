@@ -846,10 +846,29 @@ export class WorldRenderer {
     return this.temp[yi * this.info.w + xi] / 255;
   }
 
+  private secretFound = new Set<number>();
+  /** the year of the May the secrets were last moved in, and whether the villages were known then */
+  secretRound: number | null = null;
+  private secretWithCamps = false;
+  private secretShown: number | null = null;
+
   setSecrets(found: number[]) {
+    this.secretFound = new Set(found);
+    if (this.secretRound !== null) this.placeSecrets(this.secretRound);
+  }
+
+  /** every May the secrets move to clean ground: no water, snow, houses, walls or fields */
+  placeSecrets(round: number) {
+    this.secretRound = round;
+    this.secretWithCamps = this.camps.size > 0;
+    const camps = [...this.camps.values()];
+    const taken = (x: number, y: number) => camps.some((c) => Math.hypot(c.tx - x, c.ty - y) <= (c.townR || 2) + 4);
+    const { seed, w, h } = this.info;
+    // last year's places: the ones on the map, or worked out again after a reload
+    const before = this.secrets.length && this.secretShown !== round ? this.secrets.map((x) => x.spot) : secretSpots(seed, w, h, this.biome, this.river, round - 1, taken);
     for (const x of this.secrets) x.s.destroy();
-    const have = new Set(found);
-    this.secrets = secretSpots(this.info.seed, this.info.w, this.info.h, this.biome, this.river).map((spot) => {
+    this.secretShown = round;
+    this.secrets = secretSpots(seed, w, h, this.biome, this.river, round, taken, before).map((spot) => {
       const s = this.atlas.sprite(`sec_${SECRET_KINDS[spot.kind].id}0`);
       const p = this.tileTop(spot.x, spot.y);
       s.position.set(p.x, p.y);
@@ -857,11 +876,19 @@ export class WorldRenderer {
       s.eventMode = 'none';
       s.visible = false;
       this.peopleLayer.addChild(s);
-      return { spot, s, i: Math.round(spot.y) * this.info.w + Math.round(spot.x), found: have.has(spot.k) };
+      return { spot, s, i: Math.round(spot.y) * this.info.w + Math.round(spot.x), found: this.secretFound.has(spot.k) };
     });
   }
 
+  /** called with the time of every month */
+  secretTime(year: number, month: number) {
+    if (!this.info || !this.biome) return;
+    const round = Math.floor(year) - (month < 4 ? 1 : 0);
+    if (round !== this.secretRound || (!this.secretWithCamps && this.camps.size > 0)) this.placeSecrets(round);
+  }
+
   markSecret(k: number) {
+    this.secretFound.add(k);
     const x = this.secrets.find((q) => q.spot.k === k);
     if (x) x.found = true;
   }

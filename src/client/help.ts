@@ -20,6 +20,9 @@ const TAG_ORDER: Tag[] = ['breaking', 'new', 'old'];
 
 /** newest first; a new version gets its own entry here */
 export const CHANGELOG: Release[] = [
+  { v: '1.90.1', items: [
+    ['Тайните се местят всеки май на чисто място.', 'The secrets move to a clean spot every May.', 'Die Geheimnisse ziehen jeden Mai an einen freien Ort um.', 'add'],
+  ] },
   { v: '1.90', items: [
     ['Приложение за Android: играта на телефона като истинско приложение, без браузър. При първото пускане питаш адреса на сървъра. Бутонът „Известия“ избира за какво телефонът да те известява: открития и нови епохи, известни личности, царства, нови селища и сливания, бедствия, и от Марс. Приложението проверява на около 15 минути, дори когато е затворено.',
       'Android app: the game on the phone as a real app, without a browser. On the first start it asks for the address of the server. The “Notifications” button chooses what the phone tells you about: discoveries and new ages, famous people, kingdoms, new places and mergers, disasters, and Mars too. The app looks about every 15 minutes, even when it is closed.',

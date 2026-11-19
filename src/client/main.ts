@@ -201,6 +201,7 @@ function applyTime(t: TickMessage['time'], population: number) {
   tickMs = t.tickMs;
   lastTickAt = performance.now();
   r.month = t.month;
+  r.secretTime(t.year, t.month);
   r.fauna.year = t.year;
   $('#year').textContent = fmtYear(t.year);
   $('#month').textContent = monthName(t.month);
@@ -452,9 +453,9 @@ function renderSide() {
         return EN ? ` - Found on ${two(d.getDate())}.${two(d.getMonth() + 1)}.${d.getFullYear()} at ${two(d.getHours())}:${two(d.getMinutes())}`
           : ` - Открит на ${two(d.getDate())}.${two(d.getMonth() + 1)}.${d.getFullYear()} в ${two(d.getHours())}:${two(d.getMinutes())}ч.`;
       };
-      body.innerHTML = `<p class="muted">${T(`Намерени ${found.length} от ${SECRET_COUNT}. Тайните са мънички и се крият из проучената земя. Зимата ги затрупва със сняг.`,
-        `Found ${found.length} of ${SECRET_COUNT}. The secrets are tiny and hide in the explored land. Winter buries them in snow.`,
-        `${found.length} von ${SECRET_COUNT} gefunden. Die Geheimnisse sind winzig und verstecken sich im erkundeten Land. Im Winter liegen sie unter dem Schnee.`)}</p>
+      body.innerHTML = `<p class="muted">${T(`Намерени ${found.length} от ${SECRET_COUNT}. Тайните са мънички и се крият из проучената земя. Зимата ги затрупва със сняг, а всеки май се местят.`,
+        `Found ${found.length} of ${SECRET_COUNT}. The secrets are tiny and hide in the explored land. Winter buries them in snow, and every May they move.`,
+        `${found.length} von ${SECRET_COUNT} gefunden. Die Geheimnisse sind winzig und verstecken sich im erkundeten Land. Im Winter liegen sie unter dem Schnee, und jeden Mai ziehen sie um.`)}</p>
         <ol class="secrets">${Array.from({ length: SECRET_COUNT }, (_, k) => at.has(k)
           ? `<li class="found"><b>${esc(HERO(k))}</b>${when(at.get(k)!)}</li>`
           : `<li>${T('Намери ме', 'Find me', 'Finde mich')}</li>`).join('')}</ol>`;
