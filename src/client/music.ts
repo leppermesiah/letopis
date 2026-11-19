@@ -1,5 +1,5 @@
 // Quiet background music of the age the world is in (public/music, made with Suno for the project).
-// Each track loops seamlessly; a new age fades the old track out and the new one in.
+// Every age has two songs that take turns; a new age (or the next song) fades the old one out and the new one in.
 
 const TRACKS = ['stone-age', 'stone-age', 'bronze-age', 'iron-age', 'middle-ages', 'early-modern', 'industrial', 'information-age', 'space-age'];
 /** at full volume the music still stays well under the sounds of the world */
@@ -10,7 +10,7 @@ export class Music {
   on = false;
   volume = 0.6;
   private want = '';
-  private playing: { name: string; el: HTMLAudioElement; t0: number }[] = [];
+  private playing: { name: string; base: string; el: HTMLAudioElement; t0: number; handed: boolean }[] = [];
   private timer = 0;
 
   /** the age (0..8) or Mars */
@@ -36,20 +36,27 @@ export class Music {
 
   private update() {
     const cur = this.playing[this.playing.length - 1];
-    if (this.on && this.want && cur?.name !== this.want) {
-      const el = new Audio(`music/${this.want}.ogg`);
-      el.loop = true;
-      el.volume = 0;
-      void el.play().catch(() => { /* not allowed yet: the next click starts it */ });
-      this.playing.push({ name: this.want, el, t0: performance.now() });
-    }
+    if (this.on && this.want && cur?.base !== this.want) this.play(Math.random() < 0.5 ? this.want : `${this.want}1`);
     if (!this.timer) this.timer = window.setInterval(() => this.fade(), 100);
     this.fade();
   }
 
+  private play(name: string) {
+    const el = new Audio(`music/${name}.ogg`);
+    el.volume = 0;
+    void el.play().catch(() => { /* not allowed yet: the next click starts it */ });
+    this.playing.push({ name, base: this.want, el, t0: performance.now(), handed: false });
+  }
+
   private fade() {
     const now = performance.now();
-    const top = this.playing[this.playing.length - 1];
+    let top = this.playing[this.playing.length - 1];
+    // a few seconds before a song ends the other song of the same age comes in
+    if (this.on && top && !top.handed && top.el.duration && (top.el.ended || top.el.currentTime > top.el.duration - 6)) {
+      top.handed = true;
+      this.play(top.name === top.base ? `${top.base}1` : top.base);
+      top = this.playing[this.playing.length - 1];
+    }
     for (const p of this.playing) {
       const target = this.on && p === top ? LEVEL * this.volume : 0;
       const step = (LEVEL / FADE_MS) * 100;
@@ -64,6 +71,7 @@ export class Music {
     });
     if (!this.on && top && top.el.volume <= 0.001) top.el.pause();
     const settled = this.playing.length <= 1 && (!top || Math.abs(top.el.volume - (this.on ? LEVEL * this.volume : 0)) < 0.002);
-    if (settled && this.timer) { clearInterval(this.timer); this.timer = 0; }
+    // while music plays the clock keeps running, to hand over to the next song in time
+    if (settled && !this.on && this.timer) { clearInterval(this.timer); this.timer = 0; }
   }
 }

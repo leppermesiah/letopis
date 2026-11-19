@@ -156,7 +156,7 @@ export interface SimState {
   /** everyone who ever wore a crown (from v1.41) */
   kingIds?: number[];
   nextKingdomId?: number;
-  /** 'mars': the second world, where the colonists live under domes (from v1.70) */
+  /** 'mars': the second world, where the colonists live under domes (from v1.80) */
   planet?: 'mars';
   /** ships that flew between the worlds */
   ships?: number;

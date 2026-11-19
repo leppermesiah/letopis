@@ -26,7 +26,7 @@ export class Store {
     `);
     // v1.11: names in the chronicle link to people and bands
     const cols = this.db.prepare('PRAGMA table_info(chronicle)').all() as { name: string }[];
-    // v1.70: more numbers for the charts
+    // v1.80: more numbers for the charts
     const sc = this.db.prepare('PRAGMA table_info(stats)').all() as { name: string }[];
     for (const c of ['villages', 'born', 'died', 'kingdoms', 'disaster']) if (!sc.some((x) => x.name === c)) this.db.exec(`ALTER TABLE stats ADD COLUMN ${c} INTEGER`);
     if (!cols.some((c) => c.name === 'refs')) this.db.exec('ALTER TABLE chronicle ADD COLUMN refs TEXT');
