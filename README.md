@@ -4,7 +4,11 @@
 
 <p align="center"><i>An idle civilization that lives on its own server. You just watch it grow.</i></p>
 
-<p align="center"><img src="art/screenshot.png" alt="A Stone Age world in Letopis" width="800"></p>
+<p align="center">
+  <a href="art/screenshot.png"><img src="art/screenshot.png" alt="A Stone Age world in Letopis" width="32%"></a>
+  <a href="art/screenshot-2.png"><img src="art/screenshot-2.png" alt="Walled villages of the New Stone Age" width="32%"></a>
+  <a href="art/screenshot-3.png"><img src="art/screenshot-3.png" alt="An Iron Age town by the sea" width="32%"></a>
+</p>
 
 Letopis (Bulgarian for *chronicle*) is a self-hosted idle simulation. A few families start in the Stone Age
 and, with nobody pressing a button, discover fire, tools, farming and everything after. Open the page whenever
