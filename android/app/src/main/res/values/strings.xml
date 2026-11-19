@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Letopis</string>
+    <string name="server_title">Letopis server</string>
+    <string name="server_hint">For example 192.168.1.10:2222</string>
+    <string name="server_text">The address of the server where the world lives.</string>
+    <string name="ok">Open</string>
+    <string name="cancel">Cancel</string>
+    <string name="retry">Try again</string>
+    <string name="offline">The server does not answer.</string>
+    <string name="change">Another server</string>
+    <string name="channel">Chronicle</string>
+    <string name="channel_text">The big events of the world</string>
+</resources>

@@ -49,9 +49,41 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # the Android app: the game from the server at home, with notifications
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.10.2
+      - name: The signing key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+        run: |
+          if [ -n "$KEYSTORE" ]; then
+            echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/letopis.jks"
+            echo "LETOPIS_KEYSTORE=$RUNNER_TEMP/letopis.jks" >> "$GITHUB_ENV"
+          fi
+      - name: Build the APK
+        env:
+          LETOPIS_KEY_PASS: ${{ secrets.ANDROID_KEY_PASS }}
+        run: |
+          gradle -p android assembleRelease --no-daemon
+          V=$(node -p "require('./package.json').version")
+          cp android/app/build/outputs/apk/release/app-release.apk "letopis-$V.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: letopis-android
+          path: letopis-*.apk
+
   # a GitHub release only for the round versions (1.70, 1.80, ...), once, when they reach main
   release:
-    needs: build
+    needs: [build, android]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -73,3 +105,12 @@ jobs:
           npx esbuild scripts/release-notes.ts --bundle --platform=node --format=esm --outfile=dist/release-notes.mjs --log-level=warning
           node dist/release-notes.mjs "$V" > notes.md
           gh release create "v$V" --title "Letopis $V" --notes-file notes.md --target "$GITHUB_SHA"
+      - uses: actions/download-artifact@v4
+        with:
+          name: letopis-android
+      - name: The Android app goes with every release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V=$(node -p "require('./package.json').version.split('.').slice(0, 2).join('.')")
+          if gh release view "v$V" > /dev/null 2>&1; then gh release upload "v$V" letopis-*.apk --clobber; fi

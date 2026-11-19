@@ -7,7 +7,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Simulation, SimState } from './sim/sim';
 import { setWorldSize } from './sim/world';
 import { Store } from './db';
-import { Discovery, SnapshotMessage, TickMessage, WorldInfo, b64encode } from '../shared/types';
+import { Discovery, SnapshotMessage, TickMessage, WorldInfo, b64encode, formatYear } from '../shared/types';
 import { TECHS } from './sim/tech';
 
 const PORT = Number(process.env.LETOPIS_PORT ?? 2222);
@@ -274,6 +274,25 @@ const server = http.createServer((req, res) => {
     if (p === '/api/since') {
       const after = q('after') ?? 0;
       return json(res, { ...store.countSince(world, after), events: store.chronicle(world, { after, min: 2, limit: 200 }) });
+    }
+    // for the Android app: the big events since the last look, ready to show as notifications
+    if (p === '/api/news') {
+      const lang = (['bg', 'en', 'de'] as const).find((l) => l === url.searchParams.get('lang')) ?? 'bg';
+      const kinds = new Set((url.searchParams.get('kinds') ?? '').split(',').filter(Boolean));
+      const kidsText = url.searchParams.get('kids') === '1';
+      const after = q('after');
+      const last = store.chronicle(world, { limit: 1 })[0]?.id ?? 0;
+      // the first look only learns where the chronicle is now
+      if (after === undefined || after > last) return json(res, { last, items: [] });
+      const name = onMars ? { bg: 'Летопис · Марс', en: 'Letopis · Mars', de: 'Letopis · Mars' } : { bg: 'Летопис', en: 'Letopis', de: 'Letopis' };
+      const items = store.chronicle(world, { after, min: 2, limit: 200 })
+        .filter((e) => kinds.has(e.kind))
+        .slice(-20)
+        .map((e) => {
+          const tr = lang === 'bg' ? { text: e.text, kids: e.kids } : (e[lang] as { text: string; kids?: string } | undefined) ?? { text: e.text, kids: e.kids };
+          return { id: e.id, title: `${name[lang]} · ${formatYear(e.year, lang)}`, text: (kidsText && tr.kids) || tr.text };
+        });
+      return json(res, { last, items });
     }
     if (p === '/api/heroes') return json(res, sim2.heroes());
     if (p === '/api/famous') return json(res, sim2.famousList());

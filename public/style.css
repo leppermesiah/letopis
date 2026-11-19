@@ -217,3 +217,7 @@ a.ref:hover { border-bottom-style: solid; }
 .sound-row { display: flex; align-items: center; gap: 10px; }
 .sound-row .btn { min-width: 92px; }
 .sound-row input[type='range'] { width: 130px; accent-color: var(--accent); }
+.app-wrap[hidden] { display: none; }
+.news-panel { min-width: 240px; max-width: calc(100vw - 24px); left: 0; transform: none; }
+.news-panel .btn { width: 100%; text-align: left; }
+.news-panel .news-server { text-align: center; opacity: 0.85; }
