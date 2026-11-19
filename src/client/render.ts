@@ -42,6 +42,15 @@ interface Frame { x: number; y: number; w: number; h: number; ax: number; ay: nu
 export class Atlas {
   tex: Record<string, Texture> = {};
   frames: Record<string, Frame> = {};
+  private pages: { url: string; size: [number, number] }[] = [];
+
+  /** a sprite as a small picture for the page (a span with the atlas as background), fitted into size px */
+  html(name: string, size: number, cls = 'sprite-ico'): string {
+    const f = this.frames[name], pg = f && this.pages[f.p ?? 0];
+    if (!f || !pg) return '';
+    const k = size / Math.max(f.w, f.h);
+    return `<span class="${cls}" style="width:${Math.round(f.w * k)}px;height:${Math.round(f.h * k)}px;background:url(${pg.url}) -${(f.x * k).toFixed(1)}px -${(f.y * k).toFixed(1)}px/${(pg.size[0] * k).toFixed(1)}px ${(pg.size[1] * k).toFixed(1)}px no-repeat"></span>`;
+  }
 
   static async load(base: string, version = ''): Promise<Atlas> {
     const a = new Atlas();
@@ -65,6 +74,7 @@ export class Atlas {
       });
     }));
     a.frames = meta.frames;
+    a.pages = files.map((file, i) => ({ url: `${base}/${file}${v}`, size: meta.pages?.[i]?.size ?? meta.size ?? [2048, 2048] }));
     for (const [name, f] of Object.entries(a.frames)) {
       a.tex[name] = new Texture({ source: sources[f.p ?? 0], frame: new Rectangle(f.x, f.y, f.w, f.h) });
     }
@@ -240,7 +250,7 @@ export class WorldRenderer {
   canoes = new Canoes(this);
   trains = new Trains(this);
   /** the 100 hidden secrets: tiny, half see-through, buried by snow in winter */
-  secrets: { spot: SecretSpot; s: Sprite; i: number; found: boolean }[] = [];
+  secrets: { spot: SecretSpot; s: Sprite; i: number; found: boolean; rim: Sprite[] }[] = [];
   tex!: Record<string, Texture>;
   time = 0;
   month = 0;
@@ -866,7 +876,7 @@ export class WorldRenderer {
     const { seed, w, h } = this.info;
     // last year's places: the ones on the map, or worked out again after a reload
     const before = this.secrets.length && this.secretShown !== round ? this.secrets.map((x) => x.spot) : secretSpots(seed, w, h, this.biome, this.river, round - 1, taken);
-    for (const x of this.secrets) x.s.destroy();
+    for (const x of this.secrets) { x.s.destroy(); for (const q of x.rim) q.destroy(); }
     this.secretShown = round;
     this.secrets = secretSpots(seed, w, h, this.biome, this.river, round, taken, before).map((spot) => {
       const s = this.atlas.sprite(`sec_${SECRET_KINDS[spot.kind].id}0`);
@@ -875,8 +885,19 @@ export class WorldRenderer {
       s.zIndex = p.y;
       s.eventMode = 'none';
       s.visible = false;
+      // a found one gets a thin soft green rim: four green copies a hair to each side, behind it
+      const rim = [[-1, 0], [1, 0], [0, -1], [0, 1]].map(([dx, dy]) => {
+        const q = this.atlas.sprite(`sec_${SECRET_KINDS[spot.kind].id}0`);
+        q.position.set(p.x + dx * 0.45, p.y + dy * 0.45);
+        q.zIndex = p.y - 0.01;
+        q.eventMode = 'none';
+        q.tint = 0x8fdc8a;
+        q.visible = false;
+        this.peopleLayer.addChild(q);
+        return q;
+      });
       this.peopleLayer.addChild(s);
-      return { spot, s, i: Math.round(spot.y) * this.info.w + Math.round(spot.x), found: this.secretFound.has(spot.k) };
+      return { spot, s, i: Math.round(spot.y) * this.info.w + Math.round(spot.x), found: this.secretFound.has(spot.k), rim };
     });
   }
 
@@ -906,6 +927,7 @@ export class WorldRenderer {
     for (const x of this.secrets) {
       const on = zoom > 0.75 && this.explored[x.i] === 1;
       x.s.visible = on;
+      for (const q of x.rim) q.visible = on && x.found;
       if (!on) continue;
       // snow covers them on cold ground, the same way it covers the tiles
       const t = this.temp[x.i] / 255;
@@ -914,6 +936,7 @@ export class WorldRenderer {
       const id = SECRET_KINDS[x.spot.kind].id;
       const f = Math.floor(nowMs / 1600 + x.spot.k * 0.37) % 2;
       this.atlas.set(x.s, `sec_${id}${f}`);
+      if (x.found) for (const q of x.rim) { this.atlas.set(q, `sec_${id}${f}`); q.alpha = x.s.alpha * 0.5; }
     }
   }
 

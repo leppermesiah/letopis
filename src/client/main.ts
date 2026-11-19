@@ -8,7 +8,7 @@ const music = new Music();
 import {
   BandView, ChronicleEntry, Discovery, FamilyTree, GoneBand, TreeNode, PersonDetail, PersonRow, SnapshotMessage, TASKS, TASK_NAMES, TickMessage, WorldInfo, b64decode,
 } from '../shared/types';
-import { SECRET_COUNT, SecretFind, SecretSpot } from '../shared/secrets';
+import { SECRET_COUNT, SECRET_KINDS, SecretFind, SecretSpot } from '../shared/secrets';
 import { FAMOUS, Famous, famousByName, fameRole } from '../shared/famous';
 import { ERAS_BG, ERAS_EN, ERA_GATE, TECH_DESC, TECH_LIST } from '../shared/i18n';
 import { ERAS_DE, TECH_DESC_DE, bandTextCaseDe } from '../shared/i18n-de';
@@ -457,11 +457,14 @@ function renderSide() {
         `Found ${found.length} of ${SECRET_COUNT}. The secrets are tiny and hide in the explored land. Winter buries them in snow, and every May they move.`,
         `${found.length} von ${SECRET_COUNT} gefunden. Die Geheimnisse sind winzig und verstecken sich im erkundeten Land. Im Winter liegen sie unter dem Schnee, und jeden Mai ziehen sie um.`)}</p>
         <ol class="secrets">${Array.from({ length: SECRET_COUNT }, (_, k) => at.has(k)
-          ? `<li class="found"><b>${esc(HERO(k))}</b>${when(at.get(k)!)}</li>`
+          ? `<li class="found">${secretIcon(k)}<b>${esc(HERO(k))}</b>${when(at.get(k)!)}</li>`
           : `<li>${T('Намери ме', 'Find me', 'Finde mich')}</li>`).join('')}</ol>`;
     });
   }
 }
+
+/** the little picture of secret k for the list */
+const secretIcon = (k: number) => atlas.html(`sec_${SECRET_KINDS[k % SECRET_KINDS.length].id}0`, 22, 'secret-ico');
 
 let statsAt = 0;
 interface StatRow { year: number; population: number; bands: number; era: number; techs: number; villages?: number; born?: number; died?: number; kingdoms?: number; disaster?: number }
