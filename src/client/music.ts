@@ -12,6 +12,7 @@ export class Music {
   private want = '';
   private playing: { name: string; base: string; el: HTMLAudioElement; t0: number; handed: boolean }[] = [];
   private timer = 0;
+  private held = false;
 
   /** the age (0..8) or Mars */
   setEra(era: number, mars: boolean) {
@@ -31,6 +32,7 @@ export class Music {
 
   /** the app went to the background: everything quiet at once, and back where it was */
   hold(held: boolean) {
+    this.held = held;
     for (const p of this.playing) {
       if (held) p.el.pause();
       else if (this.on && p === this.playing[this.playing.length - 1]) void p.el.play().catch(() => {});
@@ -52,7 +54,7 @@ export class Music {
   private play(name: string) {
     const el = new Audio(`music/${name}.ogg`);
     el.volume = 0;
-    void el.play().catch(() => { /* not allowed yet: the next click starts it */ });
+    if (!this.held) void el.play().catch(() => { /* not allowed yet: the next click starts it */ });
     this.playing.push({ name, base: this.want, el, t0: performance.now(), handed: false });
   }
 
@@ -60,7 +62,7 @@ export class Music {
     const now = performance.now();
     let top = this.playing[this.playing.length - 1];
     // a few seconds before a song ends the other song of the same age comes in
-    if (this.on && top && !top.handed && top.el.duration && (top.el.ended || top.el.currentTime > top.el.duration - 6)) {
+    if (this.on && !this.held && top && !top.handed && top.el.duration && (top.el.ended || top.el.currentTime > top.el.duration - 6)) {
       top.handed = true;
       this.play(top.name === top.base ? `${top.base}1` : top.base);
       top = this.playing[this.playing.length - 1];
@@ -70,7 +72,7 @@ export class Music {
       const step = (LEVEL / FADE_MS) * 100;
       const v = p.el.volume + Math.max(-step, Math.min(step, target - p.el.volume));
       p.el.volume = Math.max(0, Math.min(1, v));
-      if (this.on && p === top && p.el.paused && now - p.t0 > 500) void p.el.play().catch(() => {});
+      if (this.on && !this.held && p === top && p.el.paused && now - p.t0 > 500) void p.el.play().catch(() => {});
     }
     // tracks faded out are let go; when everything is quiet the clock stops
     this.playing = this.playing.filter((p) => {
