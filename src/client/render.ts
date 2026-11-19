@@ -2023,6 +2023,8 @@ const CASTLE_SWAPS: Record<string, string> = { tower: 'ctower', gate: 'cgate', i
 /** what iron replaces: the bronze workshop goes, the walls get battlements */
 const IRON_DROPS = new Set(['ore', 'furnace', 'mould', 'anvil', 'toolrack', 'tablets']);
 const IRON_SWAPS: Record<string, string> = { tower: 'itower', gate: 'igate' };
+/** ?walls in the address draws the walls as plain lines before their pictures exist (for testing) */
+const WALL_DEBUG = typeof location !== 'undefined' && new URLSearchParams(location.search).has('walls');
 const WALL_PROPS = new Set(['tower', 'gate', 'itower', 'igate', 'ctower', 'cgate', 'sfbastion', 'sfgate']);
 
 export class CampSprite {
@@ -2137,6 +2139,81 @@ export class CampSprite {
     return { x: p.x - this.pos.x, y: p.y - this.pos.y };
   }
 
+  /** the wall round a village or town: which kind (by the age) and how far out, or none */
+  private wallPlan(b: BandView, techs: Set<string>, town: boolean): { kit: string; R: number } | null {
+    if (this.r.mars || !b.settled || (b.dwelling !== 'hut' && b.dwelling !== 'house')) return null;
+    const kit = techs.has('computer') ? 'DI' : techs.has('steam_engine') ? 'DH' : techs.has('star_fort') ? 'DG' : techs.has('castle') ? 'DF' : techs.has('walls') ? 'DE' : 'DD';
+    if (!this.r.atlas.has(`wall${kit}r0`) && !WALL_DEBUG) return null; // that age's wall is not drawn yet
+    return { kit, R: town ? this.townR : 2 };
+  }
+
+  /** the tiles inside the wall: as far as the town reaches, on dry land not much higher or lower than the fire */
+  inside(R: number): Set<string> {
+    const bx = Math.round(this.tx), by = Math.round(this.ty);
+    const L0 = this.r.levelAt(bx, by);
+    const F = new Set<string>();
+    for (let dy = -R - 1; dy <= R + 1; dy++) for (let dx = -R - 1; dx <= R + 1; dx++) {
+      if (Math.hypot(dx, dy) > R + 0.4) continue;
+      const x = bx + dx, y = by + dy;
+      if (dx || dy) { if (!this.r.walkable(x, y) || Math.abs(this.r.levelAt(x, y) - L0) > 1) continue; }
+      F.add(`${x},${y}`);
+    }
+    return F;
+  }
+
+  /** wall pieces along every outer edge of the tiles inside, a gate where the two streets go out, a tower on every corner */
+  private buildWall(kit: string, R: number) {
+    const A = this.r.atlas;
+    const bx = Math.round(this.tx), by = Math.round(this.ty);
+    const F = this.inside(R);
+    const corners = new Map<string, { x: number; y: number; L: number; r: boolean; l: boolean }>();
+    const corner = (x: number, y: number, L: number, dir: 'r' | 'l') => {
+      const k = `${x},${y}`;
+      const c = corners.get(k) ?? { x, y, L, r: false, l: false };
+      c[dir] = true;
+      c.L = Math.max(c.L, L);
+      corners.set(k, c);
+    };
+    const put = (name: string, x: number, y: number, L: number, z = 0) => {
+      const p = iso(x, y);
+      const px = p.x - this.pos.x, py = p.y - L * ELEV + TH / 2 - this.pos.y;
+      if (WALL_DEBUG && !A.has(name)) {
+        const g = new Graphics();
+        if (name.includes('tower')) g.circle(0, -4, 3).fill(0xd8c8a0);
+        else {
+          const [ax, ay] = name.includes('r') && !name.includes('tower') && /r\d?$/.test(name) ? [TW / 4, -TH / 4] : [TW / 4, TH / 4];
+          g.moveTo(-ax, -ay).lineTo(ax, ay).stroke({ color: name.startsWith('gate') ? 0x6a4020 : 0xd8c8a0, width: 3 });
+        }
+        g.position.set(px, py);
+        g.zIndex = py + z;
+        this.homes.addChild(g);
+        return;
+      }
+      if (!A.has(name)) return;
+      const s = A.sprite(name);
+      s.position.set(px, py);
+      s.zIndex = py + z;
+      this.homes.addChild(s);
+    };
+    for (const k of F) {
+      const [x, y] = k.split(',').map(Number);
+      const L = this.r.levelAt(x, y);
+      // the edge towards x+1 / x-1 runs from lower left to upper right on screen ("r"); towards y+1 / y-1 the other way ("l")
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (F.has(`${x + dx},${y + dy}`)) continue;
+        const mx = x + dx / 2, my = y + dy / 2;
+        const dir: 'r' | 'l' = dx ? 'r' : 'l';
+        const gate = (dx && y === by) || (dy && x === bx);
+        const v = Math.floor(hash(Math.round(mx * 2), Math.round(my * 2) + 5) * 2);
+        put(gate ? `gate${kit}${dir}` : `wall${kit}${dir}${v}`, mx, my, L);
+        if (dx) { corner(mx, my - 0.5, L, dir); corner(mx, my + 0.5, L, dir); }
+        else { corner(mx - 0.5, my, L, dir); corner(mx + 0.5, my, L, dir); }
+      }
+    }
+    // a tower where the wall turns, so the pieces meet cleanly
+    for (const c of corners.values()) if (c.r && c.l) put(hash(Math.round(c.x * 2), Math.round(c.y * 2)) < 0.7 ? `tower${kit}` : `tower${kit}s`, c.x, c.y, c.L, 0.5);
+  }
+
   /** the first good spot on a ring: the wanted one, then closer in, then a little to the side */
   private ringSpot(a: number, rad: number): { x: number; y: number } | null {
     for (const [k, da] of [[1, 0], [0.7, 0], [1, 0.35], [1, -0.35], [0.45, 0], [0.7, 0.6], [0.7, -0.6]]) {
@@ -2216,7 +2293,8 @@ export class CampSprite {
       + `${town && modern ? `N${['jet', 'television', 'nuclear_power', 'rocket', 'automobile', 'school'].map((t) => (techs.has(t) ? t[0] : '')).join('')}${b.size > 300 ? 'B' : ''}` : ''}`
       + `${town && industrial ? `X${['factory', 'railway', 'school', 'vaccine', 'electricity', 'academy', 'theatre'].map((t) => (techs.has(t) ? t[0] : '')).join('')}` : ''}`
       + `${town && early ? `E${['palace', 'telescope', 'banking', 'coffeehouse', 'newspaper', 'post'].map((t) => (techs.has(t) ? t[0] : '')).join('')}` : ''}${colony ? 'C' : ''}`;
-    const key = `${tkind}:${n}:${b.settled}:${cold}:${props.join(',')}:${Math.round(b.x)},${Math.round(b.y)}`;
+    const wall = this.wallPlan(b, techs, town);
+    const key = `${tkind}:${n}:${b.settled}:${cold}:${props.join(',')}:${Math.round(b.x)},${Math.round(b.y)}:${wall?.kit ?? ''}${wall?.R ?? ''}`;
     if (key === this.key) return;
     // homes added since last time are built in four steps; the first look at a camp shows it finished
     const sameKind = this.key.split(':')[0] === tkind && this.key !== '';
@@ -2356,6 +2434,7 @@ export class CampSprite {
       s.zIndex = s.y;
       this.homes.addChild(s);
     });
+    if (wall) this.buildWall(wall.kit, wall.R);
     // an ocean ship rocks on the water next to a harbour town
     this.ship = null;
     const sea = techs.has('caravel') && b.settled && A.has('galleon0') ? this.harbourSpot(b) : null;
@@ -2435,6 +2514,7 @@ export class CampSprite {
       if (placed >= count) break;
       const x = bx + dx, y = by + dy;
       if (!this.r.walkable(x, y)) continue;
+      if (Math.hypot(dx, dy) <= (this.townR || 2) + 0.4) continue; // the fields lie outside the wall
       const L = this.r.levelAt(x, y);
       if (Math.abs(L - this.r.levelAt(bx, by)) > 1 || this.r.levelAt(x + 1, y) > L || this.r.levelAt(x, y + 1) > L) continue;
       const h = hash(x, y + 101);

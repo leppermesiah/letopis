@@ -563,6 +563,47 @@ export class Simulation {
     }
   }
 
+  /** how far the wall of a village or town reaches from its fire, in tiles (the same rule the map draws it by) */
+  wallReach(b: Band, size: number): number {
+    if (!b.settled || this.s.planet === 'mars') return 0;
+    const town = this.hasTech(b, 'mudbrick') && this.hasTech(b, 'walls');
+    return town ? Math.max(2, Math.min(5, 2 + Math.floor(size / 150))) : 2;
+  }
+
+  /** once a year two villages or towns whose walls have grown into each other become one: the one with more people
+   *  keeps its name, and the wall is built anew round both */
+  private joinWalls() {
+    const size = new Map<number, number>();
+    for (const p of this.s.people) size.set(p.bandId, (size.get(p.bandId) ?? 0) + 1);
+    const walled = this.s.bands.filter((b) => b.settled && (size.get(b.id) ?? 0) > 0)
+      .sort((a, b) => (size.get(b.id) ?? 0) - (size.get(a.id) ?? 0));
+    const gone = new Set<number>();
+    for (const t of walled) {
+      if (gone.has(t.id)) continue;
+      for (const v of walled) {
+        if (v === t || gone.has(v.id)) continue;
+        const ts = size.get(t.id) ?? 0, vs = size.get(v.id) ?? 0;
+        if (vs > ts) continue;
+        // the walls touch: the two rings of tiles are next to each other
+        if (dist(v, t) > this.wallReach(t, ts) + this.wallReach(v, vs) + 1.5) continue;
+        if (this.isCapital(v) || (v.kingdom != null && t.kingdom != null && v.kingdom !== t.kingdom)) continue;
+        if (ts + vs > this.townLimit(t) * 0.95) continue;
+        for (const p of this.s.people) if (p.bandId === v.id) { p.bandId = t.id; p.task = 'travel'; }
+        for (const tech of v.techs) this.addTech(t, tech);
+        t.food += v.food;
+        size.set(t.id, ts + vs);
+        gone.add(v.id);
+        this.emit('merge', 2, `Стените на ${this.bandLabel(t)} и ${this.bandLabel(v)} се допряха и двете места станаха едно, което запази името на ${this.bandLabel(t)}.`,
+          `${this.bandLabel(t, true)} и ${this.bandLabel(v)} пораснаха, докато стените им се допряха. Сега са едно място!`, undefined, t.id, this.bRefs(v),
+          [`The walls of ${this.bandEnLabel(t)} and ${this.bandEnLabel(v)} grew until they touched, and the two became one place, keeping the name of ${this.bandEnLabel(t)}.`,
+            `${this.bandEnLabel(t, true)} and ${this.bandEnLabel(v)} grew until their walls touched. Now they are one place!`],
+          [`Die Mauern ${this.bDe(t, 'gen')} und ${this.bDe(v, 'gen')} wuchsen, bis sie sich berührten, und beide wurden ein Ort, der den Namen ${this.bDe(t, 'gen')} behält.`,
+            `${this.bDe(t, 'nom', true)} und ${this.bDe(v, 'nom')} sind gewachsen, bis sich ihre Mauern berührten. Jetzt sind sie ein Ort!`]);
+        this.removeBand(v, t);
+      }
+    }
+  }
+
   /** king, queen (a king's wife), prince or princess (a king's child), for the family tree */
   private royalOf(id: number, motherId: number | null, fatherId: number | null, partnerId: number | null): TreeNode['royal'] {
     const kings = this.s.kingIds;
@@ -1087,7 +1128,7 @@ export class Simulation {
     this.contact();
     if (this.month === 6) { this.buildRoads(); this.buildRails(); }
     if (this.month === 7) this.kingdoms();
-    if (this.month === 8) { this.growTowns(); this.gatherVillages(); }
+    if (this.month === 8) { this.growTowns(); this.gatherVillages(); this.joinWalls(); }
     if (this.s.tick % 6 === 0) this.explore();
     if (this.mars) this.marsEvents(); else { this.randomEvents(members); this.disasters(members); }
     if (this.month === 4) this.voyages(members);

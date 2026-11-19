@@ -460,6 +460,21 @@ group('rocketdown', cells('DC', (1,)), 'thing', 0.075, 0)  # 4 frames: comes dow
 group('rocketup', cells('DC', (2,)), 'thing', 0.075, 0)    # 4 frames: lifts off
 group('mdrill', cells('DC', (3,)), 'pose', PEOPLE_WPP, 0)
 group('mbotanist', cells('DC', (4,)), 'pose', PEOPLE_WPP, 0)
+# town walls of each age (DD palisade, DE stone, DF castle, DG brick bastion, DH iron railing, DI white wall with a hedge):
+# straight pieces along a tile edge rising to the right (r) or left (l), gates, towers, half-built pieces, rubble, stairs
+for kit in ('DD', 'DE', 'DF', 'DG', 'DH', 'DI'):
+    first = os.path.join(CUT, f'{kit}11.png')
+    if not os.path.exists(first):
+        continue
+    # one straight piece spans one side of a tile (16 x 8 world units) and a little more, so the pieces overlap
+    wpp = 19 / Image.open(first).size[0]
+    for cid, name in ((f'{kit}11', 'r0'), (f'{kit}12', 'r1'), (f'{kit}13', 'l0'), (f'{kit}14', 'l1')):
+        group(f'wall{kit}{name}', cid, 'thing', wpp, 0)
+    for cid, name in ((f'{kit}21', 'gate{k}r'), (f'{kit}22', 'gate{k}l'), (f'{kit}23', 'tower{k}'), (f'{kit}24', 'tower{k}s'),
+                      (f'{kit}41', 'rubble{k}r'), (f'{kit}42', 'rubble{k}l'), (f'{kit}43', 'stairs{k}r'), (f'{kit}44', 'stairs{k}l')):
+        group(name.format(k=kit), cid, 'thing', wpp, 0)
+    group(f'wbuild{kit}r', f'{kit}31 {kit}32', 'thing', wpp, 0)
+    group(f'wbuild{kit}l', f'{kit}33 {kit}34', 'thing', wpp, 0)
 # everyday clothes of each age (sheets BS-CD, two per age: adults, then children and more poses); prefix e<era>
 for pre, a, b in (('e2', 'BS', 'BT'), ('e4', 'BU', 'BV'), ('e5', 'BW', 'BX'), ('e6', 'BY', 'BZ'), ('e7', 'CA', 'CB'), ('e8', 'CC', 'CD'), ('m9', 'CY', 'CZ')):
     group(pre + 'walk', cells(a, (1,)), 'person', 11, 64)
@@ -682,6 +697,8 @@ def main() -> int:
                 ay = max(0.5, 1 - 0.08 * w0 / h0)
                 if cid[:2] == 'CH' and cid[:4] not in ('CH41', 'CH42'):
                     ay = 0.9  # cars, buses, planes, the helicopter and the truck have no ground patch under them
+                if cid[:2] in ('DD', 'DE', 'DF', 'DG', 'DH', 'DI'):
+                    ay = 0.85  # wall pieces stand on the tile edge, no patch under them
                 if cid[:2] in ('DB', 'DC') and cid[:4] not in ('DB13',):
                     ay = 0.9  # Mars: machines, rocks and rockets stand on the bare ground, no patch under them
                 if cid[:2] == 'DA':
