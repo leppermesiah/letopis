@@ -51,6 +51,19 @@ public class MainActivity extends Activity {
         else open();
     }
 
+    // in the background the page goes quiet (the page stops its music and sounds when it is hidden)
+    @Override
+    protected void onPause() {
+        super.onPause();
+        web.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        web.onResume();
+    }
+
     @Override
     protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out);

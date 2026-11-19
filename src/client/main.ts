@@ -920,6 +920,15 @@ $('#musicToggle').onclick = () => {
   music.setVolume(v / 100);
   save('letopis.musicVol', v);
 };
+// in the Android app nothing plays while the app is in the background
+if ((window as unknown as { LetopisApp?: unknown }).LetopisApp) {
+  document.addEventListener('visibilitychange', () => {
+    const hidden = document.hidden;
+    music.hold(hidden);
+    if (hidden) sound.stop();
+    else if (soundOn) sound.start();
+  });
+}
 // the other world: a button to Mars once the first ship has landed there, and back to the Earth
 const planetBtn = $('#planetBtn') as HTMLButtonElement;
 document.body.classList.toggle('mars', !!BASE);

@@ -29,6 +29,14 @@ export class Music {
     this.update();
   }
 
+  /** the app went to the background: everything quiet at once, and back where it was */
+  hold(held: boolean) {
+    for (const p of this.playing) {
+      if (held) p.el.pause();
+      else if (this.on && p === this.playing[this.playing.length - 1]) void p.el.play().catch(() => {});
+    }
+  }
+
   setVolume(v: number) {
     this.volume = v;
     this.update();
