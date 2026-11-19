@@ -63,6 +63,13 @@ If humanity dies out, the world is archived in `/data/archive/` and a new one be
 | `LETOPIS_SEED` | random | seed of the first world |
 | `TZ` | `Europe/Sofia` | time zone |
 
+### Android app
+
+The `android/` folder holds a small Android app: the game from your own server in a full-screen view, with notifications.
+On the first start it asks for the server address (for example `192.168.1.10:2222`).
+About every 15 minutes, even when it is closed, it asks the server for the big events and shows the ones you chose under the Notifications button.
+The APK is attached to every release.
+
 ## Building from source
 
 Requires Node.js 22.
@@ -85,9 +92,14 @@ python3 -I tools/build_atlas.py     # builds public/sprites/atlas*.webp and atla
 
 The finished atlas is in git, so Python is not needed to build the game.
 
+### Android
+
+Needs JDK 17, Gradle 8.10 and the Android SDK: `gradle -p android assembleRelease`.
+
 ## API
 
 `/api/health`, `/api/world`, `/api/snapshot`, `/api/chronicle?before=&after=&min=&limit=`, `/api/since?after=`,
+`/api/news?after=&kinds=&lang=&kids=` (the Android notifications),
 `/api/person/:id`, `/api/tree/:id`, `/api/band/:id`, `/api/heroes`, `/api/discoveries`, `/api/stats`, `/api/worlds`, WebSocket `/ws`.
 `/api/health` works well as a sensor for Home Assistant or any uptime monitor.
 

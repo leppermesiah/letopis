@@ -20,6 +20,11 @@ const TAG_ORDER: Tag[] = ['breaking', 'new', 'old'];
 
 /** newest first; a new version gets its own entry here */
 export const CHANGELOG: Release[] = [
+  { v: '1.82', items: [
+    ['Приложение за Android: играта на телефона като истинско приложение, без браузър. При първото пускане питаш адреса на сървъра. Бутонът „Известия“ избира за какво телефонът да те известява: открития и нови епохи, известни личности, царства, нови селища и сливания, бедствия, и от Марс. Приложението проверява на около 15 минути, дори когато е затворено.',
+      'Android app: the game on the phone as a real app, without a browser. On the first start it asks for the address of the server. The “Notifications” button chooses what the phone tells you about: discoveries and new ages, famous people, kingdoms, new places and mergers, disasters, and Mars too. The app looks about every 15 minutes, even when it is closed.',
+      'Android-App: Das Spiel auf dem Handy als richtige App, ohne Browser. Beim ersten Start fragt sie nach der Adresse des Servers. Der Knopf „Mitteilungen“ wählt, worüber dich das Handy benachrichtigt: Entdeckungen und neue Zeitalter, berühmte Persönlichkeiten, Königreiche, neue Orte und Zusammenschlüsse, Katastrophen und auch der Mars. Die App schaut etwa alle 15 Minuten nach, auch wenn sie geschlossen ist.', 'add'],
+  ] },
   { v: '1.81', items: [
     ['Стени: всяко село и град вече има стена около себе си, която расте заедно с него. Колове в Каменната епоха, камък в Бронзовата и Желязната, крепостни стени през Средновековието, тухлени бастиони в Новата епоха, чугунени огради в индустриалната и ниски бели стени с жив плет накрая. Нивите остават извън стените. Когато стените на две селища се допрат, те се сливат в едно и то носи името на по-голямото.',
       'Walls: every village and town now has a wall around it that grows with it. Wooden stakes in the Stone Age, stone in the Bronze and Iron Ages, castle walls in the Middle Ages, brick bastions in the Early Modern age, cast-iron railings in the Industrial age and low white walls with hedges at the end. The fields stay outside the walls. When the walls of two places touch, they merge into one, which keeps the name of the bigger one.',

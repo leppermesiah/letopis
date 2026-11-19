@@ -15,6 +15,7 @@ import { ERAS_DE, TECH_DESC_DE, bandTextCaseDe } from '../shared/i18n-de';
 import { isWoman } from '../shared/people-l10n';
 import type { Lang } from '../shared/i18n';
 import { hasNews, helpWindowHtml } from './help';
+import { initApp } from './app';
 import {
   B, BL, CAUSE, CHIEF, DE, DEED, EN, ERA, L3, LANG, LOCALE, GENE, HERO, P, SECRET_KIND, T, TASK, TECH, TECH_ID, TITLE, VILLAGE, fmtYear, monthName, num, refName, setLang, translatePage,
 } from './lang';
@@ -853,6 +854,8 @@ $('#kidsBtn').onclick = () => {
   renderSide();
 };
 document.body.classList.toggle('kids', kids);
+// inside the Android app: what the phone should tell you about
+initApp(() => kids);
 $('#kidsBtn').setAttribute('aria-pressed', String(kids));
 let night = store('letopis.night', true);
 r.night = night;

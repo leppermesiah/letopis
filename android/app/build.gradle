@@ -1,0 +1,51 @@
+import groovy.json.JsonSlurper
+
+plugins {
+    id 'com.android.application'
+}
+
+// the same version as the game
+def pkg = new JsonSlurper().parse(file('../../package.json'))
+def (maj, min, patch) = pkg.version.tokenize('.').collect { it as int }
+
+android {
+    namespace 'eu.letopis.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'eu.letopis.app'
+        minSdk 26
+        targetSdk 34
+        versionCode maj * 10000 + min * 100 + patch
+        versionName pkg.version
+    }
+
+    // the key for the release comes from the CI secrets; without it the build is signed with the debug key
+    signingConfigs {
+        release {
+            def ks = System.getenv('LETOPIS_KEYSTORE')
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv('LETOPIS_KEY_PASS')
+                keyAlias 'letopis'
+                keyPassword System.getenv('LETOPIS_KEY_PASS')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig System.getenv('LETOPIS_KEYSTORE') ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.work:work-runtime:2.9.1'
+}

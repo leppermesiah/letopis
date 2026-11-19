@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Летопис</string>
+    <string name="server_title">Сървър на Летопис</string>
+    <string name="server_hint">Например 192.168.1.10:2222</string>
+    <string name="server_text">Адресът на сървъра, на който живее светът.</string>
+    <string name="ok">Отвори</string>
+    <string name="cancel">Отказ</string>
+    <string name="retry">Опитай пак</string>
+    <string name="offline">Сървърът не отговаря.</string>
+    <string name="change">Друг сървър</string>
+    <string name="channel">Летопис</string>
+    <string name="channel_text">Големите събития в света</string>
+</resources>
