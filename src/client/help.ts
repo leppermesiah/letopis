@@ -20,6 +20,9 @@ const TAG_ORDER: Tag[] = ['breaking', 'new', 'old'];
 
 /** newest first; a new version gets its own entry here */
 export const CHANGELOG: Release[] = [
+  { v: '1.90.2', items: [
+    ['Всяка тайна е свой приказен герой. Намерените са с лек зелен контур и с картинка в списъка.', 'Every secret is its own fairy tale hero. Found ones get a soft green rim and a picture in the list.', 'Jedes Geheimnis ist eine eigene Märchenfigur. Gefundene haben einen zarten grünen Rand und ein Bild in der Liste.', 'add'],
+  ] },
   { v: '1.90.1', items: [
     ['Тайните се местят всеки май на чисто място.', 'The secrets move to a clean spot every May.', 'Die Geheimnisse ziehen jeden Mai an einen freien Ort um.', 'add'],
   ] },

@@ -879,7 +879,7 @@ export class WorldRenderer {
     for (const x of this.secrets) { x.s.destroy(); for (const q of x.rim) q.destroy(); }
     this.secretShown = round;
     this.secrets = secretSpots(seed, w, h, this.biome, this.river, round, taken, before).map((spot) => {
-      const s = this.atlas.sprite(`sec_${SECRET_KINDS[spot.kind].id}0`);
+      const s = this.atlas.sprite(this.secretSprite(spot));
       const p = this.tileTop(spot.x, spot.y);
       s.position.set(p.x, p.y);
       s.zIndex = p.y;
@@ -887,7 +887,7 @@ export class WorldRenderer {
       s.visible = false;
       // a found one gets a thin soft green rim: four green copies a hair to each side, behind it
       const rim = [[-1, 0], [1, 0], [0, -1], [0, 1]].map(([dx, dy]) => {
-        const q = this.atlas.sprite(`sec_${SECRET_KINDS[spot.kind].id}0`);
+        const q = this.atlas.sprite(this.secretSprite(spot));
         q.position.set(p.x + dx * 0.45, p.y + dy * 0.45);
         q.zIndex = p.y - 0.01;
         q.eventMode = 'none';
@@ -899,6 +899,11 @@ export class WorldRenderer {
       this.peopleLayer.addChild(s);
       return { spot, s, i: Math.round(spot.y) * this.info.w + Math.round(spot.x), found: this.secretFound.has(spot.k), rim };
     });
+  }
+
+  /** the picture of secret k: its fairy tale hero, or the old kinds while the heroes are not drawn */
+  secretSprite(spot: SecretSpot, frame = 0): string {
+    return this.atlas.has(`hero${spot.k}`) ? `hero${spot.k}` : `sec_${SECRET_KINDS[spot.kind].id}${frame}`;
   }
 
   /** called with the time of every month */
@@ -933,10 +938,10 @@ export class WorldRenderer {
       const t = this.temp[x.i] / 255;
       const snow = t < 0.33 ? Math.min(1, winter * 1.2) : t < 0.5 && winter >= 1 ? 0.7 : 0;
       x.s.alpha = (x.found ? 0.95 : 0.6) * (1 - snow * 0.97);
-      const id = SECRET_KINDS[x.spot.kind].id;
       const f = Math.floor(nowMs / 1600 + x.spot.k * 0.37) % 2;
-      this.atlas.set(x.s, `sec_${id}${f}`);
-      if (x.found) for (const q of x.rim) { this.atlas.set(q, `sec_${id}${f}`); q.alpha = x.s.alpha * 0.5; }
+      const name = this.secretSprite(x.spot, f);
+      this.atlas.set(x.s, name);
+      if (x.found) for (const q of x.rim) { this.atlas.set(q, name); q.alpha = x.s.alpha * 0.5; }
     }
   }
 

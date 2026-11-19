@@ -189,6 +189,9 @@ group('sec_robot', 'R31 R32', 'prop', 5.5, 40)
 group('sec_stag', 'R33 R34', 'prop', 6.6, 48)
 group('sec_dragon', 'R41 R42', 'prop', 6.6, 48)
 group('sec_portal', 'R43 R44', 'prop', 6.6, 48)
+# the 100 fairy tale heroes of the secrets (sheet DJ, 10 x 10): hero0..hero99 in the order of the secrets
+for _k in range(100):
+    group(f'hero{_k}', f'DJ{_k // 10 + 1}{_k % 10 + 1:02}', 'thing', 0.058, 0)
 # chiefs (sheets S-V, 8 frames each): A young/old, B young/old; their cream fur is kept as drawn (no band tint)
 for look, young, old in (('chiefA', 'S', 'T'), ('chiefB', 'U', 'V')):
     for age, sheet in (('y', young), ('o', old)):
@@ -670,7 +673,7 @@ def main() -> int:
             elif kind in ('pose', 'thing'):
                 # world units per sheet pixel: the sheet keeps its own sizes between cells
                 ww = w0 * world
-                w = max(1, round(ww * (5.6 if kind == 'pose' else 4.6)))
+                w = max(1, round(ww * (5.6 if kind == 'pose' else 10 if cid[:2] == 'DJ' else 4.6)))
                 h = max(1, round(h0 * w / w0))
                 s = ww / w
             elif kind == 'grow':
@@ -697,6 +700,8 @@ def main() -> int:
                 ay = max(0.5, 1 - 0.08 * w0 / h0)
                 if cid[:2] == 'CH' and cid[:4] not in ('CH41', 'CH42'):
                     ay = 0.9  # cars, buses, planes, the helicopter and the truck have no ground patch under them
+                if cid[:2] == 'DJ':
+                    ay = 0.93  # the heroes stand on nothing
                 if cid[:2] in ('DD', 'DE', 'DF', 'DG', 'DH', 'DI'):
                     ay = 0.85  # wall pieces stand on the tile edge, no patch under them
                 if cid[:2] in ('DB', 'DC') and cid[:4] not in ('DB13',):

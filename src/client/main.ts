@@ -464,7 +464,7 @@ function renderSide() {
 }
 
 /** the little picture of secret k for the list */
-const secretIcon = (k: number) => atlas.html(`sec_${SECRET_KINDS[k % SECRET_KINDS.length].id}0`, 22, 'secret-ico');
+const secretIcon = (k: number, size = 22) => atlas.html(atlas.has(`hero${k}`) ? `hero${k}` : `sec_${SECRET_KINDS[k % SECRET_KINDS.length].id}0`, size, 'secret-ico');
 
 let statsAt = 0;
 interface StatRow { year: number; population: number; bands: number; era: number; techs: number; villages?: number; born?: number; died?: number; kingdoms?: number; disaster?: number }
@@ -697,9 +697,9 @@ async function showSecret(spot: SecretSpot) {
   r.markSecret(spot.k);
   if (activeTab === 'secrets') renderSide();
   openCard(`
-    <h2>✨ ${T('№', '#', 'Nr. ')}${spot.k + 1} ${esc(HERO(spot.k))}</h2>
-    <div class="muted">${esc(kind.name[0].toUpperCase() + kind.name.slice(1))}</div>
-    <p>${esc(kind.text)}</p>
+    <h2>${secretIcon(spot.k, 40)} ${T('№', '#', 'Nr. ')}${spot.k + 1} ${esc(HERO(spot.k))}</h2>
+    ${atlas.has(`hero${spot.k}`) ? `<p>${esc(T(`Тук се криеше ${HERO(spot.k)}.`, `${HERO(spot.k)} was hiding here.`, `${HERO(spot.k)} hatte sich hier versteckt.`))}</p>`
+    : `<div class="muted">${esc(kind.name[0].toUpperCase() + kind.name.slice(1))}</div><p>${esc(kind.text)}</p>`}
     <div class="muted">${res ? `${res.first ? T('Ти си първият, който я откри!', 'You are the first to find it!', 'Niemand war vor dir hier: Du hast es zuerst gefunden!') : T('Някой вече я е открил преди теб.', 'Someone found it before you.', 'Jemand hat es schon vor dir gefunden.')} ${T('Намерени тайни', 'Secrets found', 'Gefundene Geheimnisse')}: ${res.found} ${T('от', 'of', 'von')} ${SECRET_COUNT}.` : ''}</div>`);
 }
 

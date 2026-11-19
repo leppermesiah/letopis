@@ -19,7 +19,9 @@ ALPHA_CUT = 128   # below this a pixel is background
 ERODE = 3         # px eaten from the outline: removes the coloured halo the generator leaves
 MIN_PART = 0.04
 # sheets that are not 4x4: letter -> (rows, columns); their cells are named <letter><row><column, two digits>
-GRIDS = {'AQ': (5, 10), 'AR': (5, 10)}
+GRIDS = {'AQ': (5, 10), 'AR': (5, 10), 'DJ': (10, 10)}
+# tightly packed sheets whose figures reach into the next cell
+STRAYS = {'DJ'}
 # sheets with clear glass helmets: the magenta seen through the glass becomes a faint light bubble, not a hole
 GLASS = {'CY', 'CZ', 'DB', 'DC'}   # parts smaller than this share of the biggest part are specks and are dropped
 
@@ -82,6 +84,47 @@ def dilate(mask: np.ndarray, r: int) -> np.ndarray:
     return ~erode(~mask, r)
 
 
+def gap_cuts(mask: np.ndarray, axis: int, n: int) -> list[int]:
+    """The rows of a packed sheet are not even: cut at the nearly empty lines closest to the nominal ones."""
+    f = np.convolve(mask.sum(axis=1 - axis), np.ones(7) / 7, 'same')
+    size = len(f)
+    lows = [y for y in range(10, size - 10) if f[y] == f[y - 10:y + 11].min() and f[y] < 200]
+    cuts = [0]
+    for k in range(1, n):
+        nominal = size * k / n
+        near = [y for y in lows if abs(y - nominal) < size / n * 0.6]
+        cuts.append(min(near, key=lambda y: abs(y - nominal)) if near else round(nominal))
+    return cuts + [size]
+
+
+def blob_owners(mask: np.ndarray, nr: int, nc: int):
+    """Tightly packed sheets: every blob belongs to the cell its middle lies in (needs SciPy)."""
+    from scipy import ndimage
+    labels, n = ndimage.label(mask, structure=np.ones((3, 3)))
+    rows, cols = gap_cuts(mask, 0, nr), gap_cuts(mask, 1, nc)
+    print('cells', rows, cols)
+    owner = np.zeros(n + 1, dtype=int) - 1
+    for i, sl in enumerate(ndimage.find_objects(labels), start=1):
+        ys, xs = np.nonzero(labels[sl] == i)
+        cy, cx = sl[0].start + ys.mean(), sl[1].start + xs.mean()
+        r = min(nr - 1, int(np.searchsorted(rows, cy, 'right')) - 1)
+        c = min(nc - 1, int(np.searchsorted(cols, cx, 'right')) - 1)
+        owner[i] = r * nc + c
+    return labels, owner
+
+
+def own_blobs(img: np.ndarray, labels: np.ndarray, owner: np.ndarray, cell: int) -> np.ndarray:
+    """The part of the sheet with only the blobs of one cell, cut to their box."""
+    mine = dilate(np.isin(labels, np.flatnonzero(owner == cell)), 3) & (img[..., 3] >= ALPHA_CUT)
+    ys, xs = np.nonzero(mine)
+    if not len(ys):
+        return img[:1, :1] * 0
+    y0, y1, x0, x1 = max(0, ys.min() - 2), ys.max() + 3, max(0, xs.min() - 2), xs.max() + 3
+    out = img[y0:y1, x0:x1].copy()
+    out[..., 3] = np.where(mine[y0:y1, x0:x1], out[..., 3], 0)
+    return out
+
+
 def clean_cell(rgba: np.ndarray, symbol: bool = False, glass: bool = False) -> np.ndarray | None:
     mask = rgba[..., 3] >= ALPHA_CUT
     if symbol:
@@ -106,11 +149,14 @@ def clean_cell(rgba: np.ndarray, symbol: bool = False, glass: bool = False) -> n
     return out
 
 
-def key_magenta(img: np.ndarray, glass: bool = False) -> np.ndarray:
-    """Sheets made on a solid #FF00FF background (no real transparency): magenta -> transparent."""
+def key_magenta(img: np.ndarray, glass: bool = False, strict: bool = False) -> np.ndarray:
+    """Sheets made on a solid #FF00FF background (no real transparency): magenta -> transparent.
+    strict: only bright magenta goes, for sheets with purple in the sprites (the Cheshire Cat)."""
     rgb = img[..., :3].astype(np.int32)
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
     magenta = (r - g > 90) & (b - g > 90) & (np.abs(r - b) < 90)
+    if strict:
+        magenta &= (r > 200) & (b > 200)
     out = img.copy()
     out[..., 3] = np.where(magenta, 0, 255)
     # pull the pink spill out of the edges
@@ -139,16 +185,22 @@ def main() -> int:
             continue  # only the sheets named on the command line
         img = np.array(Image.open(os.path.join(SHEETS, name)).convert('RGBA'))
         if img[..., 3].min() == 255:
-            img = key_magenta(img, letter in GLASS)
+            img = key_magenta(img, letter in GLASS, letter in STRAYS)
         mask = img[..., 3] >= ALPHA_CUT
         nr, nc = GRIDS.get(letter, (4, 4))
         rows = find_cuts(mask, 0, nr, search=40 if nr > 4 else 60)
         cols = find_cuts(mask, 1, nc, search=40 if nc > 4 else 60)
+        if letter in STRAYS:
+            # who owns what: from the usual key, which keeps the figures apart; the pixels: from the strict one
+            loose = key_magenta(np.array(Image.open(os.path.join(SHEETS, name)).convert('RGBA')))[..., 3] >= ALPHA_CUT
+            labels, owner = blob_owners(loose, nr, nc)
         for r in range(nr):
             for c in range(nc):
                 cid = f'{letter}{r + 1}{c + 1:02}' if letter in GRIDS else f'{letter}{r + 1}{c + 1}'
                 cell = img[rows[r]:rows[r + 1], cols[c]:cols[c + 1]]
-                sprite = clean_cell(cell, symbol=letter in GRIDS, glass=letter in GLASS)
+                if letter in STRAYS:
+                    cell = own_blobs(img, labels, owner, r * nc + c)
+                sprite = clean_cell(cell, symbol=letter in GRIDS and letter not in STRAYS, glass=letter in GLASS)
                 if sprite is None:
                     print(f'{cid}: empty', file=sys.stderr)
                     continue
