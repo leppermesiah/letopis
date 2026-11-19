@@ -1164,7 +1164,8 @@ export class WorldRenderer {
     for (const l of byBand.values()) {
       const chief = l.find((r) => r[7] === 1);
       const scouting = !!chief && TASKS[chief[3]] === 'scout';
-      const men = l.filter((r) => r[6] === 0 && r[7] !== 1 && r[5] >= 18 && r[5] < 50 && TASKS[r[3]] !== 'scout').sort((a, b) => a[0] - b[0]);
+      // a guard stays a guard from 18 until he dies or retires (an elder, at 59)
+      const men = l.filter((r) => r[6] === 0 && r[7] !== 1 && r[5] >= 18 && TASKS[r[3]] !== 'elder' && TASKS[r[3]] !== 'scout').sort((a, b) => a[0] - b[0]);
       const n = l.length >= 8 ? 2 : 1;
       men.slice(0, n).forEach((r, k) => out.set(r[0], scouting && n === 2 && k === 1 ? 'bodyguard' : 'guard'));
       const teller = l.find((r) => r[6] === 0 && r[5] >= 70 && TASKS[r[3]] !== 'scout');
@@ -1195,13 +1196,14 @@ export class WorldRenderer {
     return null;
   }
 
-  /** what a person is doing right now, when the night changes it (null: the day's task) */
+  /** what a person is doing right now, when the guard duty or the night changes it (null: the day's task) */
   nightTask(id: number, task?: number): string | null {
     const p = this.people.get(id);
-    if (!this.nightNow) return null;
     const role = p?.role;
+    // the guards guard, day and night: that is what they look like too
     if (role === 'guard') return 'пази селото';
     if (role === 'bodyguard') return 'пази водача';
+    if (!this.nightNow) return null;
     if (TASKS[task ?? p?.task ?? 0] === 'scout') return null;
     return 'спи';
   }
