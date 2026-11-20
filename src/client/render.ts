@@ -2348,7 +2348,7 @@ export class CampSprite {
     const rest = props.filter((p) => !WALL_PROPS.has(p));
     props = [...walls, ...rest.slice(-(12 - walls.length))];
     // walls make a village a town: stone houses, and a temple once it keeps a calendar
-    const town = b.dwelling === 'house' && techs.has('walls') && this.r.atlas.has('townb3');
+    const town = b.dwelling === 'house' && techs.has('walls') && !b.isle && this.r.atlas.has('townb3');
     // a town spreads out as it grows: every building on its own tile, the things around it further out
     const tiles = town ? this.townTiles(Math.max(2, Math.min(5, 2 + Math.floor(b.size / 150)))) : [];
     this.townR = town ? Math.max(2, Math.min(5, 2 + Math.floor(b.size / 150))) : 0;

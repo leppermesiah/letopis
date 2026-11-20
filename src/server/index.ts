@@ -250,7 +250,7 @@ function discoveries(sim: Simulation): Discovery[] {
 
 function snapshot(sim: Simulation): SnapshotMessage {
   return {
-    t: 'snapshot', time: sim.timeInfo(SPEED), bands: sim.bandViews(), people: sim.personRows(), explored: sim.exploredB64(), trees: sim.treesB64(), roads: sim.roadsB64(),
+    t: 'snapshot', time: sim.timeInfo(SPEED), bands: sim.bandViews(), people: sim.personRows(), seas: sim.seaViews(), explored: sim.exploredB64(), trees: sim.treesB64(), roads: sim.roadsB64(),
     population: sim.s.people.length, totalBorn: sim.s.totalBorn, totalDied: sim.s.totalDied,
   };
 }
@@ -368,7 +368,7 @@ function broadcast(sim: Simulation, clients: Set<WebSocket>, pendingEvents: Tick
     return;
   }
   const msg: TickMessage = {
-    t: 'tick', time: sim.timeInfo(SPEED), bands: sim.bandViews(), people: sim.personRows(), events: pendingEvents,
+    t: 'tick', time: sim.timeInfo(SPEED), bands: sim.bandViews(), people: sim.personRows(), seas: sim.seaViews(), events: pendingEvents,
     population: sim.s.people.length,
   };
   if (sim.exploredDirty) {

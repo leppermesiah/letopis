@@ -114,6 +114,8 @@ export interface BandView {
   dwelling: 'none' | 'tent' | 'hut' | 'house';
   /** settlers came over the sea (early modern age) */
   colony?: boolean;
+  /** on a small island: always a village */
+  isle?: boolean;
   /** the way of life its culture learned: farm, herd, fish, craft, build, forage or mixed */
   style?: string;
   /** iron age: the kingdom of this town (place = its Bulgarian name) */
@@ -161,12 +163,16 @@ export interface GoneBand {
   from?: { id: number; name: string } | null;
 }
 
+export interface SeaView { id: number; x: number; y: number; way: [number, number][]; techs: string[] }
+
 export interface TickMessage {
   t: 'tick';
   time: TimeInfo;
   bands: BandView[];
   people: PersonRow[];
   events: ChronicleEntry[];
+  /** ships of settlers at sea: where they are and the tiles they sailed this month */
+  seas?: SeaView[];
   explored?: string; // base64 bitset, only when changed
   /** trees that grew or were cut: [tile, stage, tile, stage, ...] */
   trees?: number[];
@@ -180,6 +186,8 @@ export interface SnapshotMessage {
   time: TimeInfo;
   bands: BandView[];
   people: PersonRow[];
+  /** ships of settlers at sea: where they are and the tiles they sailed this month */
+  seas?: SeaView[];
   explored: string;
   /** size of every tree, one byte per tile (0 none .. 4 big), base64 */
   trees: string;

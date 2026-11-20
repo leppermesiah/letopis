@@ -4,9 +4,11 @@
 import { Sprite } from 'pixi.js';
 import type { WorldRenderer } from './render';
 import { iso } from './render';
-import type { BandView } from '../shared/types';
+import type { BandView, SeaView } from '../shared/types';
 
 interface Harbour { id: number; x: number; y: number; kind: string; frames: number }
+/** a ship of settlers the simulation sails: slow, across the open sea */
+interface Voyager { s: Sprite; kind: string; frames: number; path: [number, number][]; t0: number; dur: number; seed: number }
 interface Ship { s: Sprite; path: [number, number][]; t: number; speed: number; kind: string; frames: number; seed: number }
 
 /** the best ship a town can build, and how many animation frames its sprite has */
@@ -19,6 +21,15 @@ function shipOf(techs: Set<string>): [string, number] | null {
   return null;
 }
 
+/** the ship that carries settlers far over the sea */
+function voyagerOf(techs: Set<string>): [string, number] {
+  if (techs.has('steamship')) return ['steamer', 4];
+  if (techs.has('caravel')) return ['caravel', 4];
+  if (techs.has('compass')) return ['cog', 1];
+  if (techs.has('harbor')) return ['galley', 1];
+  return ['rowship', 4];
+}
+
 const MAX_SHIPS = 10;
 const REACH = 70;
 
@@ -29,7 +40,40 @@ export class Fleet {
   private known = new Set<number>();
   private first = true;
   private lastSpawn = 0;
+  private voyagers = new Map<number, Voyager>();
   constructor(public r: WorldRenderer) {}
+
+  /** the settlers' ships: each month a stretch of their way, sailed slowly over the whole month */
+  updateSeas(seas: SeaView[], tickMs: number) {
+    const seen = new Set<number>();
+    for (const v of seas) {
+      seen.add(v.id);
+      let sh = this.voyagers.get(v.id);
+      if (!sh) {
+        let [kind, frames] = voyagerOf(new Set(v.techs));
+        if (!this.r.atlas.has(frames > 1 ? `${kind}0` : kind)) { kind = 'galleon'; frames = 4; }
+        if (!this.r.atlas.has(`${kind}0`) && !this.r.atlas.has(kind)) continue;
+        const s = this.r.atlas.sprite(frames > 1 ? `${kind}0` : kind);
+        this.r.peopleLayer.addChild(s);
+        sh = { s, kind, frames, path: [[v.x, v.y]], t0: performance.now(), dur: 1, seed: Math.random() * 100 };
+        this.voyagers.set(v.id, sh);
+      }
+      const at = this.voyagerAt(sh, performance.now());
+      sh.path = [at, ...v.way];
+      if (sh.path.length < 2) sh.path.push([v.x, v.y]);
+      sh.t0 = performance.now();
+      sh.dur = Math.max(800, tickMs * 0.98);
+    }
+    for (const [id, sh] of this.voyagers) if (!seen.has(id)) { sh.s.destroy(); this.voyagers.delete(id); }
+  }
+
+  private voyagerAt(sh: Voyager, now: number): [number, number] {
+    const k = Math.max(0, Math.min(1, (now - sh.t0) / sh.dur)) * (sh.path.length - 1);
+    const i = Math.min(sh.path.length - 2, Math.floor(k));
+    if (i < 0) return sh.path[0];
+    const f = k - i, [x0, y0] = sh.path[i], [x1, y1] = sh.path[i + 1];
+    return [x0 + (x1 - x0) * f, y0 + (y1 - y0) * f];
+  }
 
   /** a sea tile 1 to 5 steps from the town */
   private spot(b: BandView): { x: number; y: number } | null {
@@ -112,6 +156,19 @@ export class Fleet {
 
   frame(now: number, dt: number) {
     if (!this.r.info) return;
+    for (const sh of this.voyagers.values()) {
+      const [x, y] = this.voyagerAt(sh, now);
+      const p = this.r.tileTop(x, y);
+      sh.s.position.set(p.x, p.y + Math.sin(now / 600 + sh.seed) * 0.6);
+      if (sh.frames > 1) this.r.atlas.set(sh.s, `${sh.kind}${Math.floor(now / 400 + sh.seed) % sh.frames}`);
+      const k = Math.max(0, Math.min(1, (now - sh.t0) / sh.dur)) * (sh.path.length - 1);
+      const i = Math.max(0, Math.min(sh.path.length - 2, Math.floor(k)));
+      if (sh.path.length > 1) {
+        const [x0, y0] = sh.path[i], [x1, y1] = sh.path[i + 1];
+        const dx = iso(x1, y1).x - iso(x0, y0).x;
+        if (Math.abs(dx) > 0.01) sh.s.scale.x = Math.abs(sh.s.scale.x) * (dx < 0 ? -1 : 1);
+      }
+    }
     // now and then a ship leaves one harbour for another one not too far away
     if (now - this.lastSpawn > 6000 && this.harbours.length >= 2 && this.ships.length < Math.min(MAX_SHIPS, this.harbours.length)) {
       this.lastSpawn = now;

@@ -223,6 +223,7 @@ function onSnapshot(m: SnapshotMessage) {
   r.setExplored(b64decode(m.explored));
   r.updateBands(bands, kids);
   r.updatePeople(people, bandColors(), 400);
+  r.fleet.updateSeas(m.seas ?? [], 400);
   applyTime(m.time, m.population);
   $('#born').textContent = num(m.totalBorn);
   $('#died').textContent = num(m.totalDied);
@@ -237,6 +238,7 @@ function onTick(m: TickMessage) {
   if (m.roads) r.updateRoads(m.roads);
   r.updateBands(bands, kids);
   r.updatePeople(people, bandColors(), m.time.tickMs);
+  r.fleet.updateSeas(m.seas ?? [], m.time.tickMs);
   applyTime(m.time, m.population);
   for (const e of m.events) addEvent(e, true);
   // the open card keeps the age current while the years pass
