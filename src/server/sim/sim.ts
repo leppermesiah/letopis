@@ -326,7 +326,7 @@ export class Simulation {
 
   /** where tile (0, 0) lies in the coordinates of the first map */
   origin(): [number, number] {
-    const g = this.s.grid;
+    const g = this.s?.grid;
     return g ? [g.gx0 * this.mapSize, g.gy0 * this.mapSize] : [0, 0];
   }
 
