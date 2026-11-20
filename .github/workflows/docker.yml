@@ -94,16 +94,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Release a round version
+      - name: Release a new version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           V=$(node -p "require('./package.json').version.split('.').slice(0, 2).join('.')")
-          case "$V" in *0) ;; *) echo "v$V is not a round version"; exit 0 ;; esac
           if gh release view "v$V" > /dev/null 2>&1; then echo "v$V already released"; exit 0; fi
+          PREV=$(gh release list -L 1 --json tagName --jq '.[0].tagName // ""')
           npm ci
           npx esbuild scripts/release-notes.ts --bundle --platform=node --format=esm --outfile=dist/release-notes.mjs --log-level=warning
-          node dist/release-notes.mjs "$V" > notes.md
+          node dist/release-notes.mjs "$V" "$PREV" > notes.md
           gh release create "v$V" --title "Letopis $V" --notes-file notes.md --target "$GITHUB_SHA"
       - uses: actions/download-artifact@v4
         with:
