@@ -1163,8 +1163,8 @@ function setupAppMenu() {
   group('Изглед', 'View', 'Ansicht', $('#tourBtn'), $('#nightBtn'), wraps.find((w) => w.classList.contains('maps-wrap')) ?? null, $('#planetBtn'), $('#sideToggle'));
   group('Звук', 'Sound', 'Ton', wraps.find((w) => w.querySelector('#soundBtn')) ?? null);
   group('Настройки', 'Settings', 'Einstellungen', wraps.find((w) => w.classList.contains('app-wrap')) ?? null, $('#kidsBtn'), $('#langSel'), $('#helpBtn'));
-  $('#helpBtn').textContent = `?  ${T('Помощ и новости', 'Help and news', 'Hilfe und Neues')}`;
   document.body.append(btn, menu);
+  $('#helpBtn').textContent = `?  ${T('Помощ и новости', 'Help and news', 'Hilfe und Neues')}`;
   const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
   btn.onclick = (ev) => { ev.stopPropagation(); menu.hidden = !menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden)); };
   menu.addEventListener('click', (ev) => {
