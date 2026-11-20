@@ -244,3 +244,4 @@ a.ref:hover { border-bottom-style: solid; }
 #mapW { left: 12px; top: 50%; transform: translateY(-50%); }
 #mapE { right: 12px; top: 50%; transform: translateY(-50%); }
 body:not(.side-hidden) #mapE { right: calc(var(--side-w) + 24px); }
+.maps-wrap[hidden] { display: none; }

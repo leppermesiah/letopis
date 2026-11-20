@@ -543,15 +543,15 @@ function chartHover(c: HTMLCanvasElement, years: number[], series: Series[], ste
     const fx = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
     const st = steps?.(Math.round(fx * (n - 1)));
     const i = st ? st.at : Math.round(fx * (n - 1));
-    if (i === shown && !tip.hidden) return;
+    if (i !== shown || tip.hidden) drawChart(c, years, series, i);
     shown = i;
-    drawChart(c, years, series, i);
     const vals = series.filter((sr) => sr.values[i] != null).map((sr) => `<div><i style="background:${sr.color}"></i>${sr.label ? `${esc(sr.label)}: ` : ''}<b>${num(Math.round(sr.values[i]!))}</b></div>`);
     const names = st?.names ?? [];
     tip.innerHTML = `<div class="muted">${esc(fmtYear(st ? st.year : years[i]))}</div>${vals.join('')}${names.length ? `<div class="chart-found">${names.slice(0, 6).map(esc).join(', ')}${names.length > 6 ? ` +${names.length - 6}` : ''}</div>` : ''}`;
     tip.hidden = false;
-    const x = (i / (n - 1)) * r.width;
-    tip.style.left = `${Math.min(Math.max(0, x - tip.offsetWidth / 2), r.width - tip.offsetWidth)}px`;
+    // beside the mouse, never over it: on the side with more room
+    const mx = ev.clientX - r.left, tw = tip.offsetWidth;
+    tip.style.left = `${mx > r.width / 2 ? Math.max(0, mx - tw - 16) : Math.min(r.width - tw, mx + 16)}px`;
   };
   const hide = () => { tip.hidden = true; shown = -1; drawChart(c, years, series); };
   c.onpointermove = show;
@@ -893,6 +893,15 @@ function showBand(b: BandView) {
     const d = await api<PersonDetail>(`/api/person/${a.dataset.person}`).catch(() => null);
     if (d) a.textContent = P(d.name);
   });
+  keepInSight(b.x, b.y);
+}
+
+/** turn the camera so the village is not hidden behind its own card: to the left of it, or above it on a phone */
+function keepInSight(x: number, y: number) {
+  const card = ($('#card') as HTMLElement).getBoundingClientRect();
+  const p = r.tileTop(x, y), z = cam.tz;
+  if (card.left > 140) { cam.tx = p.x - (card.left / 2 - app.screen.width / 2) / z; cam.ty = p.y; }
+  else if (card.top > 110) { cam.tx = p.x; cam.ty = p.y - (card.top / 2 - app.screen.height / 2) / z; }
 }
 
 // ---------- while you were away ----------
