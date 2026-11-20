@@ -8,7 +8,7 @@ import type { BandView, SeaView } from '../shared/types';
 
 interface Harbour { id: number; x: number; y: number; kind: string; frames: number }
 /** a ship of settlers the simulation sails: slow, across the open sea */
-interface Voyager { s: Sprite; kind: string; frames: number; path: [number, number][]; t0: number; dur: number; seed: number }
+interface Voyager { s: Sprite; kind: string; frames: number; mul: number; path: [number, number][]; t0: number; dur: number; seed: number }
 interface Ship { s: Sprite; path: [number, number][]; t: number; speed: number; kind: string; frames: number; seed: number }
 
 /** the best ship a town can build, and how many animation frames its sprite has */
@@ -29,6 +29,9 @@ function voyagerOf(techs: Set<string>): [string, number] {
   if (techs.has('harbor')) return ['galley', 1];
   return ['rowship', 4];
 }
+
+/** the sail-and-oar ship is drawn at the people's scale on its sheet, where its rowers come out tiny: made bigger */
+const VOYAGER_SIZE: Record<string, number> = { rowship: 2.6 };
 
 const MAX_SHIPS = 10;
 const REACH = 70;
@@ -55,7 +58,7 @@ export class Fleet {
         if (!this.r.atlas.has(`${kind}0`) && !this.r.atlas.has(kind)) continue;
         const s = this.r.atlas.sprite(frames > 1 ? `${kind}0` : kind);
         this.r.peopleLayer.addChild(s);
-        sh = { s, kind, frames, path: [[v.x, v.y]], t0: performance.now(), dur: 1, seed: Math.random() * 100 };
+        sh = { s, kind, frames, mul: VOYAGER_SIZE[kind] ?? 1, path: [[v.x, v.y]], t0: performance.now(), dur: 1, seed: Math.random() * 100 };
         this.voyagers.set(v.id, sh);
       }
       const at = this.voyagerAt(sh, performance.now());
@@ -160,7 +163,10 @@ export class Fleet {
       const [x, y] = this.voyagerAt(sh, now);
       const p = this.r.tileTop(x, y);
       sh.s.position.set(p.x, p.y + Math.sin(now / 600 + sh.seed) * 0.6);
-      if (sh.frames > 1) this.r.atlas.set(sh.s, `${sh.kind}${Math.floor(now / 400 + sh.seed) % sh.frames}`);
+      // the atlas sets the size with every frame: bigger for the sail-and-oar ship (and keep the way it faces)
+      const facing = Math.sign(sh.s.scale.x) || 1;
+      this.r.atlas.set(sh.s, sh.frames > 1 ? `${sh.kind}${Math.floor(now / 400 + sh.seed) % sh.frames}` : sh.kind, sh.mul);
+      sh.s.scale.x *= facing;
       const k = Math.max(0, Math.min(1, (now - sh.t0) / sh.dur)) * (sh.path.length - 1);
       const i = Math.max(0, Math.min(sh.path.length - 2, Math.floor(k)));
       if (sh.path.length > 1) {
