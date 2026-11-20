@@ -36,7 +36,8 @@ const { Grassland: GR, Plains: PL, Forest: FO, Taiga: TA, Hills: HI, Mountain: M
   Snow: Biome.Snow, Desert: Biome.Desert, Tundra: Biome.Tundra, Marsh: Biome.Marsh, Beach: Biome.Beach,
 };
 const WARM = [3, 4, 5, 6, 7, 8];
-const walk = (id: string) => ({ stand: `${id}0`, move: [`${id}0`, `${id}1`] });
+/** a walk: four frames where the sheet has them, the old two elsewhere (missing frames are left out at run time) */
+const walk = (id: string) => ({ stand: `${id}0`, move: [`${id}0`, `${id}1`, `${id}2`, `${id}3`] });
 
 const WILD: Species[] = [
   // ice age: gone as the ice melts
@@ -109,7 +110,15 @@ class Animal {
   born = performance.now();
   life: number;
   gone = false;
+  /** the frames of its walk that the atlas has, and of its run (when it has one) */
+  moves: string[];
+  runs: string[];
+  /** running this stretch: a long way, for the animals that have a gallop */
+  running = false;
   constructor(public f: Fauna, public sp: Species, x: number, y: number, public range: number, public band = 0) {
+    this.moves = sp.move.filter((n) => f.r.atlas.has(n));
+    if (!this.moves.length) this.moves = [sp.stand];
+    this.runs = [0, 1, 2, 3].map((k) => `${sp.id}run${k}`).filter((n) => f.r.atlas.has(n));
     this.x = this.hx = this.tx = x;
     this.y = this.hy = this.ty = y;
     this.c.addChild(this.s);
@@ -139,13 +148,15 @@ class Animal {
       const dx = this.tx - this.x, dy = this.ty - this.y;
       const d = Math.hypot(dx, dy);
       if (d > 0.05 && this.wait <= 0) {
-        const v = Math.min(d, sp.speed * dt);
+        const v = Math.min(d, sp.speed * (this.running ? 2.6 : 1) * dt);
         this.x += (dx / d) * v;
         this.y += (dy / d) * v;
         const sdx = dx - dy; // screen direction in iso
         if (Math.abs(sdx) > 0.05) this.facing = sdx < 0 ? -1 : 1;
-        const k = Math.floor(now / (sp.how === 'fly' ? 260 : 200) + this.hx * 7) % sp.move.length;
-        this.set(sp.move[k]);
+        const mv = this.running ? this.runs : this.moves;
+        // four frames make a whole stride: a little quicker than the old two
+        const k = Math.floor(now / (sp.how === 'fly' ? 260 : this.running ? 110 : mv.length > 2 ? 160 : 200) + this.hx * 7) % mv.length;
+        this.set(mv[k]);
       } else {
         this.set(sp.stand);
         this.wait -= dt * 1000;
@@ -172,6 +183,8 @@ class Animal {
       if (dry && this.f.fits(this.sp, Math.round(x), Math.round(y))) {
         this.tx = x;
         this.ty = y;
+        // now and then a long way at a gallop
+        this.running = this.runs.length > 0 && Math.hypot(x - this.x, y - this.y) > 4 && Math.random() < 0.35;
         break;
       }
     }

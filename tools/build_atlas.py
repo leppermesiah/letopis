@@ -26,6 +26,10 @@ TW = 32  # tile width in world units (same as src/client/render.ts)
 GROUPS: list[tuple[str, list[str], str, float, int]] = []
 
 
+def cells(sheet, rows):
+    return ' '.join(f'{sheet}{r}{c}' for r in rows for c in (1, 2, 3, 4))
+
+
 def group(prefix: str, ids: str, kind: str, world: float, tex: int):
     GROUPS.append((prefix, ids.split(), kind, world, tex))
 
@@ -135,22 +139,23 @@ group('kidpuppy', 'L24', 'person', 8, 56)
 group('boywalk', 'L31 L32 L33 L34', 'person', 8, 56)
 group('girlwalk', 'L41 L42 L43 L44', 'person', 8, 56)
 # animals (kind 'animal': world size is the width, anchor at the hooves); frame 0 stands, 1 walks
-group('mammoth', 'M11 M12', 'animal', 24, 120)
-group('rhino', 'M13 M14', 'animal', 20, 104)
-group('cavebear', 'M21 M22', 'animal', 16, 88)
-group('megaloceros', 'M23 M24', 'animal', 18, 96)
-group('aurochs', 'M31 M32', 'animal', 18, 96)
-group('bison', 'M33 M34', 'animal', 18, 96)
-group('wildhorse', 'M41 M42', 'animal', 14, 80)
-group('reindeer', 'M43 M44', 'animal', 14, 80)
+# 'animal4': four frames of a walk (frame 0 also stands), one scale for all four from the first frame
+group('mammoth', cells('DK', (1,)), 'animal4', 24, 120)
+group('rhino', cells('DK', (2,)), 'animal4', 20, 104)
+group('cavebear', cells('DK', (3,)), 'animal4', 16, 88)
+group('megaloceros', cells('DK', (4,)), 'animal4', 18, 96)
+group('aurochs', cells('DL', (1,)), 'animal4', 18, 96)
+group('bison', cells('DL', (2,)), 'animal4', 18, 96)
+group('wildhorse', cells('DL', (3,)), 'animal4', 14, 80)
+group('reindeer', cells('DL', (4,)), 'animal4', 14, 80)
 group('reddeer', 'N11 N12', 'animal', 14, 80)
 group('boar', 'N13 N14', 'animal', 12, 72)
 group('wolf', 'N21 N22', 'animal', 11, 64)
 group('bear', 'N23 N24', 'animal', 15, 88)
-group('fox', 'N31 N32', 'animal', 9, 56)
-group('lynx', 'N33 N34', 'animal', 9, 56)
-group('hare', 'N41 N42', 'animal', 6, 40)
-group('beaver', 'N43 N44', 'animal', 7, 48)
+group('fox', cells('DN', (1,)), 'animal4', 9, 56)
+group('lynx', cells('DN', (2,)), 'animal4', 9, 56)
+group('hare', cells('DN', (3,)), 'animal4', 6, 40)
+group('beaver', cells('DN', (4,)), 'animal4', 7, 48)
 # birds and water: eagle, owl and crow have two flight frames; duck, swan and fish sit on the water
 group('eagle', 'O11 O12', 'animal', 12, 72)
 group('stork', 'O13 O14', 'animal', 7, 48)
@@ -172,11 +177,14 @@ group('horse', 'P33 P34', 'animal', 13, 72)
 group('hen', 'P41 P42', 'animal', 4, 32)
 group('donkey', 'P43 P44', 'animal', 10, 56)
 # south and desert
-group('lion', 'Q11 Q12', 'animal', 13, 72)
-group('camel', 'Q13 Q14', 'animal', 15, 80)
-group('elephant', 'Q21 Q22', 'animal', 22, 112)
-group('gazelle', 'Q23 Q24', 'animal', 9, 56)
-group('ostrich', 'Q31 Q32', 'animal', 9, 56)
+group('lion', cells('DO', (1,)), 'animal4', 13, 72)
+group('camel', cells('DO', (2,)), 'animal4', 15, 80)
+group('elephant', cells('DO', (3,)), 'animal4', 22, 112)
+group('gazelle', cells('DO', (4,)), 'animal4', 9, 56)
+group('reddeerrun', cells('DP', (2,)), 'animal4', 15, 84)
+group('wildhorserun', cells('DP', (3,)), 'animal4', 15.5, 88)
+group('wolfrun', cells('DP', (4,)), 'animal4', 13, 76)
+group('ostrich', cells('DP', (1,)), 'animal4', 9, 56)
 group('croc', 'Q33 Q34', 'animal', 14, 80)
 group('monkey', 'Q41 Q42', 'animal', 6, 40)
 group('cat', 'Q43 Q44', 'animal', 5, 32)
@@ -207,8 +215,6 @@ for sheet, kinds in (('W', 'spruceS bareS autumn bare'), ('X', 'birch birchY fru
     for c, kind in enumerate(kinds.split(), start=1):
         group(f'g_{kind}', ' '.join(f'{sheet}{r}{c}' for r in (1, 2, 3, 4)), 'grow', GROW_WPP, 0)
 # sheets AA-AF (world units per sheet pixel; 'pose' = people, 'thing' = objects)
-def cells(sheet, rows):
-    return ' '.join(f'{sheet}{r}{c}' for r in rows for c in (1, 2, 3, 4))
 PEOPLE_WPP = 0.0525  # a standing adult in these sheets is about 220 px = 11.5 world units
 for k, kind in enumerate(('oak', 'birch', 'pine', 'old'), start=1):
     group(f'stump_{kind}', f'AA1{k} AA2{k}', 'thing', 0.037, 0)  # 0 old, 1 fresh
@@ -681,6 +687,12 @@ def main() -> int:
                 w = max(1, round(ww * GROW_TEX))
                 h = max(1, round(h0 * w / w0))
                 s = ww / w
+            elif kind == 'animal4':
+                # the width of the first frame sets the scale, so legs and tails stretching out do not change the size
+                first = Image.open(os.path.join(CUT, f'{ids[0]}.png')).size[0]
+                w = max(1, round(w0 * tex / first))
+                h = max(1, round(h0 * w / w0))
+                s = world / tex
             else:
                 w = tex
                 h = max(1, round(h0 * w / w0))
@@ -691,7 +703,7 @@ def main() -> int:
                 ay = 0.97
             elif kind == 'symbol':
                 ay = 0.5
-            elif kind == 'animal':
+            elif kind in ('animal', 'animal4'):
                 ay = 0.96
             elif kind == 'pose':
                 ay = 0.95
