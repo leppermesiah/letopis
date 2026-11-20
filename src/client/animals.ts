@@ -63,7 +63,7 @@ const WILD: Species[] = [
   { id: 'heron', ...walk('heron'), how: 'walk', biomes: [MA, GR, FO, BE], river: true, group: [1, 1], speed: 0.25, weight: 2 },
   { id: 'crow', stand: 'crow', move: ['crowfly0', 'crowfly1', 'crowfly2', 'crowfly3'], how: 'walk', biomes: [GR, PL, FO, TA, HI, TU, BE], group: [1, 3], speed: 0.8, weight: 2 },
   { id: 'owl', stand: 'owl', move: ['owlfly0', 'owlfly1', 'owlfly2', 'owlfly3'], how: 'walk', biomes: [FO, TA], group: [1, 1], speed: 0.8, weight: 1 },
-  { id: 'eagle', stand: 'eagle0', move: ['eagle0', 'eagle1'], how: 'fly', biomes: [MO, HI, SN, TA], group: [1, 1], speed: 1.2, weight: 2 },
+  { id: 'eagle', stand: 'eagle0', move: ['eagle0', 'eagle1', 'eagle2', 'eagle3'], how: 'fly', biomes: [MO, HI, SN, TA], group: [1, 1], speed: 1.2, weight: 2 },
   // on the water
   { id: 'duck', ...walk('duck'), how: 'swim', biomes: [], minT: 0.2, group: [2, 4], speed: 0.25, weight: 3 },
   { id: 'swan', ...walk('swan'), how: 'swim', biomes: [], minT: 0.25, group: [1, 2], speed: 0.2, weight: 1.5 },
@@ -149,7 +149,8 @@ class Animal {
     } else {
       const dx = this.tx - this.x, dy = this.ty - this.y;
       const d = Math.hypot(dx, dy);
-      if (d > 0.05 && this.wait <= 0) {
+      // on the way: walk there; arrived: stand a while (the pause), then pick the next place
+      if (d > 0.05) {
         const v = Math.min(d, sp.speed * (this.running ? 2.6 : 1) * dt);
         this.x += (dx / d) * v;
         this.y += (dy / d) * v;
