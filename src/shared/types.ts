@@ -114,6 +114,8 @@ export interface BandView {
   dwelling: 'none' | 'tent' | 'hut' | 'house';
   /** settlers came over the sea (early modern age) */
   colony?: boolean;
+  /** the way of life its culture learned: farm, herd, fish, craft, build, forage or mixed */
+  style?: string;
   /** iron age: the kingdom of this town (place = its Bulgarian name) */
   kingdom?: { id: number; place: string; capital: boolean; members: number; color: number; founded: number; allies?: string[]; kings?: { id: number; name: string; from: number; to: number | null }[] } | null;
 }

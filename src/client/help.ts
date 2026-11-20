@@ -23,6 +23,7 @@ export const CHANGELOG: Release[] = [
   { v: '1.90.2', items: [
     ['Всяка тайна е свой приказен герой. Намерените са с лек зелен контур и с картинка в списъка.', 'Every secret is its own fairy tale hero. Found ones get a soft green rim and a picture in the list.', 'Jedes Geheimnis ist eine eigene Märchenfigur. Gefundene haben einen zarten grünen Rand und ein Bild in der Liste.', 'add'],
     ['Пазачът остава пазач от 18 години до смъртта или пенсията и така пише и в картата му.', 'A guard stays a guard from 18 until death or retirement, and his card says so.', 'Ein Wächter bleibt Wächter von 18 bis zum Tod oder Ruhestand, und so steht es auch auf seiner Karte.', 'fix'],
+    ['Културите се учат: сродните родове сами откриват дали да орат, гледат стада, ловят риба или събират, и се поучават от по-успешните съседи. Начинът на живот е в картата на рода.', 'Cultures learn: kindred clans find out by themselves whether to farm, herd, fish or gather, and learn from more successful neighbours. The way of life is on the clan card.', 'Kulturen lernen: Verwandte Clans finden selbst heraus, ob sie Ackerbau, Viehzucht, Fischfang oder Sammeln betreiben, und lernen von erfolgreicheren Nachbarn. Die Lebensweise steht auf der Clan-Karte.', 'add'],
   ] },
   { v: '1.90.1', items: [
     ['Тайните се местят всеки май на чисто място.', 'The secrets move to a clean spot every May.', 'Die Geheimnisse ziehen jeden Mai an einen freien Ort um.', 'add'],

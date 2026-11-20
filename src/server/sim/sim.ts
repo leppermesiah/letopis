@@ -6,6 +6,17 @@ import { Terrain, generateTerrain, generateMars, findStart, idx, inBounds, W, H,
 import { SECRET_COUNT, SECRET_HEROES, SECRET_KINDS, SecretFind } from '../../shared/secrets';
 import { FEMALE, MALE, bandColor, bandName, fixBandName, familyFrom, nickname, placeName } from './names';
 import { ERAS, TECHS, TECH_BY_ID, Tech, eraOf, techOpen } from './tech';
+import { CultureState, Cultures, JOBS, Job, MEM, newCulture } from './culture';
+
+/** a culture's way of life in the chronicle: [bg, en, de ("leben jetzt vor allem ...")] */
+const STYLE: Record<Job, [string, string, string]> = {
+  farm: ['орат земята', 'farming', 'vom Ackerbau'],
+  herd: ['гледат стада', 'herding', 'von der Viehzucht'],
+  fish: ['ловят риба', 'fishing', 'vom Fischfang'],
+  craft: ['живеят от занаяти', 'crafts', 'vom Handwerk'],
+  build: ['строят', 'building', 'vom Bauen'],
+  forage: ['ловуват и събират', 'hunting and gathering', 'von der Jagd und vom Sammeln'],
+};
 import { FAMOUS, fameRole } from '../../shared/famous';
 import { BIG, startStage, treeKinds } from '../../shared/trees';
 import { findRoad } from './roads';
@@ -94,6 +105,9 @@ export interface Band {
   kingdom?: number | null;
   /** founded by settlers who came over the sea (from v1.40) */
   colony?: boolean;
+  /** the culture it belongs to (from v1.90.2) and the numbers its network keeps from month to month */
+  culture?: number;
+  mem?: number[];
 }
 
 /** villages that joined under one crown, peacefully: the chief of the capital is the king */
@@ -113,6 +127,8 @@ export interface Kingdom {
 /** Everything in here is saved to disk. */
 export interface SimState {
   version: 1;
+  /** cultures that learn their way of life (from v1.90.2) */
+  cultures?: CultureState;
   worldId: string;
   seed: number;
   /** map side in tiles; missing in worlds saved before maps grew (192) */
@@ -206,6 +222,11 @@ export class Simulation {
   deadQueue: DeadRecord[] = [];
   goneQueue: GoneBand[] = [];
   exploredDirty = true;
+  private cul?: Cultures;
+  /** the cultures and their networks (made on first use, also for old worlds) */
+  private culs(): Cultures {
+    return (this.cul ??= new Cultures(this.s.cultures ??= { cultures: {}, next: 1 }, this.s.seed));
+  }
   /** set by the server so that dead people's names can be looked up */
   lookupDead: (id: number) => DeadRecord | null = () => null;
 
@@ -1114,6 +1135,7 @@ export class Simulation {
 
     this.regrow();
     this.growTrees();
+    if (this.month === 0) this.culturesYearly(members);
     for (const b of this.s.bands) {
       const m = members.get(b.id)!;
       if (m.length === 0) continue;
@@ -1177,6 +1199,95 @@ export class Simulation {
     return 1 - winter * (0.75 - temp * 0.5);
   }
 
+  /** the culture of a clan, a new one for a clan that has none (the first clans, settlers, old worlds) */
+  private cultureOf(b: Band, pop: number): number {
+    const st = this.culs().st;
+    if (b.culture === undefined || !st.cultures[b.culture]) b.culture = newCulture(st, b.name, this.s.tick, pop).id;
+    return b.culture;
+  }
+
+  /** what the clan feels this month, through its culture's network: how much to lean towards every job */
+  private cultureLean(b: Band, m: Person[], canFish: boolean, farms: boolean): number[] {
+    const c = this.cultureOf(b, m.length);
+    const a = (this.month / 12) * Math.PI * 2;
+    const cx = Math.round(b.cx), cy = Math.round(b.cy);
+    let game = 0, cap = 0;
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+      if (!inBounds(cx + dx, cy + dy)) continue;
+      const i = idx(cx + dx, cy + dy);
+      game += this.t.game[i]; cap += this.t.gameCap[i];
+    }
+    let crowd = 0;
+    for (const o of this.s.bands) if (o !== b && Math.abs(o.cx - b.cx) < 10 && Math.abs(o.cy - b.cy) < 10) crowd++;
+    const need = Math.max(1, b.lastNeed || m.length);
+    const x = [
+      Math.sin(a), Math.cos(a),
+      Math.max(-1, Math.min(1, 1 - (b.fed ?? 1))),
+      Math.tanh(b.food / need / 6),
+      cap > 0 ? game / cap * 2 - 1 : -1,
+      canFish ? 1 : -1,
+      farms ? 1 : -1,
+      1 - this.t.temp[idx(cx, cy)] * 2,
+      Math.tanh(m.length / 60) * 2 - 1,
+      b.settled ? 1 : -1,
+      Math.tanh(crowd / 4) * 2 - 1,
+      Math.max(-1, Math.min(1, (this.culs().st.cultures[c]?.last ?? 0) * 20)),
+      ...(b.mem ?? new Array(MEM).fill(0)),
+    ];
+    const avail = [farms, this.hasTech(b, 'herding'), canFish, this.hasTech(b, 'stone_tools'), b.settled && this.hasTech(b, 'mudbrick'), true];
+    const r = this.culs().lean(c, x, avail);
+    b.mem = r.mem.map((v) => Math.round(v * 1000) / 1000);
+    return r.lean;
+  }
+
+  /** once a year (January): the cultures learn, copy a better neighbour, split; the chronicle tells the new ways of life */
+  private culturesYearly(members: Map<number, Person[]>) {
+    const cu = this.culs();
+    const pops = new Map<number, number>(), bandPop = new Map<number, number>();
+    for (const b of this.s.bands) {
+      const n = members.get(b.id)?.length ?? 0;
+      bandPop.set(b.id, n);
+      const c = this.cultureOf(b, n);
+      pops.set(c, (pops.get(c) ?? 0) + n);
+    }
+    const near = new Map<number, Set<number>>();
+    for (const b of this.s.bands) for (const o of this.s.bands) {
+      if (b.culture === o.culture || Math.hypot(b.cx - o.cx, b.cy - o.cy) > 14) continue;
+      (near.get(b.culture!) ?? near.set(b.culture!, new Set()).get(b.culture!)!).add(o.culture!);
+    }
+    const biggest = (cid: number) => {
+      let best: Band | null = null;
+      for (const b of this.s.bands) if (b.culture === cid && (!best || (bandPop.get(b.id) ?? 0) > (bandPop.get(best.id) ?? 0))) best = b;
+      return best;
+    };
+    const { styled, taught } = cu.yearly(this.s.tick, pops, near);
+    const year = Math.floor(this.year);
+    for (const { c, style } of styled) {
+      const b = biggest(c.id);
+      if (!b || (pops.get(c.id) ?? 0) < 80 || (c.styleYear && year - c.styleYear < 60)) continue;
+      c.styleYear = year;
+      const st = STYLE[style as Job];
+      this.emit('culture', 2, `${this.bandLabel(b, true)} и сродните му родове заживяха по нов начин: ${st[0]}.`, undefined, undefined, b.id, [],
+        [`${this.bandEnLabel(b, true)} and its kindred clans took up a new way of life: ${st[1]}.`],
+        [`${this.bDe(b, 'nom', true)} und die verwandten Clans leben jetzt vor allem ${st[2]}.`]);
+    }
+    for (const { c, from } of taught) {
+      const b = biggest(c.id), t = biggest(from.id);
+      if (!b || !t || (c.styleYear && year - c.styleYear < 60) || !this.rng.chance(0.1)) continue;
+      c.styleYear = year;
+      const st = STYLE[from.style as Job];
+      this.emit('culture', 1, `${this.bandLabel(b, true)} се поучи от ${this.bandLabel(t)}: ${st[0]}.`, undefined, undefined, b.id, this.bRefs(t),
+        [`${this.bandEnLabel(b, true)} learned from ${this.bandEnLabel(t)}: ${st[1]}.`],
+        [`${this.bDe(b, 'nom', true)} lernte ${this.bWith('von', t)}: jetzt vor allem ${st[2]}.`]);
+    }
+    cu.split(this.s.tick, this.s.bands, bandPop, (id) => this.bandById.get(id)?.name ?? '');
+  }
+
+  /** the ways of life, for the chronicle: [bg, en, de] */
+  cultureStyle(b: Band): Job | 'mixed' | undefined {
+    return b.culture !== undefined ? this.culs().st.cultures[b.culture]?.style : undefined;
+  }
+
   private work(b: Band, m: Person[]) {
     const t = this.t;
     const tool = this.hasTech(b, 'iron') ? 1.65 : this.hasTech(b, 'bronze') ? 1.5 : this.hasTech(b, 'copper') ? 1.35 : this.hasTech(b, 'stone_tools') ? 1.25 : 1;
@@ -1207,6 +1318,13 @@ export class Simulation {
     if (this.hasTech(b, 'stone_tools')) jobs.push(['craft', 0.6]);
     if (b.settled && this.hasTech(b, 'mudbrick')) jobs.push(['build', 0.5]);
     jobs.push(['forage', farms ? 2 : 6] as unknown as [Task, number]);
+    // the culture's network leans the work towards what has worked for its clans
+    // (not while the world is only a few small clans: one bad try could end it)
+    const lean = this.s.people.length >= 200 ? this.cultureLean(b, m, canFish, farms) : [];
+    for (const j of jobs) j[1] *= lean[JOBS.indexOf(j[0] as Job)] ?? 1;
+    // whatever it learns, at most a fifth of the clan makes things instead of food
+    const sum = jobs.reduce((a, j) => a + j[1], 0), notFood = jobs.filter((j) => j[0] === 'craft' || j[0] === 'build').reduce((a, j) => a + j[1], 0);
+    if (notFood > sum * 0.2) for (const j of jobs) if (j[0] === 'craft' || j[0] === 'build') j[1] *= (sum - notFood) * 0.25 / notFood;
     const total = jobs.reduce((s2, j) => s2 + j[1], 0);
     for (const p of workers) {
       let r = this.rng.next() * total;
@@ -1949,6 +2067,7 @@ export class Simulation {
     }
     if (!best) return;
     const nb = this.newBand(best.x, best.y, undefined, b.techs);
+    nb.culture = b.culture;
     nb.chiefId = leader.id;
     nb.founder = { id: leader.id, name: this.nameOf(leader) };
     nb.from = { id: b.id, name: this.bandLabel(b, true) };
@@ -2318,6 +2437,7 @@ export class Simulation {
       dwelling: this.hasTech(b, 'mudbrick') ? 'house' : b.settled ? 'hut' : this.hasTech(b, 'shelter') ? 'tent' : 'none',
       colony: b.colony || undefined,
       kingdom: this.kingdomView(b),
+      style: this.cultureStyle(b),
     }));
   }
 

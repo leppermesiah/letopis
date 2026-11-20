@@ -325,7 +325,7 @@ function linkedText(e: ChronicleEntry): string {
 function eventHtml(e: ChronicleEntry): string {
   const icon: Record<string, string> = {
     famous: '🌟', discovery: '💡', rediscovery: '🔁', settle: '🏘️', colony: '🏘️', split: '🚶', death: '🕯️', twins: '👶', hunt: '🦣',
-    winter: '❄️', secret: '✨', drought: '☀️', extinct: '🌑', lost: '📜', meet: '🤝', learn: '📚', era: '⭐', milestone: '👥', genesis: '🌅', merge: '🔗', marriage: '💞', end: '🌑', kingdom: '👑', spring: '🌸', flood: '🌊', epidemic: '🦠', murrain: '🐄', ship: '🚀', storm: '🌪️', locusts: '🦗', harvest: '🌾', feast: '🎉', wedding: '💍',
+    winter: '❄️', secret: '✨', culture: '🧭', drought: '☀️', extinct: '🌑', lost: '📜', meet: '🤝', learn: '📚', era: '⭐', milestone: '👥', genesis: '🌅', merge: '🔗', marriage: '💞', end: '🌑', kingdom: '👑', spring: '🌸', flood: '🌊', epidemic: '🦠', murrain: '🐄', ship: '🚀', storm: '🌪️', locusts: '🦗', harvest: '🌾', feast: '🎉', wedding: '💍',
   };
   return `<li class="ev imp${e.importance}">
     <span class="ev-icon">${icon[e.kind] ?? '•'}</span>
@@ -576,6 +576,13 @@ function openRef(el: HTMLElement) {
   }
 }
 
+/** the way of life a clan's culture learned */
+const WAYS: Record<string, [string, string, string]> = {
+  farm: ['земеделци', 'farmers', 'Bauern'], herd: ['скотовъдци', 'herders', 'Viehzüchter'], fish: ['рибари', 'fishers', 'Fischer'],
+  craft: ['занаятчии', 'craftspeople', 'Handwerker'], build: ['строители', 'builders', 'Baumeister'], forage: ['ловци и събирачи', 'hunters and gatherers', 'Jäger und Sammler'],
+  mixed: ['от всичко по малко', 'a bit of everything', 'von allem etwas'],
+};
+
 /** "Основан от X, дошъл от Y" for a band card; the first bands came with the world */
 function originHtml(founder?: { id: number; name: string } | null, from?: { id: number; name: string } | null): string {
   if (!founder && !from) return `<div class="muted">${T('Един от първите родове на света.', 'One of the first clans of the world.', 'Einer der ersten Clans der Welt.')}</div>`;
@@ -797,6 +804,7 @@ function showBand(b: BandView) {
     ${b.chief ? `<div>${esc(CHIEF(b.chief.title, isWoman(b.chief.name)))}: <a href="#" data-person="${b.chief.id}">${esc(P(b.chief.name))}</a></div>` : ''}
     ${kingdomHtml(b.kingdom)}
     ${originHtml(b.founder, b.from)}
+    ${b.style && WAYS[b.style] ? `<div>${T('Начин на живот', 'Way of life', 'Lebensweise')}: ${esc(L3(...WAYS[b.style]))}</div>` : ''}
     <div class="kpis"><div><span>${T('Хора', 'People', 'Menschen')}</span><b>${b.size}</b></div><div><span>${T('Деца', 'Children', 'Kinder')}</span><b>${kidsN}</b></div><div><span>${T('Запаси', 'Food', 'Vorräte')}</span><b>${b.food}</b></div></div>
     <h3>${T('Какво правят сега', 'What they are doing', 'Was sie gerade tun')}</h3><ul class="deeds">${[...tasks].sort((a, c) => c[1] - a[1]).map(([t, n]) => `<li>${n} ${esc(t)}</li>`).join('')}</ul>
     <h3>${T('Какво знаят', 'What they know', 'Was sie wissen')}</h3><div class="techs">${b.techs.map((t) => `<span class="pill">${esc(TECH(t))}</span>`).join('') || `<span class="muted">${T('Още нищо', 'Nothing yet', 'Noch nichts')}</span>`}</div>
