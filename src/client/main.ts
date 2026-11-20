@@ -45,8 +45,12 @@ function save(key: string, v: unknown) {
 
 /** '/mars' when watching the second world: every question to the server goes there */
 const BASE = location.pathname.startsWith('/mars') ? '/mars' : '';
+/** the Earth can grow by whole maps: this page shows the whole world ('all') or one map ('gx,gy') */
+let viewMap = BASE ? 'all' : store<string>('letopis.view', 'all');
+/** questions about places on the map carry the view, so the server answers in its coordinates */
+const viewed = (path: string) => (/^\/api\/(world|snapshot|band\/)/.test(path) && viewMap !== 'all' ? `${path}${path.includes('?') ? '&' : '?'}map=${viewMap}` : path);
 async function api<T>(path: string): Promise<T> {
-  const r = await fetch(BASE + path);
+  const r = await fetch(BASE + viewed(path));
   if (!r.ok) throw new Error(`${path}: ${r.status}`);
   return r.json() as Promise<T>;
 }
@@ -266,12 +270,17 @@ setInterval(() => void checkVersion(), 60_000);
 }
 
 function connect() {
-  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${BASE}/ws`);
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${BASE}/ws${viewMap !== 'all' ? `?map=${viewMap}` : ''}`);
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.t === 'snapshot') onSnapshot(m);
     else if (m.t === 'tick') onTick(m);
     else if (m.t === 'newworld') location.reload();
+    // a ship opened a new map: load the world again, looking at the same place
+    else if (m.t === 'grew') {
+      const [x, y] = camTile();
+      goView(viewMap, viewMap === 'all' ? { x: x + m.dx, y: y + m.dy } : { x, y });
+    }
   };
   ws.onopen = () => { $('#conn').classList.remove('off'); void checkVersion(); };
   ws.onclose = () => {
@@ -327,7 +336,7 @@ function linkedText(e: ChronicleEntry): string {
 function eventHtml(e: ChronicleEntry): string {
   const icon: Record<string, string> = {
     famous: '🌟', discovery: '💡', rediscovery: '🔁', settle: '🏘️', colony: '🏘️', split: '🚶', death: '🕯️', twins: '👶', hunt: '🦣',
-    winter: '❄️', secret: '✨', culture: '🧭', drought: '☀️', extinct: '🌑', lost: '📜', meet: '🤝', learn: '📚', era: '⭐', milestone: '👥', genesis: '🌅', merge: '🔗', marriage: '💞', end: '🌑', kingdom: '👑', spring: '🌸', flood: '🌊', epidemic: '🦠', murrain: '🐄', ship: '🚀', storm: '🌪️', locusts: '🦗', harvest: '🌾', feast: '🎉', wedding: '💍',
+    winter: '❄️', secret: '✨', culture: '🧭', drought: '☀️', extinct: '🌑', lost: '📜', meet: '🤝', learn: '📚', era: '⭐', milestone: '👥', genesis: '🌅', merge: '🔗', marriage: '💞', end: '🌑', kingdom: '👑', spring: '🌸', flood: '🌊', epidemic: '🦠', murrain: '🐄', ship: '🚀', sail: '⛵', newland: '🗺️', storm: '🌪️', locusts: '🦗', harvest: '🌾', feast: '🎉', wedding: '💍',
   };
   return `<li class="ev imp${e.importance}">
     <span class="ev-icon">${icon[e.kind] ?? '•'}</span>
@@ -609,6 +618,13 @@ function originHtml(founder?: { id: number; name: string } | null, from?: { id: 
 
 async function showGoneBand(id: number) {
   const r2 = await api<{ live?: BandView; gone?: GoneBand }>(`/api/band/${id}`).catch(() => null);
+  const away = (r2 as { map?: [number, number] } | null)?.map;
+  if (r2?.live && away && info.grid) {
+    // on another map: go there and open it
+    const S = info.grid.size;
+    goView(`${away[0]},${away[1]}`, { x: r2.live.x - (away[0] - info.grid.gx0) * S, y: r2.live.y - (away[1] - info.grid.gy0) * S, band: id });
+    return;
+  }
   if (r2?.live) { const b = r2.live; stopTour(); lookAt(b.x, b.y, 1.6); showBand(b); return; }
   const g = r2?.gone;
   if (!g) { openCard(`<h2>${T('Изгубен в мъглата на времето', 'Lost in the mists of time', 'Im Nebel der Zeit verloren')}</h2><p class="muted">${T('Летописът не помни повече за този род.', 'The chronicle remembers nothing more of this clan.', 'Die Chronik weiß nichts mehr über diesen Clan.')}</p>`); return; }
@@ -965,6 +981,64 @@ const showPlanet = () => fetch('/api/planets').then((x) => x.json()).then((pl: {
 void showPlanet();
 setInterval(showPlanet, 60_000);
 planetBtn.onclick = () => { location.href = BASE ? '/' : '/mars/'; };
+// ---------- more maps: the whole world or one map at a time ----------
+
+/** the tile in the middle of the screen */
+function camTile(): [number, number] {
+  const a = cam.x / (TW / 2), b = cam.y / (TH / 2);
+  return [(a + b) / 2, (b - a) / 2];
+}
+
+/** show another view (the page loads again), looking at `at` in that view's tiles */
+function goView(map: string, at: { x: number; y: number; band?: number }) {
+  save('letopis.view', map);
+  try { sessionStorage.setItem('letopis.focus', JSON.stringify({ ...at, zoom: cam.zoom })); } catch { /* private mode */ }
+  location.reload();
+}
+
+/** the button that switches between the whole world and one map, and the arrows to the maps next door */
+function setupMaps() {
+  const g = info.grid;
+  const btn = $('#mapBtn') as HTMLButtonElement;
+  if (BASE || !g || g.open.length < 2) { btn.hidden = true; return; }
+  const S = g.size;
+  const open = (gx: number, gy: number) => g.open.includes(`${gx},${gy}`);
+  btn.hidden = false;
+  const label = () => {
+    btn.textContent = viewMap === 'all' ? T('Една карта', 'One map', 'Eine Karte') : T('Целият свят', 'Whole world', 'Ganze Welt');
+    btn.title = viewMap === 'all' ? T('Само картата под камерата: по-леко за телефона', 'Only the map under the camera: lighter for a phone', 'Nur die Karte unter der Kamera: leichter fürs Handy')
+      : T('Всички открити карти заедно', 'All the maps found so far together', 'Alle bisher entdeckten Karten zusammen');
+  };
+  label();
+  btn.onclick = () => {
+    const [x, y] = camTile();
+    if (viewMap === 'all') {
+      let gx = Math.floor(x / S) + g.gx0, gy = Math.floor(y / S) + g.gy0;
+      if (!open(gx, gy)) [gx, gy] = g.open.map((k) => k.split(',').map(Number)).sort((a, b) => Math.hypot(a[0] - gx, a[1] - gy) - Math.hypot(b[0] - gx, b[1] - gy))[0];
+      goView(`${gx},${gy}`, { x: Math.max(2, Math.min(S - 3, x - (gx - g.gx0) * S)), y: Math.max(2, Math.min(S - 3, y - (gy - g.gy0) * S)) });
+    } else {
+      const [gx, gy] = viewMap.split(',').map(Number);
+      goView('all', { x: x + (gx - g.gx0) * S, y: y + (gy - g.gy0) * S });
+    }
+  };
+  if (viewMap === 'all') return;
+  // one map: arrows at the edges of the screen lead to the open maps next to it
+  const [gx, gy] = viewMap.split(',').map(Number);
+  const dirs: [string, number, number, string][] = [['mapN', 0, -1, '▲'], ['mapS', 0, 1, '▼'], ['mapW', -1, 0, '◀'], ['mapE', 1, 0, '▶']];
+  for (const [id, dx, dy, ch] of dirs) {
+    if (!open(gx + dx, gy + dy)) continue;
+    const a = document.createElement('button');
+    a.id = id;
+    a.className = 'btn round map-arrow';
+    a.textContent = ch;
+    a.onclick = () => {
+      const [x, y] = camTile();
+      goView(`${gx + dx},${gy + dy}`, { x: dx ? (dx > 0 ? 3 : S - 4) : Math.max(2, Math.min(S - 3, x)), y: dy ? (dy > 0 ? 3 : S - 4) : Math.max(2, Math.min(S - 3, y)) });
+    };
+    document.body.appendChild(a);
+  }
+}
+
 // the panel can hide; a small tab at the edge brings it back, and the choice is remembered
 const toggleSide = () => save('letopis.sideHidden', document.body.classList.toggle('side-hidden'));
 if (store('letopis.sideHidden', false)) document.body.classList.add('side-hidden');
@@ -1021,7 +1095,15 @@ onSnapshot(snap);
 const recent = await early.recent;
 for (const e of recent.reverse()) addEvent(e, false);
 renderSide();
-if (bands.length) {
+// the server shows the whole world when the remembered map is gone (a new world)
+if (!BASE && (info.view ? `${info.view[0]},${info.view[1]}` : 'all') !== viewMap) { viewMap = info.view ? `${info.view[0]},${info.view[1]}` : 'all'; save('letopis.view', viewMap); }
+setupMaps();
+let focus: { x: number; y: number; zoom?: number; band?: number } | null = null;
+try { focus = JSON.parse(sessionStorage.getItem('letopis.focus') ?? 'null'); sessionStorage.removeItem('letopis.focus'); } catch { /* none */ }
+if (focus) {
+  lookAt(focus.x, focus.y, focus.zoom ?? 1.3, true);
+  if (focus.band) void showGoneBand(focus.band);
+} else if (bands.length) {
   const cx = bands.reduce((s, b) => s + b.x, 0) / bands.length;
   const cy = bands.reduce((s, b) => s + b.y, 0) / bands.length;
   lookAt(cx, cy, 1.3, true);

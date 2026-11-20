@@ -77,6 +77,12 @@ export interface WorldInfo {
   temp: string;
   /** which tree can grow on each tile (index into TREE_KINDS, 0 none) */
   treeKinds: string;
+  /** the maps opened so far, when ships found more than the first (from v1.90.2) */
+  grid?: { size: number; gx0: number; gy0: number; cols: number; rows: number; open: string[] };
+  /** the one map this page shows, or null for the whole world */
+  view?: [number, number] | null;
+  /** whole world only: 1 on tiles of maps nobody has reached yet, base64 */
+  closed?: string;
 }
 
 export interface TimeInfo {

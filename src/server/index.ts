@@ -5,8 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { Simulation, SimState } from './sim/sim';
-import { setWorldSize } from './sim/world';
 import { Store } from './db';
+import { Moving, View, movingOf, snapshotFor, tickFor, viewFor, worldInfoFor } from './views';
 import { Discovery, SnapshotMessage, TickMessage, WorldInfo, b64encode, formatYear } from '../shared/types';
 import { TECHS } from './sim/tech';
 
@@ -50,8 +50,15 @@ let sim = loadOrCreate();
 store.startWorld(sim.s.worldId);
 /** the second world: there once the first ship has landed (same map size as the Earth) */
 let mars: Simulation | null = loadMars();
-let worldInfo = makeWorldInfo(sim);
-let marsInfo = mars ? makeWorldInfo(mars) : null;
+/** the world as each view sees it, made once and kept until the world grows */
+const infos = new Map<Simulation, Map<string, WorldInfo>>();
+function infoFor(sm: Simulation, v: View): WorldInfo {
+  let m = infos.get(sm);
+  if (!m) infos.set(sm, (m = new Map()));
+  let info = m.get(v.key);
+  if (!info) m.set(v.key, (info = worldInfoFor(sm.use(), v)));
+  return info;
+}
 
 function loadMars(): Simulation | null {
   if (!existsSync(MARS_FILE)) return null;
@@ -59,28 +66,13 @@ function loadMars(): Simulation | null {
     const st = JSON.parse(gunzipSync(readFileSync(MARS_FILE)).toString('utf8')) as SimState;
     if (!st.worldId.startsWith(sim.s.worldId)) return null;
     const m = new Simulation(st);
-    setWorldSize(sim.s.size ?? m.t.w);
+    sim.use();
     log(`Марс: ${st.people.length} души`);
     return m;
   } catch (e) {
     log('Марс не се зареди', e);
     return null;
   }
-}
-
-function makeWorldInfo(sm: Simulation): WorldInfo {
-  const t = sm.t;
-  const n = t.w * t.h;
-  const height = new Uint8Array(n), temp = new Uint8Array(n);
-  for (let i = 0; i < n; i++) {
-    height[i] = Math.max(0, Math.min(255, Math.round((t.height[i] + 1) * 127.5)));
-    temp[i] = Math.round(t.temp[i] * 255);
-  }
-  return {
-    worldId: sm.s.worldId, seed: sm.s.seed, w: t.w, h: t.h,
-    height: b64encode(height), biome: b64encode(t.biome), river: b64encode(t.river), temp: b64encode(temp),
-    treeKinds: b64encode(sm.treeKind), planet: sm.s.planet,
-  };
 }
 
 function bindLookup() {
@@ -91,11 +83,12 @@ bindLookup();
 
 function save() {
   const tmp = STATE_FILE + '.tmp';
-  writeFileSync(tmp, gzipSync(JSON.stringify(sim.serialize())));
+  writeFileSync(tmp, gzipSync(JSON.stringify(sim.use().serialize())));
   renameSync(tmp, STATE_FILE);
   if (mars) {
-    writeFileSync(MARS_FILE + '.tmp', gzipSync(JSON.stringify(mars.serialize())));
+    writeFileSync(MARS_FILE + '.tmp', gzipSync(JSON.stringify(mars.use().serialize())));
     renameSync(MARS_FILE + '.tmp', MARS_FILE);
+    sim.use();
   }
 }
 
@@ -121,17 +114,18 @@ function carry() {
     if (!mars) {
       mars = Simulation.newMars(sim);
       store.startWorld(mars.s.worldId);
-      marsInfo = makeWorldInfo(mars);
       bindLookup();
       log('Първият кораб кацна на Марс');
     }
-    mars.receive(v);
+    mars.use().receive(v);
   }
   sim.outbox = [];
   if (mars) {
+    sim.use();
     for (const v of mars.outbox) sim.receive(v);
     mars.outbox = [];
   }
+  sim.use();
 }
 
 // ---------- the endless loop ----------
@@ -144,9 +138,16 @@ let marsPending: TickMessage['events'] = [];
 function tick() {
   const started = Date.now();
   try {
-    sim.step();
-    if (mars) mars.step();
+    sim.use().step();
+    if (mars) mars.use().step();
     carry();
+    // a ship opened a new map: every viewer loads the world again
+    if (sim.grew) {
+      infos.delete(sim);
+      const msg = JSON.stringify({ t: 'grew', ...sim.grew });
+      for (const ws of clients.keys()) if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+      sim.grew = null;
+    }
     pendingEvents = sim.events;
     flush();
     sim.events = [];
@@ -164,9 +165,9 @@ function tick() {
       addStat(sim);
       if (mars) addStat(mars);
     }
-    broadcast(sim, clients, pendingEvents);
+    broadcast(sim.use(), clients, pendingEvents);
     pendingEvents = [];
-    if (mars) { broadcast(mars, marsClients, marsPending); marsPending = []; }
+    if (mars) { broadcast(mars.use(), marsClients, marsPending); marsPending = []; sim.use(); }
     if (sim.extinct) return restartWorld();
     if (Date.now() - lastSave > SAVE_EVERY_MS) {
       save();
@@ -196,17 +197,17 @@ function restartWorld() {
   renameSync(STATE_FILE, path.join(DATA, 'archive', `${old}.json.gz`));
   if (existsSync(MARS_FILE)) renameSync(MARS_FILE, path.join(DATA, 'archive', `${old}-mars.json.gz`));
   mars = null;
-  marsInfo = null;
+  infos.clear();
   log(`Светът ${old} угасна. Започвам нов след 1 минута.`);
   setTimeout(() => {
     sim = new Simulation(null);
     bindLookup();
     store.startWorld(sim.s.worldId);
-    worldInfo = makeWorldInfo(sim);
+    infos.clear();
     flush();
     sim.events = [];
     save();
-    for (const ws of clients) ws.send(JSON.stringify({ t: 'newworld' }));
+    for (const ws of clients.keys()) ws.send(JSON.stringify({ t: 'newworld' }));
     tick();
   }, 60_000);
 }
@@ -248,11 +249,8 @@ function discoveries(sim: Simulation): Discovery[] {
   return out.sort((a, b) => a.year - b.year);
 }
 
-function snapshot(sim: Simulation): SnapshotMessage {
-  return {
-    t: 'snapshot', time: sim.timeInfo(SPEED), bands: sim.bandViews(), people: sim.personRows(), seas: sim.seaViews(), explored: sim.exploredB64(), trees: sim.treesB64(), roads: sim.roadsB64(),
-    population: sim.s.people.length, totalBorn: sim.s.totalBorn, totalDied: sim.s.totalDied,
-  };
+function snapshot(sm: Simulation, v: View): SnapshotMessage {
+  return snapshotFor(sm.use(), v, sm.timeInfo(SPEED));
 }
 
 const server = http.createServer((req, res) => {
@@ -261,15 +259,16 @@ const server = http.createServer((req, res) => {
   const onMars = url.pathname === '/mars' || url.pathname.startsWith('/mars/');
   const p = onMars ? url.pathname.slice(5) || '/' : url.pathname;
   const q = (k: string) => (url.searchParams.has(k) ? Number(url.searchParams.get(k)) : undefined);
-  const sm = onMars && mars && p.startsWith('/api/') ? mars : sim;
+  const sm = (onMars && mars && p.startsWith('/api/') ? mars : sim).use();
+  const view = viewFor(sm, url.searchParams.get('map'));
   const world = sm.s.worldId;
   const sim2 = sm;
   try {
     if (p === '/api/planets') return json(res, { mars: !!mars, marsPeople: mars?.s.people.length ?? 0 });
     if (onMars && !mars && p.startsWith('/api/')) return json(res, { error: 'Марс още е пуст' }, 404);
     if (p === '/api/health') return json(res, { ok: true, world, year: Math.floor(sim2.year), population: sim2.s.people.length });
-    if (p === '/api/world') return json(res, (onMars ? marsInfo! : worldInfo));
-    if (p === '/api/snapshot') return json(res, snapshot(sim2));
+    if (p === '/api/world') return json(res, infoFor(sm, view));
+    if (p === '/api/snapshot') return json(res, snapshot(sim2, view));
     if (p === '/api/chronicle') return json(res, store.chronicle(world, { before: q('before'), after: q('after'), min: q('min'), limit: q('limit'), fromYear: q('fromYear') }));
     if (p === '/api/since') {
       const after = q('after') ?? 0;
@@ -311,7 +310,12 @@ const server = http.createServer((req, res) => {
     if (p.startsWith('/api/band/')) {
       const id = Number(p.split('/').pop());
       const live = sim2.bandViews().find((b) => b.id === id);
-      if (live) return json(res, { live });
+      if (live) {
+        // on another map than the one the page shows: tell it which, so it can go there
+        const [gx, gy] = sm.mapAt(Math.round(live.x), Math.round(live.y));
+        if (view.map && (view.map[0] !== gx || view.map[1] !== gy)) return json(res, { live, map: [gx, gy] });
+        return json(res, { live: { ...live, x: live.x - view.x0, y: live.y - view.y0 } });
+      }
       const gone = store.getGoneBand(world, id);
       return gone ? json(res, { gone }) : json(res, { error: 'няма такъв род' }, 404);
     }
@@ -346,41 +350,45 @@ const server = http.createServer((req, res) => {
 
 // every tick carries all the people: compressed it is about a fifth of the size
 const wss = new WebSocketServer({ noServer: true, perMessageDeflate: { threshold: 4096, zlibDeflateOptions: { level: 3 } } });
-const clients = new Set<WebSocket>();
-const marsClients = new Set<WebSocket>();
+/** every viewer and the map it looks at (`?map=gx,gy`, or the whole world) */
+const clients = new Map<WebSocket, string | null>();
+const marsClients = new Map<WebSocket, string | null>();
 server.on('upgrade', (req, socket, head) => {
-  const p = new URL(req.url ?? '/', 'http://x').pathname;
+  const u = new URL(req.url ?? '/', 'http://x'), p = u.pathname, map = u.searchParams.get('map');
   if (p !== '/ws' && p !== '/mars/ws') { socket.destroy(); return; }
   const onMars = p === '/mars/ws' && !!mars;
   wss.handleUpgrade(req, socket, head, (ws) => {
     const set = onMars ? marsClients : clients;
-    set.add(ws);
-    ws.send(JSON.stringify(snapshot(onMars ? mars! : sim)));
+    set.set(ws, map);
+    const sm = onMars ? mars! : sim;
+    ws.send(JSON.stringify(snapshot(sm, viewFor(sm.use(), map))));
+    sim.use();
     ws.on('close', () => set.delete(ws));
     ws.on('error', () => set.delete(ws));
   });
 });
 
-function broadcast(sim: Simulation, clients: Set<WebSocket>, pendingEvents: TickMessage['events']) {
+function broadcast(sim: Simulation, clients: Map<WebSocket, string | null>, pendingEvents: TickMessage['events']) {
   if (!clients.size) {
     sim.treeChanges = [];
     sim.roadChanges = [];
     return;
   }
-  const msg: TickMessage = {
-    t: 'tick', time: sim.timeInfo(SPEED), bands: sim.bandViews(), people: sim.personRows(), seas: sim.seaViews(), events: pendingEvents,
-    population: sim.s.people.length,
-  };
-  if (sim.exploredDirty) {
-    msg.explored = sim.exploredB64();
-    sim.exploredDirty = false;
+  const base = { time: sim.timeInfo(SPEED), events: pendingEvents, population: sim.s.people.length };
+  const all: Moving = movingOf(sim);
+  const explored = sim.exploredDirty;
+  sim.exploredDirty = false;
+  // one message for every map somebody looks at
+  const sent = new Map<string, string>();
+  for (const [ws, map] of clients) {
+    if (ws.readyState !== WebSocket.OPEN) continue;
+    const v = viewFor(sim, map);
+    let data = sent.get(v.key);
+    if (!data) sent.set(v.key, (data = JSON.stringify(tickFor(sim, v, base, all, explored, sim.treeChanges, sim.roadChanges))));
+    ws.send(data);
   }
-  if (sim.treeChanges.length) msg.trees = sim.treeChanges;
   sim.treeChanges = [];
-  if (sim.roadChanges.length) msg.roads = sim.roadChanges;
   sim.roadChanges = [];
-  const data = JSON.stringify(msg);
-  for (const ws of clients) if (ws.readyState === WebSocket.OPEN) ws.send(data);
 }
 
 function shutdown() {

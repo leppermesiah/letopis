@@ -26,7 +26,8 @@ function pick<T>(list: readonly T[], n: number): T {
 const K = (name: (typeof TREE_KINDS)[number]) => TREE_KINDS.indexOf(name);
 
 /** which tree may grow on each tile (groves and clearings, like the old hand-placed forests) */
-export function treeKinds(w: number, h: number, biome: ArrayLike<number>, river: ArrayLike<number>, temp: ArrayLike<number>): Uint8Array {
+/** ox, oy: where tile (0, 0) lies in the coordinates of the first map (the world can grow to the west and north) */
+export function treeKinds(w: number, h: number, biome: ArrayLike<number>, river: ArrayLike<number>, temp: ArrayLike<number>, ox = 0, oy = 0): Uint8Array {
   const clumps = new Simplex(new Rng(20261101));
   const out = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) {
@@ -34,10 +35,11 @@ export function treeKinds(w: number, h: number, biome: ArrayLike<number>, river:
       const i = y * w + x;
       const b = biome[i];
       if (isWater(b) || river[i] >= RIVER_WATER) continue;
-      const n = hash(x + 11, y + 7);
-      const n2 = hash(x + 31, y + 17);
+      const gx = x + ox, gy = y + oy;
+      const n = hash(gx + 11, gy + 7);
+      const n2 = hash(gx + 31, gy + 17);
       const t = temp[i];
-      const dense = 0.5 + 0.55 * clumps.noise(x * 0.11, y * 0.11);
+      const dense = 0.5 + 0.55 * clumps.noise(gx * 0.11, gy * 0.11);
       let k = 0;
       switch (b) {
         case Biome.Forest:

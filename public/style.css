@@ -222,3 +222,12 @@ a.ref:hover { border-bottom-style: solid; }
 .news-panel { min-width: 240px; max-width: calc(100vw - 24px); left: 0; transform: none; }
 .news-panel .btn { width: 100%; text-align: left; }
 .news-panel .news-server { text-align: center; opacity: 0.85; }
+
+/* more maps: arrows at the edges of the screen to the maps next door */
+.map-arrow { position: fixed; z-index: 4; opacity: 0.8; }
+.map-arrow:hover { opacity: 1; }
+#mapN { top: 64px; left: 50%; transform: translateX(-50%); }
+#mapS { bottom: 64px; left: 50%; transform: translateX(-50%); }
+#mapW { left: 12px; top: 50%; transform: translateY(-50%); }
+#mapE { right: 12px; top: 50%; transform: translateY(-50%); }
+body:not(.side-hidden) #mapE { right: calc(var(--side-w) + 24px); }

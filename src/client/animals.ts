@@ -61,13 +61,13 @@ const WILD: Species[] = [
   // birds
   { id: 'stork', ...walk('stork'), how: 'walk', biomes: [GR, MA, PL], minT: 0.35, months: WARM, group: [1, 2], speed: 0.3, weight: 2 },
   { id: 'heron', ...walk('heron'), how: 'walk', biomes: [MA, GR, FO, BE], river: true, group: [1, 1], speed: 0.25, weight: 2 },
-  { id: 'crow', stand: 'crow', move: ['crowfly', 'crow'], how: 'walk', biomes: [GR, PL, FO, TA, HI, TU, BE], group: [1, 3], speed: 0.8, weight: 2 },
-  { id: 'owl', stand: 'owl', move: ['owlfly'], how: 'walk', biomes: [FO, TA], group: [1, 1], speed: 0.8, weight: 1 },
+  { id: 'crow', stand: 'crow', move: ['crowfly0', 'crowfly1', 'crowfly2', 'crowfly3'], how: 'walk', biomes: [GR, PL, FO, TA, HI, TU, BE], group: [1, 3], speed: 0.8, weight: 2 },
+  { id: 'owl', stand: 'owl', move: ['owlfly0', 'owlfly1', 'owlfly2', 'owlfly3'], how: 'walk', biomes: [FO, TA], group: [1, 1], speed: 0.8, weight: 1 },
   { id: 'eagle', stand: 'eagle0', move: ['eagle0', 'eagle1'], how: 'fly', biomes: [MO, HI, SN, TA], group: [1, 1], speed: 1.2, weight: 2 },
   // on the water
   { id: 'duck', ...walk('duck'), how: 'swim', biomes: [], minT: 0.2, group: [2, 4], speed: 0.25, weight: 3 },
   { id: 'swan', ...walk('swan'), how: 'swim', biomes: [], minT: 0.25, group: [1, 2], speed: 0.2, weight: 1.5 },
-  { id: 'fish', stand: 'fish0', move: ['fish0', 'fish1'], how: 'leap', biomes: [], group: [1, 1], speed: 0, weight: 3 },
+  { id: 'fish', stand: 'fish0', move: ['fish0', 'fish1', 'fish2', 'fish3'], how: 'leap', biomes: [], group: [1, 1], speed: 0, weight: 3 },
   // warm south and desert
   { id: 'lion', ...walk('lion'), how: 'walk', biomes: [GR, PL, DE], minT: 0.66, group: [1, 3], speed: 0.5, weight: 1.5 },
   { id: 'camel', ...walk('camel'), how: 'walk', biomes: [DE], group: [1, 3], speed: 0.4, weight: 2 },
@@ -89,6 +89,7 @@ const TAME: { sp: Species; tech?: string; settled?: boolean; from?: number; n: [
   { sp: { id: 'cat', ...walk('cat'), how: 'walk', biomes: [], group: [1, 1], speed: 0.4, weight: 1 }, settled: true, from: -7500, n: [0, 1] },
   { sp: { id: 'horse', ...walk('horse'), how: 'walk', biomes: [], group: [1, 1], speed: 0.5, weight: 1 }, tech: 'agriculture', from: -3500, n: [1, 2] },
   { sp: { id: 'donkey', ...walk('donkey'), how: 'walk', biomes: [], group: [1, 1], speed: 0.4, weight: 1 }, tech: 'agriculture', from: -4000, n: [0, 1] },
+  { sp: { id: 'farmduck', ...walk('farmduck'), how: 'walk', biomes: [], group: [1, 1], speed: 0.25, weight: 1 }, tech: 'agriculture', from: -2500, n: [0, 2] },
 ];
 
 /** farm animals: a town of the information age keeps them on the farms, not in its streets */
@@ -142,7 +143,8 @@ class Animal {
     const sp = this.sp;
     const age = now - this.born;
     if (sp.how === 'leap') {
-      this.set(age < 450 ? sp.move[0] : sp.move[1]);
+      // one jump: up out of the water and back in
+      this.set(this.moves[Math.min(this.moves.length - 1, Math.floor((age / this.life) * this.moves.length))]);
       if (age > this.life) this.gone = true;
     } else {
       const dx = this.tx - this.x, dy = this.ty - this.y;
@@ -164,7 +166,7 @@ class Animal {
       }
     }
     const p = this.f.r.tileTop(this.x, this.y);
-    const flying = sp.how === 'fly' || (this.frame !== sp.stand && (this.frame.endsWith('fly')));
+    const flying = sp.how === 'fly' || (this.frame !== sp.stand && this.frame.includes('fly'));
     const lift = sp.how === 'fly' ? 34 + Math.sin(now / 900 + this.hx) * 4 : flying ? 8 : 0;
     this.c.position.set(p.x, p.y - lift);
     this.c.zIndex = sp.how === 'fly' ? 1e6 : p.y;

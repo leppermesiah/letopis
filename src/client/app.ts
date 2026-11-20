@@ -16,7 +16,7 @@ const GROUPS: { id: string; bg: string; en: string; de: string; kinds: string[];
   { id: 'discover', bg: 'Открития и нови епохи', en: 'Discoveries and new ages', de: 'Entdeckungen und neue Zeitalter', kinds: ['discovery', 'era', 'secret'], on: true },
   { id: 'famous', bg: 'Известни личности', en: 'Famous people', de: 'Berühmte Persönlichkeiten', kinds: ['famous'], on: true },
   { id: 'kingdom', bg: 'Царства', en: 'Kingdoms', de: 'Königreiche', kinds: ['kingdom'], on: true },
-  { id: 'places', bg: 'Нови селища и сливания', en: 'New places and mergers', de: 'Neue Orte und Zusammenschlüsse', kinds: ['settle', 'merge', 'colony'], on: false },
+  { id: 'places', bg: 'Нови селища и сливания', en: 'New places and mergers', de: 'Neue Orte und Zusammenschlüsse', kinds: ['settle', 'merge', 'colony', 'newland'], on: false },
   { id: 'trouble', bg: 'Бедствия', en: 'Disasters', de: 'Katastrophen', kinds: ['flood', 'epidemic', 'drought', 'extinct', 'lost', 'storm', 'locusts', 'murrain'], on: false },
 ];
 

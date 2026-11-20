@@ -2,7 +2,7 @@ import { Rng } from '../../shared/rng';
 import {
   BandView, ChronicleEntry, ChronicleRef, GoneBand, PersonDetail, PersonRow, TASKS, TASK_NAMES, Task, CHIEF_TITLES, TimeInfo, TreeNode, FamilyTree, b64encode, formatYear, isWater, Biome, RIVER_WATER,
 } from '../../shared/types';
-import { Terrain, generateTerrain, generateMars, findStart, idx, inBounds, W, H, setWorldSize, OLD_SIZE, NEW_SIZE } from './world';
+import { Terrain, Grid, GRID_REACH, generateTerrain, generateMars, buildTerrain, growTerrain, mapKey, findStart, idx, inBounds, W, H, setWorldSize, OLD_SIZE, NEW_SIZE } from './world';
 import { SECRET_COUNT, SECRET_HEROES, SECRET_KINDS, SecretFind } from '../../shared/secrets';
 import { FEMALE, MALE, bandColor, bandName, fixBandName, familyFrom, nickname, placeName } from './names';
 import { ERAS, TECHS, TECH_BY_ID, Tech, eraOf, techOpen } from './tech';
@@ -129,6 +129,9 @@ export interface Kingdom {
 /** Everything in here is saved to disk. */
 export interface SimState {
   version: 1;
+  /** the maps opened so far, when ships found more than the first (from v1.90.2), and the year of the last one */
+  grid?: Grid;
+  lastMapYear?: number;
   /** ships of settlers at sea (from v1.90.2) */
   fleet?: Sea[];
   /** cultures that learn their way of life (from v1.90.2) */
@@ -201,6 +204,10 @@ export interface Sea {
   isle: boolean;
   culture?: number;
   color: number;
+  /** sailing to the edge of the known world: the map it will open */
+  explore?: [number, number];
+  /** a whole village that moved to the new world (its people are in `people`) */
+  band?: Band;
 }
 
 export interface Voyage { people: Person[]; techs: string[]; from: string; fromEn: string; fromDe: string; first: boolean }
@@ -260,7 +267,7 @@ export class Simulation {
       setWorldSize(state.size ?? OLD_SIZE);
       for (const b of state.bands) b.name = fixBandName(b.name);
       state.usedBands = state.usedBands.map(fixBandName);
-      this.t = state.planet === 'mars' ? generateMars(state.seed) : generateTerrain(state.seed);
+      this.t = state.planet === 'mars' ? generateMars(state.seed) : state.grid ? buildTerrain(state.seed, state.size ?? OLD_SIZE, state.grid) : generateTerrain(state.seed);
       this.regions = this.landRegions();
       this.rng = new Rng(state.rng);
       for (let i = 0; i < state.plants.length; i++) this.t.plants[i] = state.plants[i] / 100;
@@ -312,6 +319,88 @@ export class Simulation {
     this.roadChanges = [];
   }
 
+  /** the side of one map in tiles */
+  get mapSize(): number {
+    return this.s.size ?? OLD_SIZE;
+  }
+
+  /** where tile (0, 0) lies in the coordinates of the first map */
+  origin(): [number, number] {
+    const g = this.s.grid;
+    return g ? [g.gx0 * this.mapSize, g.gy0 * this.mapSize] : [0, 0];
+  }
+
+  private kindsOfTrees(): Uint8Array {
+    const [ox, oy] = this.origin();
+    return treeKinds(W, H, this.t.biome, this.t.river, this.t.temp, ox, oy);
+  }
+
+  /** the Earth and Mars share the size of the map: whoever is worked on sets it first */
+  use(): this {
+    setWorldSize(this.t.w, this.t.h);
+    return this;
+  }
+
+  /** the map (gx, gy) a tile lies on */
+  mapAt(x: number, y: number): [number, number] {
+    const S = this.mapSize, g = this.s.grid;
+    return [Math.floor(x / S) + (g?.gx0 ?? 0), Math.floor(y / S) + (g?.gy0 ?? 0)];
+  }
+
+  isOpen(gx: number, gy: number): boolean {
+    return this.s.grid ? this.s.grid.open.includes(mapKey(gx, gy)) : gx === 0 && gy === 0;
+  }
+
+  /** set when the world grew this month, for the server to tell the viewers */
+  grew: { dx: number; dy: number } | null = null;
+
+  /** a ship reached the edge: the next map opens there. The old tiles keep everything, only shifted when the
+   *  world grows to the west or north */
+  openMap(gx: number, gy: number): boolean {
+    if (this.mars || Math.abs(gx) > GRID_REACH || Math.abs(gy) > GRID_REACH || this.isOpen(gx, gy)) return false;
+    const S = this.mapSize;
+    const g = this.s.grid ?? { gx0: 0, gy0: 0, cols: 1, rows: 1, open: [mapKey(0, 0)] };
+    const oldW = W, oldH = H;
+    if (!this.t.closed) this.t.closed = new Uint8Array(oldW * oldH);
+    const { t, grid, dx, dy } = growTerrain(this.t, this.s.seed, S, g, gx, gy);
+    this.t = t;
+    this.s.grid = grid;
+    const move = (i: number) => (i % oldW + dx) + (Math.floor(i / oldW) + dy) * W;
+    // trees and roads: the old ones where they were, the new map with its old forest
+    const trees = new Uint8Array(W * H), roads = new Uint8Array(W * H);
+    for (let i = 0; i < oldW * oldH; i++) { trees[move(i)] = this.trees[i]; roads[move(i)] = this.roads[i]; }
+    this.treeKind = this.kindsOfTrees();
+    const [ox, oy] = this.origin();
+    const mx = (gx - grid.gx0) * S, my = (gy - grid.gy0) * S;
+    for (let y = my; y < my + S; y++) for (let x = mx; x < mx + S; x++) {
+      const i = idx(x, y);
+      if (this.treeKind[i]) trees[i] = startStage(x + ox, y + oy);
+    }
+    this.trees = trees;
+    this.roads = roads;
+    this.treeChanges = [];
+    this.roadChanges = [];
+    // everybody and everything moves with its tiles
+    if (dx || dy) {
+      for (const p of this.s.people) { p.x += dx; p.y += dy; }
+      for (const b of this.s.bands) {
+        b.cx += dx; b.cy += dy;
+        if (b.scout) { b.scout.x += dx; b.scout.y += dy; if (b.scout.px !== undefined) b.scout.px += dx; if (b.scout.py !== undefined) b.scout.py += dy; }
+      }
+    }
+    for (const sh of this.s.fleet ?? []) {
+      sh.x += dx; sh.y += dy;
+      sh.dest = [sh.dest[0] + dx, sh.dest[1] + dy];
+      sh.path = sh.path.map(move);
+      sh.way = sh.way.map(move);
+    }
+    this.regions = this.landRegions();
+    this.regionTiles = undefined;
+    this.exploredDirty = true;
+    this.grew = { dx: (this.grew?.dx ?? 0) + dx, dy: (this.grew?.dy ?? 0) + dy };
+    return true;
+  }
+
   /** dry land you can walk on: no sea, lake or river wide enough to be drawn as water */
   private walkable(i: number): boolean {
     return !isWater(this.t.biome[i]) && this.t.river[i] < RIVER_WATER;
@@ -352,14 +441,15 @@ export class Simulation {
   // ---------- trees ----------
 
   private initTrees(saved?: string) {
-    this.treeKind = treeKinds(W, H, this.t.biome, this.t.river, this.t.temp);
+    this.treeKind = this.kindsOfTrees();
     this.trees = new Uint8Array(W * H);
     if (saved) {
       const b = Buffer.from(saved, 'base64');
       for (let i = 0; i < this.trees.length; i++) this.trees[i] = this.treeKind[i] ? Math.min(BIG, b[i] ?? 0) : 0;
       return;
     }
-    for (let i = 0; i < this.trees.length; i++) if (this.treeKind[i]) this.trees[i] = startStage(i % W, Math.floor(i / W));
+    const [ox, oy] = this.origin();
+    for (let i = 0; i < this.trees.length; i++) if (this.treeKind[i]) this.trees[i] = startStage(i % W + ox, Math.floor(i / W) + oy);
     // worlds from before v1.11: the land around each camp is already cleared
     for (const b of this.s?.bands ?? []) this.clearAround(b.cx, b.cy, b.settled ? 3 : 1);
   }
@@ -2673,39 +2763,63 @@ export class Simulation {
     return this.regionTiles.get(r) ?? 0;
   }
 
-  /** a way over the sea from the town to an empty shore of another land, or null */
-  private seaRoute(b: Band): { path: number[]; dest: [number, number]; region: number } | null {
-    const t = this.t, sea = (i: number) => isWater(t.biome[i]);
+  /** open sea a ship can sail on: no land, and not a map nobody has reached yet */
+  private sea(i: number): boolean {
+    return isWater(this.t.biome[i]) && !this.t.closed?.[i];
+  }
+
+  /** a water tile next to the town, or -1 */
+  private harbour(b: Band): number {
     const bx = Math.round(b.cx), by = Math.round(b.cy);
-    let start = -1;
-    for (let d = 1; d <= 4 && start < 0; d++) for (let dy = -d; dy <= d && start < 0; dy++) for (let dx = -d; dx <= d; dx++) {
-      if (inBounds(bx + dx, by + dy) && sea(idx(bx + dx, by + dy))) { start = idx(bx + dx, by + dy); break; }
+    for (let d = 1; d <= 4; d++) for (let dy = -d; dy <= d; dy++) for (let dx = -d; dx <= d; dx++) {
+      if (inBounds(bx + dx, by + dy) && this.sea(idx(bx + dx, by + dy))) return idx(bx + dx, by + dy);
     }
-    if (start < 0) return null;
-    const home = this.regions[idx(bx, by)];
-    const taken = new Set<number>();
-    for (const o of this.s.bands) if (inBounds(Math.round(o.cx), Math.round(o.cy))) taken.add(this.regions[idx(Math.round(o.cx), Math.round(o.cy))]);
-    for (const sh of this.s.fleet ?? []) taken.add(this.regions[idx(sh.dest[0], sh.dest[1])]);
+    return -1;
+  }
+
+  /** every sea tile reachable from `start`, with the way back to it */
+  private seaFrom(start: number): { prev: Int32Array; seen: number[] } {
     const prev = new Int32Array(W * H).fill(-2);
     prev[start] = -1;
     const q = [start];
-    // landings on lands nobody lives on: the first water tile reached next to each of them
-    const shores = new Map<number, [number, number]>();
     for (let qi = 0; qi < q.length; qi++) {
       const c = q[qi], cx = c % W, cy = (c - cx) / W;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
         const nx = cx + dx, ny = cy + dy;
         if (!inBounds(nx, ny)) continue;
         const n = idx(nx, ny);
-        if (!sea(n)) {
-          const r = this.regions[n];
-          if (!dx || !dy) if (r >= 0 && r !== home && !taken.has(r) && !shores.has(r)) shores.set(r, [c, n]);
-          continue;
-        }
-        if (prev[n] !== -2) continue;
-        if (dx && dy && (!sea(idx(cx + dx, cy)) || !sea(idx(cx, cy + dy)))) continue;
+        if (prev[n] !== -2 || !this.sea(n)) continue;
+        if (dx && dy && (!this.sea(idx(cx + dx, cy)) || !this.sea(idx(cx, cy + dy)))) continue;
         prev[n] = c;
         q.push(n);
+      }
+    }
+    return { prev, seen: q };
+  }
+
+  private wayTo(prev: Int32Array, end: number): number[] {
+    const path: number[] = [];
+    for (let c = end; c !== -1; c = prev[c]) path.push(c);
+    return path.reverse();
+  }
+
+  /** a way over the sea to an empty shore of another land (on map `only` if given), or null */
+  private seaRoute(start: number, home: number, self: Band, only?: [number, number]): { path: number[]; dest: [number, number]; region: number } | null {
+    const { prev, seen } = this.seaFrom(start);
+    const taken = new Set<number>();
+    for (const o of this.s.bands) if (inBounds(Math.round(o.cx), Math.round(o.cy))) taken.add(this.regions[idx(Math.round(o.cx), Math.round(o.cy))]);
+    for (const sh of this.s.fleet ?? []) if (sh.dest[0] >= 0) taken.add(this.regions[idx(sh.dest[0], sh.dest[1])]);
+    // landings on lands nobody lives on: the first water tile reached next to each of them
+    const shores = new Map<number, [number, number]>();
+    for (const c of seen) {
+      const cx = c % W, cy = (c - cx) / W;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = cx + dx, ny = cy + dy;
+        if (!inBounds(nx, ny)) continue;
+        const n = idx(nx, ny), r = this.regions[n];
+        if (r < 0 || r === home || taken.has(r) || shores.has(r)) continue;
+        if (only) { const [mx, my] = this.mapAt(nx, ny); if (mx !== only[0] || my !== only[1]) continue; }
+        shores.set(r, [c, n]);
       }
     }
     // the best of a few new lands: room for a village and wood, the nearer the better
@@ -2716,63 +2830,167 @@ export class Simulation {
       for (let k = 0; k < 20; k++) {
         const x = lx + this.rng.int(-4, 4), y = ly + this.rng.int(-4, 4);
         if (!inBounds(x, y) || this.regions[idx(x, y)] !== r) continue;
-        const v = this.campScore(x, y, 3, b);
+        const v = this.campScore(x, y, 3, self);
         if (v > sc) { sc = v; spot = [x, y]; }
       }
       if (!spot) continue;
-      const path: number[] = [];
-      for (let c = w; c !== -1; c = prev[c]) path.push(c);
-      path.reverse();
-      const v = sc / (1 + path.length / W);
+      const path = this.wayTo(prev, w);
+      const v = sc / (1 + path.length / this.mapSize);
       if (v > bestS) { bestS = v; best = { path, dest: spot, region: r }; }
     }
     return best;
   }
 
-  /** once a year a big town that knows the sail may send a ship of families to find a land of their own */
+  /** a way to the edge of the known world, where a map nobody has seen yet begins; the map behind it, or null */
+  private edgeRoute(start: number): { path: number[]; map: [number, number] } | null {
+    const { prev, seen } = this.seaFrom(start);
+    const ends: { c: number; map: [number, number] }[] = [];
+    for (const c of seen) {
+      const cx = c % W, cy = (c - cx) / W;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = cx + dx, ny = cy + dy;
+        if (inBounds(nx, ny) && !this.t.closed?.[idx(nx, ny)]) continue;
+        const map = this.mapAt(nx, ny);
+        if (Math.abs(map[0]) > GRID_REACH || Math.abs(map[1]) > GRID_REACH || this.isOpen(map[0], map[1])) continue;
+        ends.push({ c, map });
+      }
+    }
+    if (!ends.length) return null;
+    // one unknown direction, then the nearest way to it
+    const maps = [...new Set(ends.map((e) => mapKey(e.map[0], e.map[1])))];
+    const pick = this.rng.pick(maps);
+    const end = ends.find((e) => mapKey(e.map[0], e.map[1]) === pick)!;
+    return { path: this.wayTo(prev, end.c), map: end.map };
+  }
+
+  private newShip(b: Band, list: Person[], path: number[], dest: [number, number], isle: boolean, explore?: [number, number]): Sea {
+    const sh: Sea = {
+      id: (this.s.ships = (this.s.ships ?? 0) + 1), x: path[0] % W, y: Math.floor(path[0] / W), way: [], path,
+      people: list, techs: [...b.techs], from: b.id, fromBg: this.bandLabel(b), fromEn: this.bandEnLabel(b), fromDe: this.bDe(b, 'dat'),
+      dest, isle, culture: b.culture, color: b.color, explore,
+    };
+    (this.s.fleet ??= []).push(sh);
+    return sh;
+  }
+
+  /** once a year a big town that knows the sail may send a ship of families to a land of their own; when there is no
+   *  free land left within reach, now and then a ship sails off to the edge of the known world */
   private setSail(members: Map<number, Person[]>) {
     const fleet = (this.s.fleet ??= []);
     for (const b of this.rng.shuffle(this.s.bands.filter((o) => o.settled && this.hasTech(o, 'sailing') && (members.get(o.id)?.length ?? 0) >= 60))) {
       if (fleet.length >= 3) return;
       if (!this.rng.chance(0.04)) continue;
-      const route = this.seaRoute(b);
-      if (!route) continue;
+      const start = this.harbour(b);
+      if (start < 0) continue;
+      const route = this.seaRoute(start, this.regions[idx(Math.round(b.cx), Math.round(b.cy))], b);
+      // the edge of the world: one ship at a time, and a new map at most every 25 years or so
+      const exploring = fleet.some((x) => x.explore) || this.year - (this.s.lastMapYear ?? -1e9) < 25;
+      const edge = !route && !exploring && this.rng.chance(0.3) ? this.edgeRoute(start) : null;
+      if (!route && !edge) continue;
       const list = this.takeFamilies([b], members, this.rng.int(12, 30));
       if (list.length < 8) continue;
       this.depart(list);
-      const sh: Sea = {
-        id: (this.s.ships = (this.s.ships ?? 0) + 1), x: route.path[0] % W, y: Math.floor(route.path[0] / W), way: [], path: route.path,
-        people: list, techs: [...b.techs], from: b.id, fromBg: this.bandLabel(b), fromEn: this.bandEnLabel(b), fromDe: this.bDe(b, 'dat'),
-        dest: route.dest, isle: this.regionSize(route.region) < 700, culture: b.culture, color: b.color,
-      };
-      fleet.push(sh);
-      this.emit('ship', 1, `Кораб от ${this.bandLabel(b)} отплава с ${list.length} души да търси нова земя отвъд морето.`,
+      if (route) this.newShip(b, list, route.path, route.dest, this.regionSize(route.region) < 700);
+      else this.newShip(b, list, edge!.path, [-1, -1], false, edge!.map);
+      this.emit('sail', 1, `Кораб от ${this.bandLabel(b)} отплава с ${list.length} души да търси нова земя ${edge ? 'отвъд края на познатия свят' : 'отвъд морето'}.`,
         `${list.length} души от ${this.bandLabel(b)} отплаваха с кораб да търсят нова земя!`, undefined, b.id, [],
-        [`A ship from ${this.bandEnLabel(b)} set sail with ${list.length} people to find a new land over the sea.`, `${list.length} people from ${this.bandEnLabel(b)} sailed away to find a new land!`],
-        [`Ein Schiff ${this.bWith('aus', b)} stach mit ${list.length} Menschen in See, um ein neues Land zu finden.`, `${list.length} Menschen ${this.bWith('aus', b)} segeln los, um ein neues Land zu finden!`]);
+        [`A ship from ${this.bandEnLabel(b)} set sail with ${list.length} people to find a new land ${edge ? 'beyond the edge of the known world' : 'over the sea'}.`, `${list.length} people from ${this.bandEnLabel(b)} sailed away to find a new land!`],
+        [`Ein Schiff ${this.bWith('aus', b)} stach mit ${list.length} Menschen in See, um ein neues Land ${edge ? 'jenseits des Randes der bekannten Welt' : 'übers Meer'} zu finden.`, `${list.length} Menschen ${this.bWith('aus', b)} segeln los, um ein neues Land zu finden!`]);
     }
   }
 
-  /** the ships at sea: slow, so that crossing the whole map takes two years; they see the coasts they pass */
+  /** the ships at sea: slow, so that crossing one map takes two years; they see the coasts they pass */
   private sail() {
     const fleet = this.s.fleet;
     if (!fleet?.length) return;
-    const stepTiles = Math.max(4, Math.round(W / 24));
-    for (const sh of fleet) {
+    const stepTiles = Math.max(4, Math.round(this.mapSize / 24));
+    for (const sh of [...fleet]) {
       sh.way = sh.path.splice(0, stepTiles);
       for (const c of sh.way) {
         const cx = c % W, cy = (c - cx) / W;
         for (let y = cy - 4; y <= cy + 4; y++) for (let x = cx - 4; x <= cx + 4; x++) {
           if (!inBounds(x, y) || (x - cx) ** 2 + (y - cy) ** 2 > 16) continue;
           const i = idx(x, y);
-          if (!this.t.explored[i]) { this.t.explored[i] = 1; this.exploredDirty = true; }
+          if (!this.t.explored[i] && !this.t.closed?.[i]) { this.t.explored[i] = 1; this.exploredDirty = true; }
         }
       }
       const last = sh.way[sh.way.length - 1];
       if (last !== undefined) { sh.x = last % W; sh.y = Math.floor(last / W); }
+      if (sh.path.length) continue;
+      if (sh.explore) this.beyond(sh);
+      else this.landfall(sh);
     }
-    for (const sh of fleet.filter((x) => !x.path.length)) this.landfall(sh);
-    this.s.fleet = fleet.filter((x) => x.path.length);
+    this.s.fleet = (this.s.fleet ?? []).filter((x) => x.path.length);
+  }
+
+  /** a ship at the edge of the known world: the next map opens, and the ship goes on to a shore there */
+  private beyond(sh: Sea) {
+    const [gx, gy] = sh.explore!;
+    sh.explore = undefined;
+    const opened = this.openMap(gx, gy);
+    if (opened) this.s.lastMapYear = this.year;
+    const self = this.bandById.get(sh.from) ?? this.s.bands[0];
+    const here = idx(sh.x, sh.y);
+    const route = self ? this.seaRoute(here, -2, self, [gx, gy]) ?? this.seaRoute(here, -2, self) : null;
+    if (opened) {
+      const dir = this.dirName(gx, gy);
+      this.emit('newland', 3, `Кораб от ${sh.fromBg} стигна до края на познатия свят и продължи на ${dir[0]}. Отвъд него се откриха нови морета и брегове.`,
+        `Кораб отплава отвъд края на картата и откри нов свят на ${dir[0]}!`, undefined, sh.from, [],
+        [`A ship from ${sh.fromEn} reached the edge of the known world and sailed on to the ${dir[1]}. New seas and shores lay beyond.`, `A ship sailed past the edge of the map and found a new world to the ${dir[1]}!`],
+        [`Ein Schiff aus ${sh.fromDe} erreichte den Rand der bekannten Welt und segelte weiter nach ${dir[2]}. Dahinter lagen neue Meere und Küsten.`, `Ein Schiff ist über den Rand der Karte gesegelt und hat im ${dir[3]} eine neue Welt gefunden!`]);
+      this.spreadOut(gx, gy);
+    }
+    if (route) {
+      sh.path = route.path.slice(1);
+      sh.dest = route.dest;
+      sh.isle = this.regionSize(route.region) < 700;
+      if (!sh.path.length) this.landfall(sh);
+      return;
+    }
+    // nowhere to land: they go home
+    const home = this.bandById.get(sh.from);
+    if (home) {
+      for (const p of sh.people) { p.bandId = home.id; p.x = home.cx; p.y = home.cy; p.task = 'travel'; this.s.people.push(p); this.byId.set(p.id, p); }
+    }
+  }
+
+  private dirName(gx: number, gy: number): [string, string, string, string] {
+    const ns = gy < 0 ? 0 : gy > 0 ? 1 : -1, ew = gx < 0 ? 0 : gx > 0 ? 1 : -1;
+    const bg = [ns === 0 ? 'север' : ns === 1 ? 'юг' : '', ew === 0 ? 'запад' : ew === 1 ? 'изток' : ''].filter(Boolean).join('о');
+    const en = [ns === 0 ? 'north' : ns === 1 ? 'south' : '', ew === 0 ? 'west' : ew === 1 ? 'east' : ''].filter(Boolean).join('-');
+    const de = [ns === 0 ? 'Norden' : ns === 1 ? 'Süden' : '', ew === 0 ? 'Westen' : ew === 1 ? 'Osten' : ''].filter(Boolean).join('');
+    const deIn = de.replace('NordenWesten', 'Nordwesten').replace('NordenOsten', 'Nordosten').replace('SüdenWesten', 'Südwesten').replace('SüdenOsten', 'Südosten');
+    return [bg, en, deIn, deIn];
+  }
+
+  /** a new world was found: some of the smallest villages by the sea pack up and sail there, so the people spread out */
+  private spreadOut(gx: number, gy: number) {
+    const size = new Map<number, number>();
+    for (const p of this.s.people) size.set(p.bandId, (size.get(p.bandId) ?? 0) + 1);
+    const small = this.s.bands
+      .filter((b) => (size.get(b.id) ?? 0) >= 6 && !b.kingdom && !b.colony && this.harbour(b) >= 0)
+      .sort((a, b) => (size.get(a.id) ?? 0) - (size.get(b.id) ?? 0))
+      .slice(0, Math.max(2, Math.min(8, Math.round(this.s.bands.length * 0.08))));
+    let n = 0;
+    for (const b of small) {
+      if ((this.s.fleet?.length ?? 0) >= 12) break;
+      const route = this.seaRoute(this.harbour(b), this.regions[idx(Math.round(b.cx), Math.round(b.cy))], b, [gx, gy]);
+      if (!route) continue;
+      // the whole village goes: its people and its name, it is the same village on a new shore
+      const list = this.s.people.filter((p) => p.bandId === b.id);
+      this.depart(list);
+      const sh = this.newShip(b, list, route.path, route.dest, this.regionSize(route.region) < 700);
+      sh.band = b;
+      this.s.bands.splice(this.s.bands.indexOf(b), 1);
+      this.bandById.delete(b.id);
+      this.techSets.delete(b.id);
+      n++;
+    }
+    const one = n === 1;
+    if (n) this.emit('sail', 2, one ? 'Едно малко село по брега натовари лодките си и отплава към новия свят.' : `${n} малки села по брега натовариха лодките си и отплаваха към новия свят.`,
+      one ? 'Едно малко село отплава към новия свят!' : `${n} малки села отплаваха към новия свят!`, undefined, undefined, [],
+      [one ? 'A small village by the sea loaded its boats and sailed for the new world.' : `${n} small villages by the sea loaded their boats and sailed for the new world.`, one ? 'A small village sailed off to the new world!' : `${n} small villages sailed off to the new world!`],
+      [one ? 'Ein kleines Dorf an der Küste belud seine Boote und segelte in die neue Welt.' : `${n} kleine Dörfer an der Küste beluden ihre Boote und segelten in die neue Welt.`, one ? 'Ein kleines Dorf ist in die neue Welt gesegelt!' : `${n} kleine Dörfer sind in die neue Welt gesegelt!`]);
   }
 
   /** the ship reaches the new land: the families found a village (on a small island it stays a village) */
@@ -2787,29 +3005,47 @@ export class Simulation {
         if (free(nx, ny) && this.regions[idx(nx, ny)] === r) { x = nx; y = ny; break; }
       }
     }
-    const nb = this.newBand(x, y, undefined, sh.techs);
+    // a whole village that moved keeps its name; settlers found a new one
+    const moved = sh.band;
+    let nb: Band;
+    if (moved) {
+      nb = moved;
+      nb.cx = x; nb.cy = y; nb.scout = null; nb.kingdom = null;
+      this.s.bands.push(nb);
+      this.bandById.set(nb.id, nb);
+      this.techSets.set(nb.id, new Set(nb.techs));
+    } else {
+      nb = this.newBand(x, y, undefined, sh.techs);
+      nb.culture = sh.culture;
+      nb.color = sh.color;
+      const from = this.bandById.get(sh.from);
+      if (from) nb.from = { id: from.id, name: this.bandLabel(from, true) };
+      nb.food = sh.people.length * 6;
+    }
     nb.colony = true;
     nb.isle = sh.isle || undefined;
-    nb.culture = sh.culture;
-    nb.color = sh.color;
-    const from = this.bandById.get(sh.from);
-    if (from) nb.from = { id: from.id, name: this.bandLabel(from, true) };
     this.clearAround(nb.cx, nb.cy, 1);
-    nb.food = sh.people.length * 6;
     const year = formatYear(this.year);
     for (const p of sh.people) {
       p.bandId = nb.id;
       p.x = nb.cx + this.rng.range(-1.5, 1.5);
       p.y = nb.cy + this.rng.range(-1.5, 1.5);
       p.task = 'travel';
-      p.deeds.push(`Преплава морето и основа ново село (${year})`);
+      p.deeds.push(moved ? `Отплава с цялото село към нова земя (${year})` : `Преплава морето и основа ново село (${year})`);
       this.s.people.push(p);
       this.byId.set(p.id, p);
+    }
+    const n = sh.people.length;
+    if (moved) {
+      this.emit('colony', 2, `${this.bandLabel(nb, true)} стигна с лодките си до нова земя и се засели там.${sh.isle ? ' Островът е малък: тук ще има само село.' : ''}`,
+        `${this.bandLabel(nb, true)} се засели на нова земя!`, undefined, nb.id, [],
+        [`${this.bandEnLabel(nb, true)} reached a new land in its boats and settled there.${sh.isle ? ' The island is small: there will only ever be a village here.' : ''}`, `${this.bandEnLabel(nb, true)} settled in a new land!`],
+        [`${this.bDe(nb, 'nom', true)} erreichte mit seinen Booten ein neues Land und ließ sich dort nieder.${sh.isle ? ' Die Insel ist klein: Hier wird es immer nur ein Dorf geben.' : ''}`, `${this.bDe(nb, 'nom', true)} hat sich in einem neuen Land niedergelassen!`]);
+      return;
     }
     const leader = sh.people.filter((p) => p.sex === 0).sort((a, b) => a.born - b.born)[0];
     if (leader) { nb.chiefId = leader.id; nb.founder = { id: leader.id, name: this.nameOf(leader) }; }
     if (this.hasTech(nb, 'agriculture')) this.settleNew(nb);
-    const n = sh.people.length;
     const small = sh.isle ? ' Островът е малък: тук ще има само село.' : '';
     this.emit('colony', 2, `Кораб от ${sh.fromBg} стигна до непозната земя. ${n} души слязоха на брега и основаха ${this.bandLabel(nb)}.${small}`,
       `Кораб стигна до нова земя! ${n} души основаха там ${this.bandLabel(nb)}.`, leader?.id, nb.id, [],

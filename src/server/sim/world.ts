@@ -7,11 +7,17 @@ export const OLD_SIZE = 192;
 export const NEW_SIZE = 272;
 export let W = OLD_SIZE;
 export let H = OLD_SIZE;
-/** Set before generating or loading a world: one world per process. */
-export function setWorldSize(n: number) {
-  W = n;
-  H = n;
+/** Set before generating, loading or touching a world: the Earth and Mars share these. */
+export function setWorldSize(w: number, h = w) {
+  W = w;
+  H = h;
 }
+
+/** The world grows by whole maps when a ship reaches the edge: at most two more maps in every direction (5 x 5).
+ *  The first map is (0, 0); the grid is the box around every open map, in maps. */
+export interface Grid { gx0: number; gy0: number; cols: number; rows: number; open: string[] }
+export const GRID_REACH = 2;
+export const mapKey = (gx: number, gy: number) => `${gx},${gy}`;
 
 /** Static terrain plus the living resources on each tile. */
 export interface Terrain {
@@ -33,6 +39,62 @@ export interface Terrain {
   grain: Uint8Array; // wild grains grow here (for agriculture)
   wildHerd: Uint8Array; // wild goats/sheep/aurochs: domestication possible
   explored: Uint8Array; // 1 if any human has seen it
+  /** 1 on the tiles of maps not opened yet (deep sea nobody can sail into) */
+  closed?: Uint8Array;
+}
+
+const FIELDS = ['height', 'temp', 'moist', 'biome', 'river', 'plants', 'plantsCap', 'game', 'gameCap', 'fish', 'flint', 'clay', 'grain', 'wildHerd', 'explored', 'closed'] as const;
+
+function emptyTerrain(w: number, h: number): Terrain {
+  const n = w * h;
+  const t: Terrain = {
+    w, h, height: new Float32Array(n).fill(-1), temp: new Float32Array(n), moist: new Float32Array(n), biome: new Uint8Array(n).fill(Biome.DeepWater),
+    river: new Uint8Array(n), plants: new Float32Array(n), plantsCap: new Float32Array(n), game: new Float32Array(n), gameCap: new Float32Array(n),
+    fish: new Float32Array(n), flint: new Uint8Array(n), clay: new Uint8Array(n), grain: new Uint8Array(n), wildHerd: new Uint8Array(n),
+    explored: new Uint8Array(n), closed: new Uint8Array(n).fill(1),
+  };
+  return t;
+}
+
+/** copy all of `src` into `dst` with its top left corner at (ox, oy) */
+function blit(src: Terrain, dst: Terrain, ox: number, oy: number) {
+  for (const f of FIELDS) {
+    const a = src[f] as Float32Array | Uint8Array | undefined, b = dst[f] as Float32Array | Uint8Array;
+    for (let y = 0; y < src.h; y++) {
+      if (a) b.set(a.subarray(y * src.w, (y + 1) * src.w), (y + oy) * dst.w + ox);
+      else b.fill(0, (y + oy) * dst.w + ox, (y + oy) * dst.w + ox + src.w);
+    }
+  }
+}
+
+/** one map of the grid, made on its own (S x S) */
+function makeMap(seed: number, S: number, gx: number, gy: number): Terrain {
+  setWorldSize(S);
+  return generateTerrain(seed, gx, gy);
+}
+
+/** the whole world: every open map in its place, the rest closed sea */
+export function buildTerrain(seed: number, S: number, g: Grid): Terrain {
+  const t = emptyTerrain(g.cols * S, g.rows * S);
+  for (const key of g.open) {
+    const [gx, gy] = key.split(',').map(Number);
+    blit(makeMap(seed, S, gx, gy), t, (gx - g.gx0) * S, (gy - g.gy0) * S);
+  }
+  setWorldSize(t.w, t.h);
+  return t;
+}
+
+/** the world with one more map: the old tiles keep what grew and was seen on them; returns the shift of the old tiles */
+export function growTerrain(old: Terrain, seed: number, S: number, g: Grid, gx: number, gy: number): { t: Terrain; grid: Grid; dx: number; dy: number } {
+  const gx0 = Math.min(g.gx0, gx), gy0 = Math.min(g.gy0, gy);
+  const cols = Math.max(g.gx0 + g.cols, gx + 1) - gx0, rows = Math.max(g.gy0 + g.rows, gy + 1) - gy0;
+  const grid: Grid = { gx0, gy0, cols, rows, open: [...g.open, mapKey(gx, gy)] };
+  const t = emptyTerrain(cols * S, rows * S);
+  const dx = (g.gx0 - gx0) * S, dy = (g.gy0 - gy0) * S;
+  blit(old, t, dx, dy);
+  blit(makeMap(seed, S, gx, gy), t, (gx - gx0) * S, (gy - gy0) * S);
+  setWorldSize(t.w, t.h);
+  return { t, grid, dx, dy };
 }
 
 export const SEA = 0.0;
@@ -45,11 +107,15 @@ export function inBounds(x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < W && y < H;
 }
 
-export function generateTerrain(seed: number): Terrain {
-  const rng = new Rng(seed);
-  const elev = new Simplex(rng);
-  const wet = new Simplex(rng);
-  const warp = new Simplex(rng);
+/** one map: the first one is (0, 0); the others go on with the same noise, so the coasts meet at the seams */
+export function generateTerrain(seed: number, gx = 0, gy = 0): Terrain {
+  const rng0 = new Rng(seed);
+  const elev = new Simplex(rng0);
+  const wet = new Simplex(rng0);
+  const warp = new Simplex(rng0);
+  // the first map goes on with the same numbers as always; every other map has its own
+  const rng = gx || gy ? new Rng((seed ^ Math.imul(gx + 101, 0x9e3779b1) ^ Math.imul(gy + 307, 0x85ebca6b)) >>> 0) : rng0;
+  const ox = gx * W, oy = gy * H;
   const n = W * H;
   // keep hills, rivers and coasts the same size in tiles on a bigger map
   const k = W / OLD_SIZE, kk = k * k;
@@ -76,16 +142,16 @@ export function generateTerrain(seed: number): Terrain {
   const ridgeX = rng.range(0.3, 0.7);
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      const nx = x / W, ny = y / H;
+      const nx = x / W + gx, ny = y / H + gy;
       const wx = nx + 0.12 * warp.fbm(nx * 3 * k, ny * 3 * k, 3);
       const wy = ny + 0.12 * warp.fbm(nx * 3 * k + 7.3, ny * 3 * k + 2.1, 3);
       let e = elev.fbm(wx * 3.2 * k, wy * 3.2 * k, 6, 2.0, 0.5);
       // continent mask: distance from centre with an elliptic falloff
-      const dx = (nx - 0.5) / 0.48, dy = (ny - 0.5) / 0.46;
+      const dx = (nx - gx - 0.5) / 0.48, dy = (ny - gy - 0.5) / 0.46;
       const d = Math.sqrt(dx * dx + dy * dy);
       e = e * 0.85 + 0.42 - Math.pow(d, 2.2) * 0.75;
       // a mountain spine
-      const spine = Math.exp(-Math.pow((wx - ridgeX - 0.15 * Math.sin(wy * 6 * k)) / (0.06 / k), 2)) * 0.28 * (1 - d * 0.7);
+      const spine = Math.exp(-Math.pow((wx - gx - ridgeX - 0.15 * Math.sin(wy * 6 * k)) / (0.06 / k), 2)) * 0.28 * (1 - d * 0.7);
       e += Math.max(0, spine) * (0.6 + 0.4 * elev.noise(wx * 9 * k, wy * 9 * k));
       t.height[idx(x, y)] = e;
     }
@@ -102,10 +168,12 @@ export function generateTerrain(seed: number): Terrain {
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const i = idx(x, y);
-      const lat = y / H; // 0 = north
+      // 0 = north; the maps to the north are colder, those to the south hotter, more gently than within the first
+      const L = y / H + gy;
+      const lat = L < 0 ? L * 0.35 : L > 1 ? 1 + (L - 1) * 0.35 : L;
       const h = Math.max(0, t.height[i]);
-      t.temp[i] = Math.min(1, Math.max(0, 0.15 + lat * 0.75 - h * 0.55 + 0.08 * wet.noise(x / 30, y / 30)));
-      t.moist[i] = Math.min(1, Math.max(0, 0.55 + 0.45 * wet.fbm(x / 55 + 11, y / 55 + 3, 4)));
+      t.temp[i] = Math.min(1, Math.max(0, 0.15 + lat * 0.75 - h * 0.55 + 0.08 * wet.noise((x + ox) / 30, (y + oy) / 30)));
+      t.moist[i] = Math.min(1, Math.max(0, 0.55 + 0.45 * wet.fbm((x + ox) / 55 + 11, (y + oy) / 55 + 3, 4)));
     }
   }
 
