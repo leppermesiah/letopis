@@ -142,10 +142,27 @@ canvas.addEventListener('pointermove', (e) => {
   last = { x: e.clientX, y: e.clientY };
   if (moved > 6) { stopTour(); follow = null; }
 });
+/** a quick second tap zooms in there; a single tap still picks, a moment later */
+let lastTap = { t: 0, x: 0, y: 0 }, tapTimer = 0;
+const tap = (e: PointerEvent) => {
+  if (e.pointerType !== 'touch') { pick(e.clientX, e.clientY); return; }
+  const now = performance.now();
+  if (now - lastTap.t < 300 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) {
+    clearTimeout(tapTimer);
+    lastTap.t = 0;
+    const rect = canvas.getBoundingClientRect();
+    stopTour(); follow = null;
+    zoomBy(1.8, e.clientX - rect.left, e.clientY - rect.top);
+    return;
+  }
+  lastTap = { t: now, x: e.clientX, y: e.clientY };
+  const { clientX, clientY } = e;
+  tapTimer = window.setTimeout(() => pick(clientX, clientY), 260);
+};
 const endPointer = (e: PointerEvent) => {
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinchDist = 0;
-  if (dragging && moved < 6 && pointers.size === 0 && !pinched) pick(e.clientX, e.clientY);
+  if (dragging && moved < 6 && pointers.size === 0 && !pinched) tap(e);
   if (pointers.size === 0) { dragging = false; pinched = false; }
 };
 canvas.addEventListener('pointerup', endPointer);
@@ -955,6 +972,7 @@ $('#kidsBtn').onclick = () => {
 document.body.classList.toggle('kids', kids);
 // inside the Android app: what the phone should tell you about
 initApp(() => kids);
+if ((window as unknown as { LetopisApp?: unknown }).LetopisApp) setupAppMenu();
 $('#kidsBtn').setAttribute('aria-pressed', String(kids));
 let night = store('letopis.night', true);
 r.night = night;
@@ -1108,6 +1126,54 @@ function setupMaps() {
     };
     document.body.appendChild(a);
   }
+}
+
+// ---------- inside the Android app: everything in a ☰ menu, only the zoom on the map ----------
+
+function setupAppMenu() {
+  document.body.classList.add('in-app');
+  const ctl = $('.controls') as HTMLElement;
+  // the zoom: + on top, a slider, − below, at the bottom right where the thumb is
+  const zoom = document.createElement('div');
+  zoom.className = 'zoom-rail';
+  const slider = document.createElement('input');
+  slider.type = 'range'; slider.min = '0'; slider.max = '1000';
+  slider.setAttribute('aria-label', T('Мащаб', 'Zoom', 'Zoom'));
+  const lo = Math.log(0.18), hi = Math.log(MAX_ZOOM);
+  slider.oninput = () => { cam.tz = Math.exp(lo + (hi - lo) * Number(slider.value) / 1000); };
+  let held = false;
+  slider.onpointerdown = () => { held = true; };
+  slider.onpointerup = slider.onpointercancel = () => { held = false; };
+  zoom.append($('#zoomIn'), slider, $('#zoomOut'));
+  document.body.appendChild(zoom);
+  app.ticker.add(() => { if (!held) slider.value = String(Math.round(((Math.log(cam.tz) - lo) / (hi - lo)) * 1000)); });
+  // the menu: the same buttons as on the big screen, in groups
+  const btn = document.createElement('button');
+  btn.id = 'menuBtn'; btn.className = 'btn round'; btn.textContent = '☰';
+  btn.setAttribute('aria-label', T('Меню', 'Menu', 'Menü'));
+  const menu = document.createElement('div');
+  menu.id = 'appMenu'; menu.hidden = true;
+  const group = (bg: string, en: string, de: string, ...els: (Element | null)[]) => {
+    const g = document.createElement('section');
+    g.innerHTML = `<h4>${esc(T(bg, en, de))}</h4>`;
+    for (const el of els) if (el) g.appendChild(el);
+    menu.appendChild(g);
+  };
+  const wraps = [...ctl.querySelectorAll('.sound-wrap')];
+  group('Изглед', 'View', 'Ansicht', $('#tourBtn'), $('#nightBtn'), wraps.find((w) => w.classList.contains('maps-wrap')) ?? null, $('#planetBtn'), $('#sideToggle'));
+  group('Звук', 'Sound', 'Ton', wraps.find((w) => w.querySelector('#soundBtn')) ?? null);
+  group('Настройки', 'Settings', 'Einstellungen', wraps.find((w) => w.classList.contains('app-wrap')) ?? null, $('#kidsBtn'), $('#langSel'), $('#helpBtn'));
+  $('#helpBtn').textContent = `?  ${T('Помощ и новости', 'Help and news', 'Hilfe und Neues')}`;
+  document.body.append(btn, menu);
+  const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  btn.onclick = (ev) => { ev.stopPropagation(); menu.hidden = !menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden)); };
+  menu.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    // a plain button does its thing and the menu goes; the ones that open their own little panel keep it open
+    const b = (ev.target as HTMLElement).closest('button');
+    if (b && !b.closest('.sound-wrap')) close();
+  });
+  canvas.addEventListener('pointerdown', close);
 }
 
 // the panel can hide; a small tab at the edge brings it back, and the choice is remembered

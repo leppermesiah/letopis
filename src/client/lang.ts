@@ -99,7 +99,7 @@ export function translatePage() {
   if (brand?.firstChild) brand.firstChild.textContent = 'Letopis ';
   document.title = document.title.replace('Летопис', 'Letopis');
   const stats: [string, string, string][] = [
-    ['#pop', 'People', 'Menschen'], ['#bandsCount', 'Clans', 'Clans'], ['#born', 'Born', 'Geboren'], ['#died', 'Died', 'Gestorben'],
+    ['#pop', 'People', 'Menschen'], ['#bandsCount', 'Clans on the map', 'Clans auf der Karte'], ['#born', 'Born', 'Geboren'], ['#died', 'Died', 'Gestorben'],
     ['#age', 'World age', 'Alter der Welt'],
   ];
   for (const [id, en, de] of stats) {
