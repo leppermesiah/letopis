@@ -549,8 +549,16 @@ function drawChart(c: HTMLCanvasElement, years: number[], series: Series[]) {
 }
 
 async function loadOlder() {
-  const oldest = feed.length ? feed[feed.length - 1].id : undefined;
-  const more = await api<ChronicleEntry[]>(`/api/chronicle?limit=80${oldest ? `&before=${oldest}` : ''}`);
+  const last = feed[feed.length - 1];
+  const before = last ? `&before=${last.id}` : '';
+  let more: ChronicleEntry[];
+  if (onlyBig && last) {
+    // only the big events: a hundred years back at a time, fifty when they come thick
+    more = await api<ChronicleEntry[]>(`/api/chronicle?min=2&limit=500${before}&fromYear=${Math.floor(last.year) - 100}`);
+    if (more.length > 60) more = more.filter((e) => e.year >= last.year - 50);
+    // nothing important in all those years: just the next few
+    if (!more.length) more = await api<ChronicleEntry[]>(`/api/chronicle?min=2&limit=20${before}`);
+  } else more = await api<ChronicleEntry[]>(`/api/chronicle?limit=80${before}`);
   for (const e of more) if (!feed.some((f) => f.id === e.id)) feed.push(e);
   renderSide();
 }

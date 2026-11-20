@@ -270,7 +270,7 @@ const server = http.createServer((req, res) => {
     if (p === '/api/health') return json(res, { ok: true, world, year: Math.floor(sim2.year), population: sim2.s.people.length });
     if (p === '/api/world') return json(res, (onMars ? marsInfo! : worldInfo));
     if (p === '/api/snapshot') return json(res, snapshot(sim2));
-    if (p === '/api/chronicle') return json(res, store.chronicle(world, { before: q('before'), after: q('after'), min: q('min'), limit: q('limit') }));
+    if (p === '/api/chronicle') return json(res, store.chronicle(world, { before: q('before'), after: q('after'), min: q('min'), limit: q('limit'), fromYear: q('fromYear') }));
     if (p === '/api/since') {
       const after = q('after') ?? 0;
       return json(res, { ...store.countSince(world, after), events: store.chronicle(world, { after, min: 2, limit: 200 }) });

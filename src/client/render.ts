@@ -1106,6 +1106,17 @@ export class WorldRenderer {
     return out;
   }
 
+  /** a farmer works on one of the clan's fields (the same one for a while), not just anywhere round the camp */
+  private fieldRow(r: PersonRow): PersonRow {
+    const f = this.camps.get(r[4])?.fieldTiles;
+    if (!f?.length) return r;
+    const [x, y] = f[Math.floor(hash(r[0], 41 + (this.month >> 2)) * f.length)];
+    const out = [...r] as PersonRow;
+    out[1] = Math.round((x + (hash(r[0], 43) - 0.5) * 0.7) * 10);
+    out[2] = Math.round((y + (hash(r[0], 47) - 0.5) * 0.7) * 10);
+    return out;
+  }
+
   updatePeople(rows: PersonRow[], bandColors: Map<number, number>, tickMs: number) {
     this.lastPeople = { rows, bandColors, tickMs };
     const seen = new Set<number>();
@@ -1134,7 +1145,7 @@ export class WorldRenderer {
       return home !== 'hut' && home !== 'house';
     }) : shown;
     for (const r0 of sleepers) {
-      let r = night ? this.nightRow(r0) : r0;
+      let r = night ? this.nightRow(r0) : TASKS[r0[3]] === 'farm' ? this.fieldRow(r0) : r0;
       // the bodyguard keeps close to the chief while he looks for a new place
       if (roles.get(r0[0]) === 'bodyguard') {
         const chief = byBand.get(r0[4])?.find((q) => q[7] === 1);
@@ -2105,6 +2116,8 @@ export class CampSprite {
   id: number;
   key = '';
   fieldKey = '';
+  /** the tiles its fields lie on, for the farmers to work */
+  fieldTiles: [number, number][] = [];
   pos = { x: 0, y: 0 };
   tx = 0;
   ty = 0;
@@ -2562,10 +2575,17 @@ export class CampSprite {
     if (fkey === this.fieldKey) return;
     this.fieldKey = fkey;
     this.fields.removeChildren().forEach((c) => c.destroy());
+    this.fieldTiles = [];
     if (!count) return;
     const A = this.r.atlas;
     const off = this.townR ? this.townR + 1 : 3;
-    const ring: [number, number][] = [[off, 0], [0, off], [off, 1], [1, off], [off, -1], [-1, off], [off + 1, 0], [0, off + 1], [off + 1, 1], [1, off + 1], [-off, 0], [0, -off]];
+    // the nearest tiles outside the wall first, in a fixed order, so the fields stay where they are
+    const ring: [number, number][] = [];
+    for (let dy = -off - 3; dy <= off + 3; dy++) for (let dx = -off - 3; dx <= off + 3; dx++) {
+      const d = Math.hypot(dx, dy);
+      if (d >= off - 0.5 && d <= off + 3) ring.push([dx, dy]);
+    }
+    ring.sort((a, c) => Math.hypot(a[0], a[1]) + hash(bx + a[0], by + a[1]) * 0.8 - Math.hypot(c[0], c[1]) - hash(bx + c[0], by + c[1]) * 0.8);
     let placed = 0;
     for (const [dx, dy] of ring) {
       if (placed >= count) break;
@@ -2581,6 +2601,7 @@ export class CampSprite {
       const p = this.r.tileTop(x, y);
       s.position.set(p.x - this.pos.x, p.y - this.pos.y);
       this.fields.addChild(s);
+      this.fieldTiles.push([x, y]);
       placed++;
     }
     // fields drawn back to front

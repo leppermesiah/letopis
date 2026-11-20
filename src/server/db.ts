@@ -101,7 +101,7 @@ export class Store {
     return out;
   }
 
-  chronicle(world: string, opts: { before?: number; after?: number; min?: number; limit?: number }): ChronicleEntry[] {
+  chronicle(world: string, opts: { before?: number; after?: number; min?: number; limit?: number; fromYear?: number }): ChronicleEntry[] {
     const limit = Math.min(500, opts.limit ?? 60);
     const min = opts.min ?? 1;
     let rows: Record<string, unknown>[];
@@ -109,8 +109,8 @@ export class Store {
       rows = this.db.prepare('SELECT * FROM chronicle WHERE world = ? AND importance >= ? AND id > ? ORDER BY id ASC LIMIT ?')
         .all(world, min, opts.after, limit) as Record<string, unknown>[];
     } else {
-      rows = this.db.prepare('SELECT * FROM chronicle WHERE world = ? AND importance >= ? AND id < ? ORDER BY id DESC LIMIT ?')
-        .all(world, min, opts.before ?? 2 ** 31, limit) as Record<string, unknown>[];
+      rows = this.db.prepare('SELECT * FROM chronicle WHERE world = ? AND importance >= ? AND id < ? AND year >= ? ORDER BY id DESC LIMIT ?')
+        .all(world, min, opts.before ?? 2 ** 31, opts.fromYear ?? -1e9, limit) as Record<string, unknown>[];
     }
     return rows.map((r) => ({
       id: r.id as number, tick: r.tick as number, year: r.year as number, kind: r.kind as string,
