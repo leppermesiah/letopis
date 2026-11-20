@@ -8,13 +8,13 @@ import { PersonRow, SnapshotMessage, TickMessage, WorldInfo, b64encode } from '.
 
 export interface View { key: string; x0: number; y0: number; w: number; h: number; map: [number, number] | null }
 
-/** the viewer's view from `?map=gx,gy` (missing, 'all' or a map that is not open: the whole world) */
+/** the viewer's view from `?map=gx,gy`; a grown world is always seen one map at a time (missing or not open: the first map) */
 export function viewFor(sm: Simulation, param: string | null): View {
   const W = sm.t.w, H = sm.t.h, g = sm.s.grid;
   const all: View = { key: 'all', x0: 0, y0: 0, w: W, h: H, map: null };
-  if (!g || !param || param === 'all') return all;
-  const [gx, gy] = param.split(',').map(Number);
-  if (!Number.isFinite(gx) || !Number.isFinite(gy) || !g.open.includes(mapKey(gx, gy))) return all;
+  if (!g) return all;
+  let [gx, gy] = (param ?? '').split(',').map(Number);
+  if (!Number.isFinite(gx) || !Number.isFinite(gy) || !g.open.includes(mapKey(gx, gy))) [gx, gy] = [0, 0];
   const S = sm.mapSize;
   return { key: mapKey(gx, gy), x0: (gx - g.gx0) * S, y0: (gy - g.gy0) * S, w: S, h: S, map: [gx, gy] };
 }

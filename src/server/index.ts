@@ -7,6 +7,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Simulation, SimState } from './sim/sim';
 import { Store } from './db';
 import { Moving, View, movingOf, snapshotFor, tickFor, viewFor, worldInfoFor } from './views';
+import { minimap } from './minimap';
 import { Discovery, SnapshotMessage, TickMessage, WorldInfo, b64encode, formatYear } from '../shared/types';
 import { TECHS } from './sim/tech';
 
@@ -268,6 +269,13 @@ const server = http.createServer((req, res) => {
     if (onMars && !mars && p.startsWith('/api/')) return json(res, { error: 'Марс още е пуст' }, 404);
     if (p === '/api/health') return json(res, { ok: true, world, year: Math.floor(sim2.year), population: sim2.s.people.length });
     if (p === '/api/world') return json(res, infoFor(sm, view));
+    if (p === '/api/minimap') {
+      const [gx, gy] = (url.searchParams.get('map') ?? '').split(',').map(Number);
+      const img = Number.isFinite(gx) && Number.isFinite(gy) ? minimap(sm, gx, gy) : null;
+      if (!img) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'public, max-age=300' });
+      return res.end(img);
+    }
     if (p === '/api/snapshot') return json(res, snapshot(sim2, view));
     if (p === '/api/chronicle') return json(res, store.chronicle(world, { before: q('before'), after: q('after'), min: q('min'), limit: q('limit'), fromYear: q('fromYear') }));
     if (p === '/api/since') {

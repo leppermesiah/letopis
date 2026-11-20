@@ -53,7 +53,10 @@
     <button id="tourBtn" class="btn" aria-pressed="false" title="Камерата сама обикаля света">Разходка</button>
     <button id="nightBtn" class="btn" aria-pressed="true" title="Смяна на ден и нощ">Нощ</button>
     <button id="planetBtn" class="btn" hidden>Марс</button>
-    <button id="mapBtn" class="btn" hidden>Една карта</button>
+    <span class="sound-wrap maps-wrap" hidden>
+      <button id="mapBtn" class="btn" aria-expanded="false">Карти</button>
+      <div id="mapsPanel" class="sound-panel maps-panel" hidden></div>
+    </span>
     <span class="sound-wrap">
       <button id="soundBtn" class="btn" aria-pressed="false" aria-expanded="false" title="Музика и звуци">Звук</button>
       <div id="soundPanel" class="sound-panel" hidden>

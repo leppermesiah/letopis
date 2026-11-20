@@ -996,34 +996,44 @@ function goView(map: string, at: { x: number; y: number; band?: number }) {
   location.reload();
 }
 
-/** the button that switches between the whole world and one map, and the arrows to the maps next door */
+/** the "Maps" window: a small picture of every map, made on the server every five minutes; a click goes there */
 function setupMaps() {
   const g = info.grid;
-  const btn = $('#mapBtn') as HTMLButtonElement;
-  if (BASE || !g || g.open.length < 2) { btn.hidden = true; return; }
+  const wrap = $('.maps-wrap') as HTMLElement, btn = $('#mapBtn') as HTMLButtonElement, panel = $('#mapsPanel');
+  if (BASE || !g || !info.view || g.open.length < 2) return;
   const S = g.size;
   const open = (gx: number, gy: number) => g.open.includes(`${gx},${gy}`);
-  btn.hidden = false;
-  const label = () => {
-    btn.textContent = viewMap === 'all' ? T('Една карта', 'One map', 'Eine Karte') : T('Целият свят', 'Whole world', 'Ganze Welt');
-    btn.title = viewMap === 'all' ? T('Само картата под камерата: по-леко за телефона', 'Only the map under the camera: lighter for a phone', 'Nur die Karte unter der Kamera: leichter fürs Handy')
-      : T('Всички открити карти заедно', 'All the maps found so far together', 'Alle bisher entdeckten Karten zusammen');
-  };
-  label();
-  btn.onclick = () => {
-    const [x, y] = camTile();
-    if (viewMap === 'all') {
-      let gx = Math.floor(x / S) + g.gx0, gy = Math.floor(y / S) + g.gy0;
-      if (!open(gx, gy)) [gx, gy] = g.open.map((k) => k.split(',').map(Number)).sort((a, b) => Math.hypot(a[0] - gx, a[1] - gy) - Math.hypot(b[0] - gx, b[1] - gy))[0];
-      goView(`${gx},${gy}`, { x: Math.max(2, Math.min(S - 3, x - (gx - g.gx0) * S)), y: Math.max(2, Math.min(S - 3, y - (gy - g.gy0) * S)) });
-    } else {
-      const [gx, gy] = viewMap.split(',').map(Number);
-      goView('all', { x: x + (gx - g.gx0) * S, y: y + (gy - g.gy0) * S });
+  const [hx, hy] = info.view;
+  wrap.hidden = false;
+  btn.textContent = T('Карти', 'Maps', 'Karten');
+  btn.title = T('Всички открити карти: избери къде да гледаш', 'All the maps found so far: pick where to look', 'Alle bisher entdeckten Karten: wähle, wohin du schaust');
+  const draw = () => {
+    const stamp = Math.floor(Date.now() / 300_000);
+    let html = '<div class="maps-grid">';
+    for (let gy = -2; gy <= 2; gy++) for (let gx = -2; gx <= 2; gx++) {
+      const i = gx + 2, j = gy + 2;
+      const pos = `left:calc(var(--cw) * ${(i - j + 4) / 2});top:calc(var(--ch) * ${(i + j) / 2})`;
+      if (!open(gx, gy)) { html += `<div class="closed" style="${pos}"></div>`; continue; }
+      html += `<img src="/api/minimap?map=${gx},${gy}&t=${stamp}" data-map="${gx},${gy}" style="${pos}" alt="" draggable="false">`;
+      if (gx === hx && gy === hy) html += `<div class="maps-ring" style="${pos}"><svg viewBox="0 0 100 50" preserveAspectRatio="none"><polygon points="50,1 99,25 50,49 1,25" fill="none" stroke="#fff" stroke-width="2" vector-effect="non-scaling-stroke"/></svg></div>`;
     }
+    panel.innerHTML = `${html}</div><div class="maps-note">${T('Картинките се обновяват на 5 минути', 'The pictures are renewed every 5 minutes', 'Die Bilder werden alle 5 Minuten erneuert')}</div>`;
   };
-  if (viewMap === 'all') return;
-  // one map: arrows at the edges of the screen lead to the open maps next to it
-  const [gx, gy] = viewMap.split(',').map(Number);
+  btn.onclick = (ev) => {
+    ev.stopPropagation();
+    panel.hidden = !panel.hidden;
+    btn.setAttribute('aria-expanded', String(!panel.hidden));
+    if (!panel.hidden) draw();
+  };
+  panel.onclick = (ev) => {
+    ev.stopPropagation();
+    const m = (ev.target as HTMLElement).closest('img')?.dataset.map;
+    if (!m) return;
+    if (m === `${hx},${hy}`) { panel.hidden = true; return; }
+    goView(m, { x: S / 2, y: S / 2 });
+  };
+  document.addEventListener('click', () => { if (!panel.hidden) { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); } });
+  const [gx, gy] = [hx, hy];
   const dirs: [string, number, number, string][] = [['mapN', 0, -1, '▲'], ['mapS', 0, 1, '▼'], ['mapW', -1, 0, '◀'], ['mapE', 1, 0, '▶']];
   for (const [id, dx, dy, ch] of dirs) {
     if (!open(gx + dx, gy + dy)) continue;
