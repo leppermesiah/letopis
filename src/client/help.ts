@@ -20,6 +20,9 @@ const TAG_ORDER: Tag[] = ['breaking', 'new', 'old'];
 
 /** newest first; a new version gets its own entry here */
 export const CHANGELOG: Release[] = [
+  { v: '1.91.1', items: [
+    ['Приложението отново зарежда.', 'The app loads again.', 'Die App lädt wieder.', 'fix'],
+  ] },
   { v: '1.91', items: [
     ['Всяка тайна е свой приказен герой. Намерените са с лек зелен контур и с картинка в списъка.', 'Every secret is its own fairy tale hero. Found ones get a soft green rim and a picture in the list.', 'Jedes Geheimnis ist eine eigene Märchenfigur. Gefundene haben einen zarten grünen Rand und ein Bild in der Liste.', 'add'],
     ['Пазачът остава пазач от 18 години до смъртта или пенсията и така пише и в картата му.', 'A guard stays a guard from 18 until death or retirement, and his card says so.', 'Ein Wächter bleibt Wächter von 18 bis zum Tod oder Ruhestand, und so steht es auch auf seiner Karte.', 'fix'],
