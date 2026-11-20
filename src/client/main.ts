@@ -485,7 +485,7 @@ const CHART_COLORS = ['#e0a84f', '#6fb1e0', '#d9675b', '#7fc77a', '#b58be0'];
 async function renderStats(body: HTMLElement) {
   if (performance.now() - statsAt < 15000 && body.querySelector('canvas')) return;
   statsAt = performance.now();
-  const rows = await api<StatRow[]>('/api/stats');
+  const [rows, found] = await Promise.all([api<StatRow[]>('/api/stats'), api<Discovery[]>('/api/discoveries').catch(() => [] as Discovery[])]);
   if (activeTab !== 'stats') return;
   const techsKnown = new Set(bands.flatMap((b) => b.techs));
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || CHART_COLORS[0];
@@ -514,14 +514,43 @@ async function renderStats(body: HTMLElement) {
       <div><span>${T('Починали', 'Died', 'Gestorben')}</span><b>${$('#died').textContent}</b></div>
       <div><span>${T('Знания', 'Knowledge', 'Wissen')}</span><b>${techsKnown.size}</b></div>
     </div>
-    ${charts.map(([title, series], k) => `<h3>${esc(title)}</h3>${series.length > 1 ? `<div class="legend">${series.map((x) => `<span><i style="background:${x.color}"></i>${esc(x.label)}</span>`).join('')}</div>` : ''}<canvas class="chart" id="chart${k}" height="140"></canvas>`).join('')}
+    ${charts.map(([title, series], k) => `<h3>${esc(title)}</h3>${series.length > 1 ? `<div class="legend">${series.map((x) => `<span><i style="background:${x.color}"></i>${esc(x.label)}</span>`).join('')}</div>` : ''}<div class="chart-wrap"><canvas class="chart" id="chart${k}" height="140"></canvas><div class="chart-tip" hidden></div></div>`).join('')}
     <h3>${T('Какво знаят хората', 'What people know', 'Was die Menschen wissen')}</h3><div class="techs">${[...techsKnown].map((t) => `<span class="pill">${esc(TECH(t))}</span>`).join('') || `<span class="muted">${T('Нищо още', 'Nothing yet', 'Noch nichts')}</span>`}</div>`;
   if (rows.length < 2) return;
-  charts.forEach(([, series], k) => drawChart($(`#chart${k}`) as HTMLCanvasElement, rows.map((r2) => r2.year), series));
+  const years = rows.map((r2) => r2.year);
+  // what was found between one point of the chart and the next
+  const foundAt = (i: number) => found.filter((d) => d.year <= years[i] && (i === 0 || d.year > years[i - 1])).map((d) => TECH_ID(d.tech, d.name));
+  charts.forEach(([, series], k) => {
+    const c = $(`#chart${k}`) as HTMLCanvasElement;
+    chartHover(c, years, series, k === 3 ? foundAt : undefined);
+  });
+}
+
+/** the chart, and on hover (or a touch) a dashed line with the exact numbers of that year */
+function chartHover(c: HTMLCanvasElement, years: number[], series: Series[], extra?: (i: number) => string[]) {
+  const tip = c.nextElementSibling as HTMLElement;
+  drawChart(c, years, series);
+  const n = years.length;
+  const show = (ev: PointerEvent) => {
+    const r = c.getBoundingClientRect();
+    const fx = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+    const i = Math.round(fx * (n - 1));
+    drawChart(c, years, series, i);
+    const vals = series.filter((sr) => sr.values[i] != null).map((sr) => `<div><i style="background:${sr.color}"></i>${sr.label ? `${esc(sr.label)}: ` : ''}<b>${num(Math.round(sr.values[i]!))}</b></div>`);
+    const more = extra?.(i) ?? [];
+    tip.innerHTML = `<div class="muted">${esc(fmtYear(years[i]))}</div>${vals.join('')}${more.length ? `<div class="chart-found">${more.slice(0, 6).map(esc).join(', ')}${more.length > 6 ? ` +${more.length - 6}` : ''}</div>` : ''}`;
+    tip.hidden = false;
+    const x = (i / (n - 1)) * r.width;
+    tip.style.left = `${Math.min(Math.max(0, x - tip.offsetWidth / 2), r.width - tip.offsetWidth)}px`;
+  };
+  const hide = () => { tip.hidden = true; drawChart(c, years, series); };
+  c.onpointermove = show;
+  c.onpointerdown = show;
+  c.onpointerleave = hide;
 }
 
 /** a small line (or bar) chart: first and last year below, the highest value in the corner */
-function drawChart(c: HTMLCanvasElement, years: number[], series: Series[]) {
+function drawChart(c: HTMLCanvasElement, years: number[], series: Series[], hover?: number) {
   const w = (c.width = c.clientWidth * 2), h = (c.height = 280), top = 34, foot = 34;
   const g = c.getContext('2d')!;
   const all = series.flatMap((x) => x.values.filter((v): v is number => v != null));
@@ -557,6 +586,19 @@ function drawChart(c: HTMLCanvasElement, years: number[], series: Series[]) {
   g.fillText(endLabel, w - g.measureText(endLabel).width - 8, h - 8);
   const top1 = Math.round(max / 1.08);
   g.fillText(`${T('макс.', 'max', 'max.')} ${num(top1)}`, 8, 24);
+  if (hover == null) return;
+  // the year under the mouse: a dashed line and a dot on every series
+  g.strokeStyle = muted;
+  g.lineWidth = 2;
+  g.setLineDash([6, 6]);
+  g.beginPath(); g.moveTo(X(hover), top - 6); g.lineTo(X(hover), h - foot); g.stroke();
+  g.setLineDash([]);
+  for (const sr of series) {
+    const v = sr.values[hover];
+    if (v == null) continue;
+    g.fillStyle = sr.color;
+    g.beginPath(); g.arc(X(hover), Y(v), 7, 0, Math.PI * 2); g.fill();
+  }
 }
 
 async function loadOlder() {
