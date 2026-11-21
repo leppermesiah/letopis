@@ -20,6 +20,10 @@ const TAG_ORDER: Tag[] = ['breaking', 'new', 'old'];
 
 /** newest first; a new version gets its own entry here */
 export const CHANGELOG: Release[] = [
+  { v: '1.92', items: [
+    ['Статистиката показва по 1000 години, със стрелки назад и напред, а пунктирът минава през всички графики наведнъж.', 'Statistics show 1000 years at a time, with arrows back and forward, and the dashed line runs through all charts at once.', 'Die Statistik zeigt jeweils 1000 Jahre, mit Pfeilen zurück und vor, und die gestrichelte Linie läuft durch alle Diagramme zugleich.', 'add'],
+    ['Хората са горе-долу толкова, колкото в истинския свят в същата година (в мащаба на картата), а селата, чиито стени се застъпват, стават едно.', 'There are about as many people as in the real world in the same year (in the scale of the map), and villages whose walls overlap become one.', 'Es gibt ungefähr so viele Menschen wie in der echten Welt im selben Jahr (im Maßstab der Karte), und Dörfer, deren Mauern sich überschneiden, werden eins.', 'add'],
+  ] },
   { v: '1.91.1', items: [
     ['Приложението отново зарежда.', 'The app loads again.', 'Die App lädt wieder.', 'fix'],
   ] },

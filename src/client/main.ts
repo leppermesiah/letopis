@@ -495,15 +495,22 @@ function renderSide() {
 const secretIcon = (k: number, size = 22) => atlas.html(atlas.has(`hero${k}`) ? `hero${k}` : `sec_${SECRET_KINDS[k % SECRET_KINDS.length].id}0`, size, 'secret-ico');
 
 let statsAt = 0;
+/** the last year of the thousand years shown; null: the newest thousand, following the time */
+let statsTo: number | null = null;
 interface StatRow { year: number; population: number; bands: number; era: number; techs: number; villages?: number; born?: number; died?: number; kingdoms?: number; disaster?: number }
 interface Series { label: string; color: string; values: (number | null)[]; bars?: boolean }
 const CHART_COLORS = ['#e0a84f', '#6fb1e0', '#d9675b', '#7fc77a', '#b58be0'];
+const STATS_SPAN = 1000;
 
-async function renderStats(body: HTMLElement) {
-  if (performance.now() - statsAt < 15000 && body.querySelector('canvas')) return;
+async function renderStats(body: HTMLElement, force = false) {
+  // an older window does not change; the newest one is drawn again every 15 seconds
+  if (!force && body.querySelector('canvas') && (statsTo !== null || performance.now() - statsAt < 15000)) return;
   statsAt = performance.now();
-  const [rows, found] = await Promise.all([api<StatRow[]>('/api/stats'), api<Discovery[]>('/api/discoveries').catch(() => [] as Discovery[])]);
+  const q = statsTo === null ? `?span=${STATS_SPAN}` : `?from=${statsTo - STATS_SPAN}&to=${statsTo}`;
+  const [st, found] = await Promise.all([api<{ first: number; last: number; rows: StatRow[] }>(`/api/stats${q}`), api<Discovery[]>('/api/discoveries').catch(() => [] as Discovery[])]);
   if (activeTab !== 'stats') return;
+  const to = statsTo ?? st.last, from = to - STATS_SPAN;
+  const rows = st.rows;
   const techsKnown = new Set(bands.flatMap((b) => b.techs));
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || CHART_COLORS[0];
   // per year from two running totals (older rows have none)
@@ -525,14 +532,23 @@ async function renderStats(body: HTMLElement) {
     [T('Жертви на бедствия на година', 'Disaster deaths per year', 'Todesopfer von Katastrophen pro Jahr'), [
       { label: '', color: CHART_COLORS[2], values: perYear('disaster'), bars: true }]],
   ];
+  const canBack = from > st.first, canFwd = statsTo !== null;
   body.innerHTML = `
     <div class="kpis">
       <div><span>${T('Родени', 'Born', 'Geboren')}</span><b id="born2">${$('#born').textContent}</b></div>
       <div><span>${T('Починали', 'Died', 'Gestorben')}</span><b>${$('#died').textContent}</b></div>
       <div><span>${T('Знания', 'Knowledge', 'Wissen')}</span><b>${techsKnown.size}</b></div>
     </div>
+    <div class="stats-nav">
+      <button class="btn round" id="statsBack" ${canBack ? '' : 'disabled'} title="${T('1000 години назад', '1000 years back', '1000 Jahre zurück')}">◀</button>
+      <span>${esc(fmtYear(Math.max(from, st.first)))} – ${esc(fmtYear(to))}</span>
+      <button class="btn round" id="statsFwd" ${canFwd ? '' : 'disabled'} title="${T('1000 години напред', '1000 years forward', '1000 Jahre vor')}">▶</button>
+    </div>
     ${charts.map(([title, series], k) => `<h3>${esc(title)}</h3>${series.length > 1 ? `<div class="legend">${series.map((x) => `<span><i style="background:${x.color}"></i>${esc(x.label)}</span>`).join('')}</div>` : ''}<div class="chart-wrap"><canvas class="chart" id="chart${k}" height="140"></canvas><div class="chart-tip" hidden></div></div>`).join('')}
     <h3>${T('Какво знаят хората', 'What people know', 'Was die Menschen wissen')}</h3><div class="techs">${[...techsKnown].map((t) => `<span class="pill">${esc(TECH(t))}</span>`).join('') || `<span class="muted">${T('Нищо още', 'Nothing yet', 'Noch nichts')}</span>`}</div>`;
+  const go = (t: number | null) => { statsTo = t !== null && t >= st.last ? null : t; void renderStats(body, true); };
+  $('#statsBack').onclick = () => go(to - STATS_SPAN);
+  $('#statsFwd').onclick = () => go(to + STATS_SPAN);
   if (rows.length < 2) return;
   const years = rows.map((r2) => r2.year);
   // discoveries: the whole flat stretch belongs to the last step up, and to what was found there
@@ -543,37 +559,45 @@ async function renderStats(body: HTMLElement) {
     let list = found.filter((d) => d.year <= years[j] && (j === 0 || d.year > years[j - 1]));
     if (!list.length) { const last = found.filter((d) => d.year <= years[i]).sort((a, b) => b.year - a.year)[0]; list = last ? [last] : []; }
     list.sort((a, b) => a.year - b.year);
-    return { at: j, year: list.length ? list[list.length - 1].year : years[j], names: list.map((d) => TECH_ID(d.tech, d.name)) };
+    return { year: list.length ? list[list.length - 1].year : years[j], names: list.map((d) => TECH_ID(d.tech, d.name)) };
   };
-  charts.forEach(([, series], k) => chartHover($(`#chart${k}`) as HTMLCanvasElement, years, series, k === 3 ? stepInfo : undefined));
+  chartGroup(charts.map(([, series], k) => ({ c: $(`#chart${k}`) as HTMLCanvasElement, series, steps: k === 3 ? stepInfo : undefined })), years);
 }
 
-/** the chart, and on hover (or a touch) a dashed line with the exact numbers of that year;
- *  `steps` snaps it to the start of a flat stretch and names what happened there */
-function chartHover(c: HTMLCanvasElement, years: number[], series: Series[], steps?: (i: number) => { at: number; year: number; names: string[] }) {
-  const tip = c.nextElementSibling as HTMLElement;
-  drawChart(c, years, series);
+/** the charts, and on hover (or a touch) over any of them a dashed line through all of them at the same year,
+ *  each with its exact numbers; `steps` names the last discovery of a flat stretch and its year */
+function chartGroup(list: { c: HTMLCanvasElement; series: Series[]; steps?: (i: number) => { year: number; names: string[] } }[], years: number[]) {
   const n = years.length;
+  for (const { c, series } of list) drawChart(c, years, series);
   let shown = -1;
   const show = (ev: PointerEvent) => {
-    const r = c.getBoundingClientRect();
-    const fx = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
-    const st = steps?.(Math.round(fx * (n - 1)));
-    const i = st ? st.at : Math.round(fx * (n - 1));
-    if (i !== shown || tip.hidden) drawChart(c, years, series, i);
+    const r0 = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    const fx = Math.max(0, Math.min(1, (ev.clientX - r0.left) / r0.width));
+    const i = Math.round(fx * (n - 1));
+    const redraw = i !== shown;
     shown = i;
-    const vals = series.filter((sr) => sr.values[i] != null).map((sr) => `<div><i style="background:${sr.color}"></i>${sr.label ? `${esc(sr.label)}: ` : ''}<b>${num(Math.round(sr.values[i]!))}</b></div>`);
-    const names = st?.names ?? [];
-    tip.innerHTML = `<div class="muted">${esc(fmtYear(st ? st.year : years[i]))}</div>${vals.join('')}${names.length ? `<div class="chart-found">${names.slice(0, 6).map(esc).join(', ')}${names.length > 6 ? ` +${names.length - 6}` : ''}</div>` : ''}`;
-    tip.hidden = false;
-    // beside the mouse, never over it: on the side with more room
-    const mx = ev.clientX - r.left, tw = tip.offsetWidth;
-    tip.style.left = `${mx > r.width / 2 ? Math.max(0, mx - tw - 16) : Math.min(r.width - tw, mx + 16)}px`;
+    for (const { c, series, steps } of list) {
+      const tip = c.nextElementSibling as HTMLElement;
+      if (redraw || tip.hidden) drawChart(c, years, series, i);
+      const st = steps?.(i);
+      const vals = series.filter((sr) => sr.values[i] != null).map((sr) => `<div><i style="background:${sr.color}"></i>${sr.label ? `${esc(sr.label)}: ` : ''}<b>${num(Math.round(sr.values[i]!))}</b></div>`);
+      const names = st?.names ?? [];
+      tip.innerHTML = `<div class="muted">${esc(fmtYear(st ? st.year : years[i]))}</div>${vals.join('')}${names.length ? `<div class="chart-found">${names.slice(0, 6).map(esc).join(', ')}${names.length > 6 ? ` +${names.length - 6}` : ''}</div>` : ''}`;
+      tip.hidden = false;
+      // beside the line, never over the mouse: on the side with more room
+      const w = c.getBoundingClientRect().width, mx = fx * w, tw = tip.offsetWidth;
+      tip.style.left = `${mx > w / 2 ? Math.max(0, mx - tw - 16) : Math.min(w - tw, mx + 16)}px`;
+    }
   };
-  const hide = () => { tip.hidden = true; shown = -1; drawChart(c, years, series); };
-  c.onpointermove = show;
-  c.onpointerdown = show;
-  c.onpointerleave = hide;
+  const hide = () => {
+    shown = -1;
+    for (const { c, series } of list) { (c.nextElementSibling as HTMLElement).hidden = true; drawChart(c, years, series); }
+  };
+  for (const { c } of list) {
+    c.onpointermove = show;
+    c.onpointerdown = show;
+    c.onpointerleave = hide;
+  }
 }
 
 /** a small line (or bar) chart: first and last year below, the highest value in the corner */

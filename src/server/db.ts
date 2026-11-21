@@ -91,8 +91,14 @@ export class Store {
       .run(world, s.tick, s.year, s.population, s.bands, s.era, s.techs, s.villages, s.born, s.died, s.kingdoms, s.disaster);
   }
 
-  stats(world: string, max = 400) {
-    const rows = this.db.prepare('SELECT tick, year, population, bands, era, techs, villages, born, died, kingdoms, disaster FROM stats WHERE world = ? ORDER BY tick').all(world) as Record<string, number>[];
+  /** the first and the last year with numbers */
+  statsSpan(world: string): { first: number; last: number } {
+    const r = this.db.prepare('SELECT MIN(year) a, MAX(year) b FROM stats WHERE world = ?').get(world) as { a: number | null; b: number | null };
+    return { first: r.a ?? 0, last: r.b ?? 0 };
+  }
+
+  stats(world: string, max = 400, from = -1e9, to = 1e9) {
+    const rows = this.db.prepare('SELECT tick, year, population, bands, era, techs, villages, born, died, kingdoms, disaster FROM stats WHERE world = ? AND year >= ? AND year <= ? ORDER BY tick').all(world, from, to) as Record<string, number>[];
     if (rows.length <= max) return rows;
     const step = rows.length / max;
     const out = [];

@@ -107,6 +107,8 @@ export interface Band {
   colony?: boolean;
   /** on a small island: it stays a village, there is no room for a town (from v1.90.2) */
   isle?: boolean;
+  /** two towns grown into one keep room for all of them, so nobody has to leave again at once (from v1.92) */
+  room?: number;
   /** the culture it belongs to (from v1.90.2) and the numbers its network keeps from month to month */
   culture?: number;
   mem?: number[];
@@ -623,6 +625,10 @@ export class Simulation {
   /** the biggest number of people a settled town holds before some leave to found a new village */
   private townLimit(b: Band): number {
     if (b.isle) return 130;
+    return Math.max(b.room ?? 0, this.techLimit(b));
+  }
+
+  private techLimit(b: Band): number {
     return this.hasTech(b, 'fusion') ? 1600 : this.hasTech(b, 'nuclear_power') ? 1200 : this.hasTech(b, 'electricity') ? 900 : this.hasTech(b, 'factory') ? 700 : this.hasTech(b, 'star_fort') ? 420 : this.hasTech(b, 'castle') ? 340
       : this.hasTech(b, 'aqueduct') ? 280 : this.hasTech(b, 'walls') ? 210 : 140;
   }
@@ -720,10 +726,14 @@ export class Simulation {
         if (v === t || gone.has(v.id)) continue;
         const ts = size.get(t.id) ?? 0, vs = size.get(v.id) ?? 0;
         if (vs > ts) continue;
-        // the walls touch: the two rings of tiles are next to each other
-        if (dist(v, t) > this.wallReach(t, ts) + this.wallReach(v, vs) + 1.5) continue;
+        // the walls touch: the two rings of tiles are next to each other; when they reach into each other
+        // by two or three tiles the two places are one already, however many live there
+        const gap = dist(v, t) - this.wallReach(t, ts) - this.wallReach(v, vs);
+        if (gap > 1.5) continue;
+        const overlap = gap <= -1;
         if (this.isCapital(v) || (v.kingdom != null && t.kingdom != null && v.kingdom !== t.kingdom)) continue;
-        if (ts + vs > this.townLimit(t) * 0.95) continue;
+        if (!overlap && ts + vs > this.townLimit(t) * 0.95) continue;
+        if (overlap && ts + vs > this.townLimit(t)) t.room = Math.ceil((ts + vs) * 1.05);
         for (const p of this.s.people) if (p.bandId === v.id) { p.bandId = t.id; p.task = 'travel'; }
         for (const tech of v.techs) this.addTech(t, tech);
         t.food += v.food;
@@ -1728,10 +1738,32 @@ export class Simulation {
     return this.s.famous ?? [];
   }
 
+  /** how many people the world can hold this year: the real world's people then (millions, roughly), taken to the
+   *  power 0.4 so that the stone age is not empty and today does not need billions, for each open map */
+  peopleCap(): number {
+    const y = this.year;
+    const P: [number, number][] = [[-10000, 4], [-5000, 5], [-3000, 14], [-2000, 27], [-1000, 50], [-500, 100], [1, 200], [1000, 300],
+      [1500, 450], [1700, 600], [1800, 1000], [1900, 1600], [1950, 2500], [2000, 6100], [2025, 8100]];
+    let m = P[P.length - 1][1];
+    if (y <= P[0][0]) m = P[0][1];
+    else for (let k = 1; k < P.length; k++) if (y <= P[k][0]) {
+      const [y0, a] = P[k - 1], [y1, b] = P[k];
+      m = Math.exp(Math.log(a) + (Math.log(b) - Math.log(a)) * (y - y0) / (y1 - y0));
+      break;
+    }
+    const perMap = Math.max(800, 16000 * (m / 8100) ** 0.4);
+    const maps = this.s.grid?.open.length ?? 1;
+    return Math.min(60000, Math.round(perMap * (1 + 0.6 * (maps - 1))));
+  }
+
   private lifeAndDeath(members: Map<number, Person[]>) {
     // a gentle hand that keeps a tiny humanity from vanishing too early
     const pop = this.s.people.length;
     const guardian = pop < 40 ? 0.45 : pop < 80 ? 0.65 : pop < 150 ? 0.85 : 1;
+    // the world holds about as many people as the real one did in that year, in its own scale: near that number
+    // fewer children are born, above it hardly any
+    const full = this.mars ? 0 : pop / this.peopleCap();
+    const crowd = Math.max(0.03, Math.min(1, 1 - (full - 0.85) / 0.3));
     const babies: [Band, Person, Person | null][] = [];
     for (const b of this.s.bands) {
       const m = members.get(b.id)!;
@@ -1786,7 +1818,7 @@ export class Simulation {
           if (this.s.tick - p.lastBirth >= interval) {
             // well fed families have children, hungry ones wait
             const fed = Math.max(0, Math.min(1, (ratio - 0.95) / 0.3));
-            const chance = (pop < 80 ? 0.075 : 0.05) * fed * (0.6 + hea * 0.8) * (a > 35 ? 0.5 : 1);
+            const chance = (pop < 80 ? 0.075 : 0.05) * fed * (0.6 + hea * 0.8) * (a > 35 ? 0.5 : 1) * crowd;
             if (this.rng.chance(chance)) {
               const father = this.byId.get(p.partnerId) ?? null;
               babies.push([b, p, father]);

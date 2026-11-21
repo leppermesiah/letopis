@@ -267,3 +267,5 @@ body.in-app .top { right: 64px; }
   body.in-app.side-hidden .zoom-rail { bottom: 12px; }
   body.in-app .top { right: 64px; }
 }
+.stats-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 2px; font-size: 13px; color: var(--muted); }
+.stats-nav .btn[disabled] { opacity: 0.35; cursor: default; }

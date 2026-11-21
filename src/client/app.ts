@@ -27,7 +27,7 @@ export function initApp(kids: () => boolean) {
   const btn = document.querySelector('#newsBtn') as HTMLButtonElement;
   const panel = document.querySelector('#newsPanel') as HTMLElement;
   wrap.hidden = false;
-  btn.textContent = T('Известия', 'Notifications', 'Mitteilungen');
+  btn.textContent = T('Известия: кои да идват ▾', 'Notifications: which ones ▾', 'Mitteilungen: welche ▾');
   btn.title = T('Известия на телефона', 'Notifications on the phone', 'Mitteilungen auf dem Handy');
 
   let prefs: Partial<Prefs> = {};
@@ -56,7 +56,7 @@ export function initApp(kids: () => boolean) {
   };
   const show = () => {
     panel.replaceChildren(
-      row(T('Известия', 'Notifications', 'Mitteilungen'), p.on, () => { p.on = !p.on; save(); }),
+      row(p.on ? T('Известията са пуснати', 'Notifications are on', 'Mitteilungen sind an') : T('Известията са спрени', 'Notifications are off', 'Mitteilungen sind aus'), p.on, () => { p.on = !p.on; save(); }),
       ...GROUPS.map((g) => row(T(g.bg, g.en, g.de), p.groups.includes(g.id), () => {
         p.groups = p.groups.includes(g.id) ? p.groups.filter((x) => x !== g.id) : [...p.groups, g.id];
         save();

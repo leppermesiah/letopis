@@ -303,7 +303,12 @@ const server = http.createServer((req, res) => {
     }
     if (p === '/api/heroes') return json(res, sim2.heroes());
     if (p === '/api/famous') return json(res, sim2.famousList());
-    if (p === '/api/stats') return json(res, store.stats(world));
+    if (p === '/api/stats') {
+      // a window of years (the page shows a thousand at a time), and where the numbers start and end
+      const span = store.statsSpan(world);
+      const from = q('from') ?? (q('span') !== undefined ? span.last - q('span')! : undefined);
+      return json(res, { ...span, rows: store.stats(world, 400, from, q('to')) });
+    }
     if (p === '/api/worlds') return json(res, store.worlds());
     if (p === '/api/secrets') return json(res, { found: sim2.secretFinds() });
     if (p.startsWith('/api/secret/') && req.method === 'POST') {
