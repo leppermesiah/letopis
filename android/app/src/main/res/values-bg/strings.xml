@@ -11,4 +11,7 @@
     <string name="change">Друг сървър</string>
     <string name="channel">Летопис</string>
     <string name="channel_text">Големите събития в света</string>
+    <string name="add">+ Добави сървър</string>
+    <string name="remove">Махни…</string>
+    <string name="name_hint">Име (по избор), напр. Dev</string>
 </resources>

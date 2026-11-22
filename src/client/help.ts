@@ -27,6 +27,7 @@ export const CHANGELOG: Release[] = [
   ] },
   { v: '1.91.1', items: [
     ['Приложението отново зарежда.', 'The app loads again.', 'Die App lädt wieder.', 'fix'],
+    ['В приложението може да запазиш няколко сървъра и да превключваш между тях.', 'The app can keep several servers and switch between them.', 'Die App kann mehrere Server speichern und zwischen ihnen wechseln.', 'add'],
   ] },
   { v: '1.91', items: [
     ['Всяка тайна е свой приказен герой. Намерените са с лек зелен контур и с картинка в списъка.', 'Every secret is its own fairy tale hero. Found ones get a soft green rim and a picture in the list.', 'Jedes Geheimnis ist eine eigene Märchenfigur. Gefundene haben einen zarten grünen Rand und ein Bild in der Liste.', 'add'],
