@@ -18,6 +18,7 @@ const STYLE: Record<Job, [string, string, string]> = {
   forage: ['ловуват и събират', 'hunting and gathering', 'von der Jagd und vom Sammeln'],
 };
 import { FAMOUS, fameRole } from '../../shared/famous';
+import { realPeople } from '../../shared/people';
 import { BIG, startStage, treeKinds } from '../../shared/trees';
 import { findRoad } from './roads';
 import { BEAST_EN, ERAS_EN, FEATURE_EN, SECRET_HEROES_EN, SECRET_KINDS_EN, TECH_EN, bandEn, bandLabelEn, bandThe, villageEn, causeEn, chiefEn, deedEn, personEn, translit } from '../../shared/i18n';
@@ -1741,16 +1742,7 @@ export class Simulation {
   /** how many people the world can hold this year: the real world's people then (millions, roughly), taken to the
    *  power 0.4 so that the stone age is not empty and today does not need billions, for each open map */
   peopleCap(): number {
-    const y = this.year;
-    const P: [number, number][] = [[-10000, 4], [-5000, 5], [-3000, 14], [-2000, 27], [-1000, 50], [-500, 100], [1, 200], [1000, 300],
-      [1500, 450], [1700, 600], [1800, 1000], [1900, 1600], [1950, 2500], [2000, 6100], [2025, 8100]];
-    let m = P[P.length - 1][1];
-    if (y <= P[0][0]) m = P[0][1];
-    else for (let k = 1; k < P.length; k++) if (y <= P[k][0]) {
-      const [y0, a] = P[k - 1], [y1, b] = P[k];
-      m = Math.exp(Math.log(a) + (Math.log(b) - Math.log(a)) * (y - y0) / (y1 - y0));
-      break;
-    }
+    const m = realPeople(this.year) / 1e6;
     const perMap = Math.max(800, 16000 * (m / 8100) ** 0.4);
     const maps = this.s.grid?.open.length ?? 1;
     return Math.min(60000, Math.round(perMap * (1 + 0.6 * (maps - 1))));

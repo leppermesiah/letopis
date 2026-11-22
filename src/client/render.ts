@@ -11,6 +11,7 @@ import { SECRET_KINDS, SecretSpot, secretSpots } from '../shared/secrets';
 import { B, VILLAGE } from './lang';
 import { Rng } from '../shared/rng';
 import { CONIFERS, TREE_KINDS } from '../shared/trees';
+import { shortNum } from '../shared/people';
 import { BandView, Biome, PersonRow, TASKS, WorldInfo, b64decode, isWater, RIVER_WATER } from '../shared/types';
 
 export const TW = 32; // tile width
@@ -263,6 +264,8 @@ export class WorldRenderer {
   nightNow = false;
   /** the second world: red dust, no animals */
   mars = false;
+  /** real people for each one living in the game: the page shows numbers like the real world's */
+  popScale = 1;
 
   constructor(app: Application, atlas: Atlas) {
     this.app = app;
@@ -2305,7 +2308,8 @@ export class CampSprite {
     this.c.position.set(p.x, p.y);
     this.glow.position.set(p.x, p.y - 4);
     this.glow.visible = b.hasFire || b.dwelling === 'house';
-    this.label.text = b.settlementName ? `${b.kingdom?.capital ? '👑 ' : ''}${VILLAGE(b.settlementName)} (${b.size})` : `${B(b.name).replace(/^(Родът на|Clan of the) /, '')} (${b.size})`;
+    const shown = shortNum(b.size * this.r.popScale);
+    this.label.text = b.settlementName ? `${b.kingdom?.capital ? '👑 ' : ''}${VILLAGE(b.settlementName)} (${shown})` : `${B(b.name).replace(/^(Родът на|Clan of the) /, '')} (${shown})`;
     this.label.style.fontSize = kids ? 16 : 12;
     this.bannerCloth.tint = b.color;
     this.tag.position.set(p.x, p.y - 30);

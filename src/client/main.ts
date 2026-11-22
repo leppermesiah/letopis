@@ -16,6 +16,7 @@ import { isWoman } from '../shared/people-l10n';
 import type { Lang } from '../shared/i18n';
 import { hasNews, helpWindowHtml } from './help';
 import { initApp } from './app';
+import { realPeople, shortNum } from '../shared/people';
 import {
   B, BL, CAUSE, CHIEF, DE, DEED, EN, ERA, L3, LANG, LOCALE, GENE, HERO, P, SECRET_KIND, T, TASK, TECH, TECH_ID, TITLE, VILLAGE, fmtYear, monthName, num, refName, setLang, translatePage,
 } from './lang';
@@ -218,6 +219,11 @@ function bandColors(): Map<number, number> {
   return new Map(bands.map((b) => [b.id, b.color]));
 }
 
+/** the number of the real world in that year; every village shows its share of it */
+function setScale(year: number, population: number) {
+  r.popScale = BASE || !population ? 1 : realPeople(year) / population;
+}
+
 function applyTime(t: TickMessage['time'], population: number) {
   tickMs = t.tickMs;
   lastTickAt = performance.now();
@@ -230,7 +236,7 @@ function applyTime(t: TickMessage['time'], population: number) {
   music.setEra(t.era, !!BASE);
   const gate = TECH_LIST.find(([id]) => id === ERA_GATE[t.era + 1]);
   $('#nextEra').textContent = gate ? `${T('следва', 'next', 'als Nächstes')}: ${TECH_ID(gate[0], gate[1])}` : '';
-  $('#pop').textContent = num(population);
+  $('#pop').textContent = BASE ? num(population) : shortNum(population * r.popScale);
   $('#bandsCount').textContent = String(bands.length);
   const days = (Date.now() - t.startedAt) / 86400000;
   $('#age').textContent = days < 1 ? `${Math.round(days * 24)} ${T('ч.', 'h', 'Std.')}` : `${Math.floor(days)} ${T('дни', 'days', 'Tage')}`;
@@ -242,6 +248,7 @@ function onSnapshot(m: SnapshotMessage) {
   if (m.trees) r.setTrees(m.trees);
   if (m.roads) r.setRoads(m.roads);
   r.setExplored(b64decode(m.explored));
+  setScale(m.time.year, m.population);
   r.updateBands(bands, kids);
   r.updatePeople(people, bandColors(), 400);
   r.fleet.updateSeas(m.seas ?? [], 400);
@@ -257,6 +264,7 @@ function onTick(m: TickMessage) {
   if (m.explored) r.setExplored(b64decode(m.explored));
   if (m.trees) r.updateTrees(m.trees);
   if (m.roads) r.updateRoads(m.roads);
+  setScale(m.time.year, m.population);
   r.updateBands(bands, kids);
   r.updatePeople(people, bandColors(), m.time.tickMs);
   r.fleet.updateSeas(m.seas ?? [], m.time.tickMs);
@@ -438,7 +446,7 @@ function renderSide() {
     body.innerHTML = `<ul class="bands">${sorted.map((b) => `
       <li data-band="${b.id}"><span class="dot" style="background:#${b.color.toString(16).padStart(6, '0')}"></span>
       <div><b>${esc(b.settlementName ? VILLAGE(b.settlementName) : B(b.name))}</b>${b.settlementName ? `<small> · ${esc(B(b.name))}</small>` : ''}
-      <div class="muted">${b.size} ${T('души', 'people', 'Menschen')} · ${b.settled ? T('село', 'village', 'Dorf') : T('скитат', 'nomads', 'Nomaden')} · ${T('знания', 'knowledge', 'Wissen')}: ${b.techs.length}</div></div></li>`).join('')}</ul>`;
+      <div class="muted">${shortNum(b.size * r.popScale)} ${T('души', 'people', 'Menschen')} · ${b.settled ? T('село', 'village', 'Dorf') : T('скитат', 'nomads', 'Nomaden')} · ${T('знания', 'knowledge', 'Wissen')}: ${b.techs.length}</div></div></li>`).join('')}</ul>`;
   } else if (activeTab === 'kingdoms') {
     body.innerHTML = kingdomsHtml();
   } else if (activeTab === 'heroes') {
@@ -520,7 +528,7 @@ async function renderStats(body: HTMLElement, force = false) {
     return Math.max(0, (r2[k]! - a[k]!) / Math.max(1, r2.year - a.year));
   });
   const charts: [string, Series[]][] = [
-    [T('Население', 'Population', 'Bevölkerung'), [{ label: '', color: accent, values: rows.map((r2) => r2.population) }]],
+    [T('Население', 'Population', 'Bevölkerung'), [{ label: '', color: accent, values: rows.map((r2) => (BASE ? r2.population : realPeople(r2.year))) }]],
     [T('Родени и починали на година', 'Born and died per year', 'Geburten und Todesfälle pro Jahr'), [
       { label: T('родени', 'born', 'geboren'), color: CHART_COLORS[3], values: perYear('born') },
       { label: T('починали', 'died', 'gestorben'), color: CHART_COLORS[2], values: perYear('died') }]],
@@ -891,7 +899,7 @@ function kingdomsHtml(): string {
       const others = m.filter((b) => b !== cap).sort((a, b) => b.size - a.size);
       return `<li><span class="dot" style="background:#${k.color.toString(16).padStart(6, '0')}"></span><div>
         <b>👑 ${esc(T(`Царство ${v}`, `Kingdom of ${v}`, `Königreich ${v}`))}</b>
-        <div class="muted">${T('от', 'since', 'seit')} ${fmtYear(k.founded)} · ${m.length} ${T(m.length === 1 ? 'село' : 'села', m.length === 1 ? 'village' : 'villages', m.length === 1 ? 'Dorf' : 'Dörfer')} · ${people} ${T('души', 'people', 'Menschen')}</div>
+        <div class="muted">${T('от', 'since', 'seit')} ${fmtYear(k.founded)} · ${m.length} ${T(m.length === 1 ? 'село' : 'села', m.length === 1 ? 'village' : 'villages', m.length === 1 ? 'Dorf' : 'Dörfer')} · ${shortNum(people * r.popScale)} ${T('души', 'people', 'Menschen')}</div>
         <div>${T('Цар', 'King', 'König')}: ${king} · ${T('Столица', 'Capital', 'Hauptstadt')}: ${town(cap)}</div>
         ${others.length ? `<div class="muted">${others.map(town).join(', ')}</div>` : ''}
         ${k.allies?.length ? `<div>🤝 ${T('Съюзници', 'Allies', 'Verbündete')}: ${k.allies.map((x) => esc(VILLAGE(x))).join(', ')}</div>` : ''}
@@ -924,10 +932,14 @@ function showBand(b: BandView) {
     ${kingdomHtml(b.kingdom)}
     ${originHtml(b.founder, b.from)}
     ${b.style && WAYS[b.style] ? `<div>${T('Начин на живот', 'Way of life', 'Lebensweise')}: ${esc(L3(...WAYS[b.style]))}</div>` : ''}
-    <div class="kpis"><div><span>${T('Хора', 'People', 'Menschen')}</span><b>${b.size}</b></div><div><span>${T('Деца', 'Children', 'Kinder')}</span><b>${kidsN}</b></div><div><span>${T('Запаси', 'Food', 'Vorräte')}</span><b>${b.food}</b></div></div>
+    <div class="kpis"><div><span>${T('Хора', 'People', 'Menschen')}</span><b>${shortNum(b.size * r.popScale)}</b></div><div><span>${T('Деца', 'Children', 'Kinder')}</span><b>${shortNum(kidsN * r.popScale)}</b></div><div><span>${T('Запаси', 'Food', 'Vorräte')}</span><b>${b.food}</b></div></div>
     <h3>${T('Какво правят сега', 'What they are doing', 'Was sie gerade tun')}</h3><ul class="deeds">${[...tasks].sort((a, c) => c[1] - a[1]).map(([t, n]) => `<li>${n} ${esc(t)}</li>`).join('')}</ul>
     <h3>${T('Какво знаят', 'What they know', 'Was sie wissen')}</h3><div class="techs">${b.techs.map((t) => `<span class="pill">${esc(TECH(t))}</span>`).join('') || `<span class="muted">${T('Още нищо', 'Nothing yet', 'Noch nichts')}</span>`}</div>
-    <h3>${T('Хората', 'The people', 'Die Menschen')}</h3><div class="names">${members.slice(0, 60).map((p) => `<a href="#" data-person="${p[0]}">…</a>`).join(', ')}${members.length > 60 ? ` ${T(`и още ${members.length - 60}`, `and ${members.length - 60} more`, `und ${members.length - 60} weitere`)}` : ''}</div>`);
+    <h3>${T('Хората', 'The people', 'Die Menschen')}</h3><div class="names">${members.slice(0, 50).map((p) => `<a href="#" data-person="${p[0]}">…</a>`).join(', ')}${(() => {
+      // a few dozen by name, the rest only as the number of the real world
+      const more = Math.round(b.size * r.popScale) - Math.min(50, members.length);
+      return more > 0 ? ` ${T(`и още ${shortNum(more)}`, `and ${shortNum(more)} more`, `und ${shortNum(more)} weitere`)}` : '';
+    })()}</div>`);
   // names come from the server one by one; fill them in lazily
   const links = [...document.querySelectorAll<HTMLAnchorElement>('#cardBody .names a')];
   links.forEach(async (a) => {
