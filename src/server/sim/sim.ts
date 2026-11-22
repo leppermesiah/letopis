@@ -19,6 +19,7 @@ const STYLE: Record<Job, [string, string, string]> = {
 };
 import { FAMOUS, fameRole } from '../../shared/famous';
 import { realPeople } from '../../shared/people';
+import { CITIES, isCity } from '../../shared/cities';
 import { BIG, startStage, treeKinds } from '../../shared/trees';
 import { findRoad } from './roads';
 import { BEAST_EN, ERAS_EN, FEATURE_EN, SECRET_HEROES_EN, SECRET_KINDS_EN, TECH_EN, bandEn, bandLabelEn, bandThe, villageEn, causeEn, chiefEn, deedEn, personEn, translit } from '../../shared/i18n';
@@ -135,6 +136,8 @@ export interface SimState {
   /** the maps opened so far, when ships found more than the first (from v1.90.2), and the year of the last one */
   grid?: Grid;
   lastMapYear?: number;
+  /** real city names given so far, never given twice (from v1.92) */
+  cities?: string[];
   /** ships of settlers at sea (from v1.90.2) */
   fleet?: Sea[];
   /** cultures that learn their way of life (from v1.90.2) */
@@ -706,6 +709,28 @@ export class Simulation {
     }
   }
 
+  /** from the Iron Age on, a big walled town takes the name of a real city: the biggest the most famous, a few a year */
+  private cityNames() {
+    if (this.mars || this.s.era < 3) return;
+    const size = new Map<number, number>();
+    for (const p of this.s.people) size.set(p.bandId, (size.get(p.bandId) ?? 0) + 1);
+    const taken = new Set(this.s.bands.map((b) => b.settlementName).filter(Boolean));
+    for (const c of this.s.cities ?? []) taken.add(c);
+    const towns = this.s.bands.filter((b) => b.settled && b.settlementName && !isCity(b.settlementName) && this.hasTech(b, 'walls') && (size.get(b.id) ?? 0) >= 150)
+      .sort((a, b) => (size.get(b.id) ?? 0) - (size.get(a.id) ?? 0)).slice(0, 3);
+    for (const b of towns) {
+      const c = CITIES.find((x) => !taken.has(x[0]));
+      if (!c) return;
+      taken.add(c[0]);
+      (this.s.cities ??= []).push(c[0]);
+      const old = b.settlementName!;
+      b.settlementName = c[0];
+      this.emit('settle', 2, `Селото ${old} порасна и вече се нарича ${c[0]}.`, `Селото ${old} стана голям град и сега се казва ${c[0]}!`, undefined, b.id, [],
+        [`The village of ${villageEn(old)} has grown and is now called ${c[1]}.`, `The village of ${villageEn(old)} became a big town and is now called ${c[1]}!`],
+        [`Das Dorf ${villageDe(old)} ist gewachsen und heißt jetzt ${c[2]}.`, `Das Dorf ${villageDe(old)} ist eine große Stadt geworden und heißt jetzt ${c[2]}!`]);
+    }
+  }
+
   /** how far the wall of a village or town reaches from its fire, in tiles (the same rule the map draws it by) */
   wallReach(b: Band, size: number): number {
     if (!b.settled || this.s.planet === 'mars') return 0;
@@ -1138,7 +1163,7 @@ export class Simulation {
 
   /** 'рода на Орела' inside a sentence, 'Родът на Орела' as its subject */
   bandLabel(b: Band, subject = false): string {
-    if (b.settlementName) return `${subject ? 'Селото' : 'селото'} ${b.settlementName}`;
+    if (b.settlementName) return isCity(b.settlementName) ? `${subject ? 'Градът' : 'града'} ${b.settlementName}` : `${subject ? 'Селото' : 'селото'} ${b.settlementName}`;
     return subject ? b.name : b.name.replace(/^Родът/, 'рода');
   }
 
@@ -1276,7 +1301,7 @@ export class Simulation {
     this.contact();
     if (this.month === 6) { this.buildRoads(); this.buildRails(); }
     if (this.month === 7) this.kingdoms();
-    if (this.month === 8) { this.growTowns(); this.gatherVillages(); this.joinWalls(); }
+    if (this.month === 8) { this.growTowns(); this.gatherVillages(); this.joinWalls(); this.cityNames(); }
     if (this.s.tick % 6 === 0) this.explore();
     if (this.mars) this.marsEvents(); else { this.randomEvents(members); this.disasters(members); }
     if (this.month === 4) this.voyages(members);

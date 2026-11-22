@@ -4,6 +4,7 @@
 
 import { CLAN_EN, clanBase } from './clans';
 import { personName, villageName } from './people-l10n';
+import { cityName, isCity } from './cities';
 
 export type Lang = 'bg' | 'en' | 'de';
 
@@ -34,7 +35,7 @@ export function personEn(name: string): string {
 
 /** "Бялово" -> "Whiteford" */
 export function villageEn(name: string): string {
-  return villageName(name, 'en') ?? translit(name);
+  return cityName(name, 'en') ?? villageName(name, 'en') ?? translit(name);
 }
 
 // totems, adjectives and places of band names, by their dictionary form and with the article
@@ -86,6 +87,7 @@ export function bandEn(name: string): string {
 /** how a band is named inside an English sentence: "the Clan of the Wolf", "the village of Belovo" */
 export function bandLabelEn(name: string, settlement: string | null | undefined, subject = false): string {
   const the = subject ? 'The' : 'the';
+  if (settlement && isCity(settlement)) return villageEn(settlement);
   return settlement ? `${the} village of ${villageEn(settlement)}` : bandThe(name, subject);
 }
 
@@ -101,8 +103,8 @@ export function bandTextEn(s: string): string {
   if (!s) return s;
   if (/^(Родът|рода) на /.test(s)) return (s[0] === 'Р' ? 'The ' : 'the ') + bandEn(s);
   if (clanBase(s)) return bandThe(s);
-  const v = /^(Селото|селото) (.+)$/.exec(s);
-  if (v) return `${v[1][0] === 'С' ? 'The' : 'the'} village of ${villageEn(v[2])}`;
+  const v = /^(Селото|селото|Градът|града) (.+)$/.exec(s);
+  if (v) return isCity(v[2]) ? villageEn(v[2]) : `${v[1][0] === 'С' ? 'The' : 'the'} village of ${villageEn(v[2])}`;
   return villageEn(s);
 }
 

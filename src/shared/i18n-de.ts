@@ -6,6 +6,7 @@
 
 import { CLAN_DE, clanBase } from './clans';
 import { personName, villageName } from './people-l10n';
+import { cityName, isCity } from './cities';
 import { TECH_BG, translit } from './i18n';
 
 export type Case = 'nom' | 'akk' | 'dat' | 'gen';
@@ -17,7 +18,7 @@ export function personDe(name: string): string {
 
 /** "Бялово" -> "Weißdorf" */
 export function villageDe(name: string): string {
-  return villageName(name, 'de') ?? translit(name);
+  return cityName(name, 'de') ?? villageName(name, 'de') ?? translit(name);
 }
 
 // ---------- clans ----------
@@ -107,7 +108,9 @@ const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 /** "der Clan Wolfszahn", "des Clans der Roten", "dem Dorf Weißdorf", "des Dorfes Weißdorf" */
 export function bandLabelDe(name: string, settlement: string | null | undefined, c: Case, capital = false): string {
-  const s = settlement
+  const s = settlement && isCity(settlement)
+    ? `${c === 'nom' || c === 'akk' ? 'die' : 'der'} Stadt ${villageDe(settlement)}`
+    : settlement
     ? `${ART_N[c]} ${c === 'gen' ? 'Dorfes' : 'Dorf'} ${villageDe(settlement)}`
     : `${ART_M[c]} ${c === 'gen' ? 'Clans' : 'Clan'} ${bandDeInText(name)}`;
   return capital ? cap(s) : s;
@@ -117,6 +120,8 @@ export function bandLabelDe(name: string, settlement: string | null | undefined,
 export function bandWithDe(prep: 'aus' | 'in' | 'von' | 'bei', name: string, settlement: string | null | undefined, capital = false): string {
   const dat = bandLabelDe(name, settlement, 'dat'); // "dem Clan X"
   const rest = dat.slice(4);
+  // a city is feminine: "in der Stadt X", "von der Stadt X"
+  if (settlement && isCity(settlement)) { const t = `${prep} ${dat}`; return capital ? cap(t) : t; }
   const s = prep === 'aus' ? `aus ${dat}` : `${{ in: 'im', von: 'vom', bei: 'beim' }[prep]} ${rest}`;
   return capital ? cap(s) : s;
 }
@@ -128,15 +133,15 @@ export function bandWithDe(prep: 'aus' | 'in' | 'von' | 'bei', name: string, set
 export function bandTextDe(s: string): string {
   if (!s) return s;
   if (/^(Родът|рода) на /.test(s) || clanBase(s)) return `Clan ${bandDeInText(s)}`;
-  const v = /^(Селото|селото) (.+)$/.exec(s);
-  if (v) return `Dorf ${villageDe(v[2])}`;
+  const v = /^(Селото|селото|Градът|града) (.+)$/.exec(s);
+  if (v) return `${isCity(v[2]) ? 'Stadt' : 'Dorf'} ${villageDe(v[2])}`;
   return villageDe(s);
 }
 
 /** the same, in a case and with an article: "dem Clan Wolfszahn", "dem Dorf Weißdorf" */
 export function bandTextCaseDe(s: string, c: Case): string {
   if (/^(Родът|рода) на /.test(s) || clanBase(s)) return bandLabelDe(s, null, c);
-  const v = /^(Селото|селото) (.+)$/.exec(s);
+  const v = /^(Селото|селото|Градът|града) (.+)$/.exec(s);
   return bandLabelDe('', v ? v[2] : s, c);
 }
 

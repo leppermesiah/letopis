@@ -424,7 +424,7 @@ function renderSide() {
       // German has no "discovered by" here: the name would have to change its case ("von Johann dem Starken")
       const done = (d: Discovery) => {
         const who = d.pid ? `<a href="#" class="ref" data-person="${d.pid}">${esc(P(d.who))}</a>` : esc(P(d.who));
-        const band = d.band ? ` <span class="muted">(${esc(BL(d.band.replace(/^рода/, 'Родът').replace(/^селото/, 'Селото')))})</span>` : '';
+        const band = d.band ? ` <span class="muted">(${esc(BL(d.band.replace(/^рода/, 'Родът').replace(/^селото/, 'Селото').replace(/^града/, 'Градът')))})</span>` : '';
         const yr = `<span class="yr">${fmtYear(d.year)}</span>`;
         return `<li><b>${esc(TECH_ID(d.tech, d.name))}</b> - ${DE ? `${who}${band}, ${yr}` : `${T('открито от', 'discovered by', '')} ${who}${band} ${T('през', 'in', '')} ${yr}`}</li>`;
       };
@@ -735,8 +735,8 @@ async function showGoneBand(id: number) {
     ${originHtml(g.founder, g.from)}
     <p>${g.end === 'extinct' ? T('Този род угасна. Няма останали хора от него.', 'This clan died out. No one from it is left.', 'Dieser Clan ist erloschen. Von ihm ist niemand mehr übrig.')
       : DE ? `Die Letzten dieses Clans schlossen sich ${esc(bandTextCaseDe(g.end, 'dat'))} an.`
-      : EN ? `The last of this clan joined ${esc(BL(g.end.replace(/^Родът/, 'рода').replace(/^Селото/, 'селото')))}.`
-      : `Последните от този род се присъединиха към ${esc(g.end.replace(/^Родът/, 'рода').replace(/^Селото/, 'селото'))}.`}</p>
+      : EN ? `The last of this clan joined ${esc(BL(g.end.replace(/^Родът/, 'рода').replace(/^Селото/, 'селото').replace(/^Градът/, 'града')))}.`
+      : `Последните от този род се присъединиха към ${esc(g.end.replace(/^Родът/, 'рода').replace(/^Селото/, 'селото').replace(/^Градът/, 'града'))}.`}</p>
     <h3>${T('Какво знаеха', 'What they knew', 'Was sie wussten')}</h3><div class="techs">${g.techs.map((t) => `<span class="pill">${esc(TECH(t))}</span>`).join('') || `<span class="muted">${T('Нищо', 'Nothing', 'Nichts')}</span>`}</div>`);
 }
 
