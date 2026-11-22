@@ -19,7 +19,7 @@ const STYLE: Record<Job, [string, string, string]> = {
 };
 import { FAMOUS, fameRole } from '../../shared/famous';
 import { realPeople } from '../../shared/people';
-import { CITIES, isCity } from '../../shared/cities';
+import { CITIES, cityYear, isCity } from '../../shared/cities';
 import { BIG, startStage, treeKinds } from '../../shared/trees';
 import { findRoad } from './roads';
 import { BEAST_EN, ERAS_EN, FEATURE_EN, SECRET_HEROES_EN, SECRET_KINDS_EN, TECH_EN, bandEn, bandLabelEn, bandThe, villageEn, causeEn, chiefEn, deedEn, personEn, translit } from '../../shared/i18n';
@@ -714,12 +714,18 @@ export class Simulation {
     if (this.mars || this.s.era < 3) return;
     const size = new Map<number, number>();
     for (const p of this.s.people) size.set(p.bandId, (size.get(p.bandId) ?? 0) + 1);
+    const year = Math.floor(this.year);
     const taken = new Set(this.s.bands.map((b) => b.settlementName).filter(Boolean));
+    // a name given before its time (older versions did not look at the year) goes back to a village name
+    for (const b of this.s.bands) if (b.settlementName && isCity(b.settlementName) && cityYear(b.settlementName) > year) {
+      this.s.cities = (this.s.cities ?? []).filter((c) => c !== b.settlementName);
+      b.settlementName = placeName(this.rng, taken as Set<string>);
+    }
     for (const c of this.s.cities ?? []) taken.add(c);
     const towns = this.s.bands.filter((b) => b.settled && b.settlementName && !isCity(b.settlementName) && this.hasTech(b, 'walls') && (size.get(b.id) ?? 0) >= 150)
       .sort((a, b) => (size.get(b.id) ?? 0) - (size.get(a.id) ?? 0)).slice(0, 3);
     for (const b of towns) {
-      const c = CITIES.find((x) => !taken.has(x[0]));
+      const c = CITIES.find((x) => x[3] <= year && !taken.has(x[0]));
       if (!c) return;
       taken.add(c[0]);
       (this.s.cities ??= []).push(c[0]);
