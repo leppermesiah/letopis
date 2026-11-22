@@ -11,4 +11,7 @@
     <string name="change">Anderer Server</string>
     <string name="channel">Chronik</string>
     <string name="channel_text">Die großen Ereignisse der Welt</string>
+    <string name="add">+ Server hinzufügen</string>
+    <string name="remove">Entfernen…</string>
+    <string name="name_hint">Name (optional), z. B. Dev</string>
 </resources>

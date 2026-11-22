@@ -19,6 +19,10 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 /** The game itself, from the server at home, in a full-screen web view. */
 public class MainActivity extends Activity {
@@ -81,35 +85,133 @@ public class MainActivity extends Activity {
         else web.loadUrl(server + "/");
     }
 
-    /** the first start, or the player wants another world */
+    /** the saved servers, each {name, url}; an app from before the list has only "server" */
+    private JSONArray servers() {
+        JSONArray a;
+        try { a = new JSONArray(prefs.getString("servers", "[]")); } catch (Exception e) { a = new JSONArray(); }
+        String cur = prefs.getString("server", "");
+        if (a.length() == 0 && !cur.isEmpty()) {
+            a.put(entry(shortName(cur), cur));
+            prefs.edit().putString("servers", a.toString()).apply();
+        }
+        return a;
+    }
+
+    private static JSONObject entry(String name, String url) {
+        JSONObject o = new JSONObject();
+        try { o.put("name", name).put("url", url); } catch (Exception ignored) { }
+        return o;
+    }
+
+    private static String shortName(String url) {
+        return url.replaceFirst("^https?://", "");
+    }
+
+    /** to another world; each server keeps its own place in the chronicle, so going back brings no old news */
+    private void use(String url) {
+        String cur = prefs.getString("server", "");
+        if (url.equals(cur)) { open(); return; }
+        SharedPreferences.Editor e = prefs.edit().putString("server", url);
+        if (!cur.isEmpty()) {
+            for (String k : new String[] { "last", "lastMars" }) {
+                if (prefs.contains(k)) e.putLong(k + "@" + cur, prefs.getLong(k, -1)); else e.remove(k + "@" + cur);
+            }
+        }
+        for (String k : new String[] { "last", "lastMars" }) {
+            if (prefs.contains(k + "@" + url)) e.putLong(k, prefs.getLong(k + "@" + url, -1)); else e.remove(k);
+        }
+        e.apply();
+        open();
+    }
+
+    /** the first start, or the player wants another world: the saved servers, or a new one */
     private void askServer() {
         if (asking) return;
+        JSONArray a = servers();
+        if (a.length() == 0) { addServer(); return; }
         asking = true;
+        String cur = prefs.getString("server", "");
+        String[] items = new String[a.length() + 1];
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject o = a.optJSONObject(i);
+            String url = o.optString("url");
+            String name = o.optString("name", shortName(url));
+            items[i] = (url.equals(cur) ? "✓ " : "    ") + name + (name.equals(shortName(url)) ? "" : "  (" + shortName(url) + ")");
+        }
+        items[a.length()] = getString(R.string.add);
+        AlertDialog.Builder b = new AlertDialog.Builder(this)
+            .setTitle(R.string.server_title)
+            .setItems(items, (d, w) -> {
+                if (w == a.length()) { asking = false; addServer(); }
+                else use(a.optJSONObject(w).optString("url"));
+            })
+            .setCancelable(!cur.isEmpty())
+            .setOnDismissListener(d -> asking = false);
+        if (a.length() > 1) b.setNeutralButton(R.string.remove, (d, w) -> { asking = false; removeServer(); });
+        if (!cur.isEmpty()) b.setNegativeButton(R.string.cancel, null);
+        b.show();
+    }
+
+    private void addServer() {
+        if (asking) return;
+        asking = true;
+        int pad = (int) (20 * getResources().getDisplayMetrics().density);
         EditText in = new EditText(this);
         in.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         in.setHint(R.string.server_hint);
-        in.setText(prefs.getString("server", "").replaceFirst("^http://", ""));
-        FrameLayout box = new FrameLayout(this);
-        int pad = (int) (20 * getResources().getDisplayMetrics().density);
+        EditText name = new EditText(this);
+        name.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        name.setHint(R.string.name_hint);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(pad, pad / 2, pad, 0);
         box.addView(in);
+        box.addView(name);
+        boolean first = servers().length() == 0;
         AlertDialog.Builder b = new AlertDialog.Builder(this)
             .setTitle(R.string.server_title)
             .setMessage(R.string.server_text)
             .setView(box)
-            .setCancelable(!prefs.getString("server", "").isEmpty())
+            .setCancelable(!first)
             .setPositiveButton(R.string.ok, (d, w) -> {
                 String v = in.getText().toString().trim().replaceAll("/+$", "");
+                if (v.isEmpty()) { if (first) { asking = false; addServer(); } return; }
                 if (!v.matches("^https?://.*")) v = "http://" + v;
-                if (!v.equals(prefs.getString("server", ""))) {
-                    // another world: its chronicle starts from now
-                    prefs.edit().putString("server", v).remove("last").remove("lastMars").apply();
+                String n = name.getText().toString().trim();
+                JSONArray a = servers();
+                JSONArray out = new JSONArray();
+                for (int i = 0; i < a.length(); i++) {
+                    if (!a.optJSONObject(i).optString("url").equals(v)) out.put(a.optJSONObject(i));
                 }
-                open();
+                out.put(entry(n.isEmpty() ? shortName(v) : n, v));
+                prefs.edit().putString("servers", out.toString()).apply();
+                use(v);
             })
             .setOnDismissListener(d -> asking = false);
-        if (!prefs.getString("server", "").isEmpty()) b.setNegativeButton(R.string.cancel, null);
+        if (!first) b.setNegativeButton(R.string.cancel, null);
         b.show();
+    }
+
+    private void removeServer() {
+        if (asking) return;
+        asking = true;
+        JSONArray a = servers();
+        String cur = prefs.getString("server", "");
+        String[] items = new String[a.length()];
+        for (int i = 0; i < a.length(); i++) items[i] = a.optJSONObject(i).optString("name");
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.remove)
+            .setItems(items, (d, w) -> {
+                String url = a.optJSONObject(w).optString("url");
+                JSONArray out = new JSONArray();
+                for (int i = 0; i < a.length(); i++) if (i != w) out.put(a.optJSONObject(i));
+                prefs.edit().putString("servers", out.toString()).remove("last@" + url).remove("lastMars@" + url).apply();
+                asking = false;
+                if (url.equals(cur)) use(out.optJSONObject(0).optString("url"));
+            })
+            .setNegativeButton(R.string.cancel, null)
+            .setOnDismissListener(d -> asking = false)
+            .show();
     }
 
     private void offline() {
@@ -146,6 +248,17 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void changeServer() {
             runOnUiThread(MainActivity.this::askServer);
+        }
+
+        /** the name of the server being watched, for the button in the page */
+        @JavascriptInterface
+        public String serverName() {
+            String cur = prefs.getString("server", "");
+            JSONArray a = servers();
+            for (int i = 0; i < a.length(); i++) {
+                if (a.optJSONObject(i).optString("url").equals(cur)) return a.optJSONObject(i).optString("name");
+            }
+            return shortName(cur);
         }
     }
 }

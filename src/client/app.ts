@@ -7,6 +7,7 @@ interface AppBridge {
   getPrefs(): string;
   setPrefs(json: string): void;
   changeServer(): void;
+  serverName?(): string;
 }
 
 interface Prefs { on: boolean; groups: string[]; mars: boolean; kids: boolean; lang: string; kinds: string[] }
@@ -62,7 +63,7 @@ export function initApp(kids: () => boolean) {
         save();
       }, !p.on)),
       row(T('И от Марс', 'Also from Mars', 'Auch vom Mars'), p.mars, () => { p.mars = !p.mars; save(); }, !p.on),
-      Object.assign(row(T('Друг сървър…', 'Another server…', 'Anderer Server…'), false, () => app.changeServer()), { className: 'btn news-server' }),
+      Object.assign(row(app.serverName ? T('Сървър: ', 'Server: ', 'Server: ') + app.serverName() + ' ▸' : T('Друг сървър…', 'Another server…', 'Anderer Server…'), false, () => app.changeServer()), { className: 'btn news-server' }),
     );
     btn.setAttribute('aria-pressed', String(p.on));
   };
