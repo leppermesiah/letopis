@@ -13,9 +13,10 @@ export function realPeople(year: number): number {
   return P[P.length - 1][1];
 }
 
-/** 1200 -> 1.2K, 3400000 -> 3.4M, 8100000000 -> 8.1B */
-export function shortNum(n: number): string {
+/** 1200 -> 1.2K, 3400000 -> 3.4M, 8100000000 -> 8.1B in English; хил./млн./млрд. in Bulgarian, Tsd./Mio./Mrd. in German */
+export function shortNum(n: number, lang: 'bg' | 'en' | 'de' = 'en'): string {
   const r = Math.round(n);
-  const f = (x: number, s: string) => `${x >= 100 ? Math.round(x) : Math.round(x * 10) / 10}${s}`;
-  return r < 1000 ? String(r) : r < 1e6 ? f(r / 1e3, 'K') : r < 1e9 ? f(r / 1e6, 'M') : f(r / 1e9, 'B');
+  const u = lang === 'bg' ? ['\u00a0хил.', '\u00a0млн.', '\u00a0млрд.'] : lang === 'de' ? ['\u00a0Tsd.', '\u00a0Mio.', '\u00a0Mrd.'] : ['K', 'M', 'B'];
+  const f = (x: number, s: string) => `${x >= 100 ? Math.round(x) : Math.round(x * 10) / 10}`.replace('.', lang === 'en' ? '.' : ',') + s;
+  return r < 1000 ? String(r) : r < 1e6 ? f(r / 1e3, u[0]) : r < 1e9 ? f(r / 1e6, u[1]) : f(r / 1e9, u[2]);
 }

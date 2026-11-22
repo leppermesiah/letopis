@@ -8,7 +8,7 @@ import { Fleet } from './ships';
 import { Canoes } from './canoes';
 import { Trains } from './trains';
 import { SECRET_KINDS, SecretSpot, secretSpots } from '../shared/secrets';
-import { B, VILLAGE } from './lang';
+import { B, LANG, VILLAGE } from './lang';
 import { Rng } from '../shared/rng';
 import { CONIFERS, TREE_KINDS } from '../shared/trees';
 import { shortNum } from '../shared/people';
@@ -2308,7 +2308,7 @@ export class CampSprite {
     this.c.position.set(p.x, p.y);
     this.glow.position.set(p.x, p.y - 4);
     this.glow.visible = b.hasFire || b.dwelling === 'house';
-    const shown = shortNum(b.size * this.r.popScale);
+    const shown = shortNum(b.size * this.r.popScale, LANG);
     this.label.text = b.settlementName ? `${b.kingdom?.capital ? '👑 ' : ''}${VILLAGE(b.settlementName)} (${shown})` : `${B(b.name).replace(/^(Родът на|Clan of the) /, '')} (${shown})`;
     this.label.style.fontSize = kids ? 16 : 12;
     this.bannerCloth.tint = b.color;
