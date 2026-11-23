@@ -375,7 +375,7 @@ function addEvent(e: ChronicleEntry, live: boolean) {
   if (feed.length > 300) feed.pop();
   lastEventId = Math.max(lastEventId, e.id);
   save(`letopis.seen.${worldId}`, lastEventId);
-  if (live && e.importance >= 2) toast(e);
+  if (live && e.importance >= 2 && feedFilter({ ...e, importance: 2 })) toast(e);
   if (live && tour && e.importance >= 2 && e.bandId) {
     const b = bands.find((x) => x.id === e.bandId);
     if (b) { lookAt(b.x, b.y, Math.max(cam.tz, 1.4)); tourHold = performance.now() + 20000; }
@@ -388,7 +388,8 @@ function addEvent(e: ChronicleEntry, live: boolean) {
 }
 
 let onlyBig = store('letopis.onlyBig', false);
-const feedFilter = (e: ChronicleEntry) => !onlyBig || e.importance >= 2;
+// with the real world's numbers on, "there are now N people" would only contradict them
+const feedFilter = (e: ChronicleEntry) => (!onlyBig || e.importance >= 2) && !(realNums && e.kind === 'milestone');
 
 function toast(e: ChronicleEntry) {
   const t = document.createElement('div');

@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createGzip, gunzipSync, gzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,12 +21,42 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(here, 'public');
 
 mkdirSync(path.join(DATA, 'archive'), { recursive: true });
+const SNAP_DIR = path.join(DATA, 'snapshots');
+mkdirSync(SNAP_DIR, { recursive: true });
 const STATE_FILE = path.join(DATA, 'world.json.gz');
 const MARS_FILE = path.join(DATA, 'mars.json.gz');
 const store = new Store(path.join(DATA, 'letopis.db'));
 
 function log(...a: unknown[]) {
   console.log(new Date().toISOString(), ...a);
+}
+
+/** the snapshots of the world, the newest first: "2026-11-23.json.gz" (Mars beside it as "...-mars.json.gz") */
+function snapshots(_kind: string): string[] {
+  return readdirSync(SNAP_DIR).filter((f) => /^\d{4}-\d{2}-\d{2}\.json\.gz$/.test(f)).sort().reverse();
+}
+
+/** once a day a copy of the world (a few MB, never the database); the last 7 days, 4 weeks and 12 months stay */
+function snapshotDay() {
+  const day = new Date().toISOString().slice(0, 10);
+  const file = path.join(SNAP_DIR, `${day}.json.gz`);
+  if (existsSync(file) || !existsSync(STATE_FILE)) return;
+  copyFileSync(STATE_FILE, file);
+  if (existsSync(MARS_FILE)) copyFileSync(MARS_FILE, path.join(SNAP_DIR, `${day}-mars.json.gz`));
+  const all = snapshots('');
+  const keep = new Set(all.slice(0, 7));
+  const week = (f: string) => { const d = new Date(f.slice(0, 10)); return Math.floor((d.getTime() / 86400000 + 3) / 7); };
+  const weeks = new Set<number>(), months = new Set<string>();
+  for (const f of all) {
+    if (weeks.size < 4 && !weeks.has(week(f))) { weeks.add(week(f)); keep.add(f); }
+    if (months.size < 12 && !months.has(f.slice(0, 7))) { months.add(f.slice(0, 7)); keep.add(f); }
+  }
+  for (const f of all) if (!keep.has(f)) {
+    unlinkSync(path.join(SNAP_DIR, f));
+    const mf = path.join(SNAP_DIR, f.replace('.json.gz', '-mars.json.gz'));
+    if (existsSync(mf)) unlinkSync(mf);
+  }
+  log(`Снимка на света: ${day} (пазят се ${keep.size})`);
 }
 
 function loadOrCreate(): Simulation {
@@ -37,8 +67,23 @@ function loadOrCreate(): Simulation {
       log(`Продължава свят ${st.worldId}, година ${Math.floor(sim.year)}, ${st.people.length} души`);
       return sim;
     } catch (e) {
-      log('Неуспешно зареждане, архивирам повредения файл и започвам нов свят', e);
+      log('Неуспешно зареждане, архивирам повредения файл', e);
       renameSync(STATE_FILE, path.join(DATA, 'archive', `broken-${Date.now()}.json.gz`));
+      // the newest snapshot that still reads takes its place
+      for (const f of snapshots('')) {
+        try {
+          const st = JSON.parse(gunzipSync(readFileSync(path.join(SNAP_DIR, f))).toString('utf8')) as SimState;
+          const sim = new Simulation(st);
+          copyFileSync(path.join(SNAP_DIR, f), STATE_FILE);
+          const mf = path.join(SNAP_DIR, f.replace('.json.gz', '-mars.json.gz'));
+          if (existsSync(mf)) copyFileSync(mf, MARS_FILE);
+          log(`Светът ${st.worldId} е върнат от снимката ${f}, година ${Math.floor(sim.year)}`);
+          return sim;
+        } catch (e2) {
+          log(`Снимката ${f} също не става: ${(e2 as Error).message}`);
+        }
+      }
+      log('Няма здрава снимка, започвам нов свят');
     }
   }
   const seed = process.env.LETOPIS_SEED ? Number(process.env.LETOPIS_SEED) : undefined;
@@ -173,12 +218,31 @@ function tick() {
     if (Date.now() - lastSave > SAVE_EVERY_MS) {
       save();
       lastSave = Date.now();
+      snapshotDay();
     }
+    cleanDb();
   } catch (e) {
     log('Грешка в симулацията', e);
   }
   const wait = Math.max(5, sim.tickMs(SPEED) - (Date.now() - started));
   setTimeout(tick, wait);
+}
+
+// the database: the dead of old worlds and the plain dead of long ago go, a few thousand rows a tick
+let deadCursor = 0, cleanedOnce = false, lastCompact = Date.now();
+function cleanDb() {
+  const worlds = [sim.s.worldId, `${sim.s.worldId}-mars`];
+  if (mars) worlds.push(mars.s.worldId);
+  const keep = [...(sim.s.kingIds ?? []), ...(sim.s.famous ?? []).map((f) => f.id)];
+  deadCursor = store.pruneDeadStep(worlds, sim.s.worldId, sim.s.tick - 150 * 12, keep, deadCursor);
+  if (deadCursor === 0 && !cleanedOnce) {
+    cleanedOnce = true;
+    const n = store.dropOldWorlds(worlds);
+    if (n) log(`Изтрити ${n} реда от стари светове`);
+    if (store.compactOnce()) log('Базата е свита веднъж (VACUUM)');
+  }
+  // once a day the freed room goes back to the disk
+  if (Date.now() - lastCompact > 24 * 3600 * 1000) { lastCompact = Date.now(); store.compact(); }
 }
 
 function restartWorld() {

@@ -81,6 +81,48 @@ export class Store {
     this.db.exec('COMMIT');
   }
 
+  /**
+   * A step of the slow cleaning of the dead: the rows from `from` on (a few thousand at a time, so the world never waits).
+   * Gone are the dead of worlds that no longer live, and the plain dead of this world who died before `beforeTick`:
+   * the ones with deeds, the famous and the kings stay for ever. Returns where the next step starts (0: from the top again).
+   */
+  pruneDeadStep(worlds: string[], world: string, beforeTick: number, keepIds: number[], from: number, rows = 20000): number {
+    const top = from + rows;
+    this.db.prepare(`DELETE FROM dead WHERE rowid >= ? AND rowid < ? AND (
+        world NOT IN (SELECT value FROM json_each(?))
+        OR (world = ? AND json_extract(json, '$.died') < ? AND json_array_length(json, '$.deeds') = 0 AND id NOT IN (SELECT value FROM json_each(?))))`)
+      .run(from, top, JSON.stringify(worlds), world, beforeTick, JSON.stringify(keepIds));
+    const max = (this.db.prepare('SELECT MAX(rowid) m FROM dead').get() as { m: number | null }).m ?? 0;
+    return top > max ? 0 : top;
+  }
+
+  /** the chronicle, the charts and the gone clans of worlds that no longer live */
+  dropOldWorlds(worlds: string[]): number {
+    const w = JSON.stringify(worlds);
+    let n = 0;
+    for (const t of ['chronicle', 'stats', 'gone_bands']) {
+      const r = this.db.prepare(`DELETE FROM ${t} WHERE world NOT IN (SELECT value FROM json_each(?))`).run(w) as { changes: number | bigint };
+      n += Number(r.changes);
+    }
+    return n;
+  }
+
+  /** once: the file gives back the room the cleaning freed and from then on can do it bit by bit */
+  compactOnce(): boolean {
+    const v = (this.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
+    if (v >= 1) return false;
+    this.db.exec('PRAGMA auto_vacuum = INCREMENTAL');
+    this.db.exec('VACUUM');
+    this.db.exec('PRAGMA user_version = 1');
+    return true;
+  }
+
+  /** the room freed since the last time goes back to the disk */
+  compact() {
+    this.db.exec('PRAGMA incremental_vacuum');
+    this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+  }
+
   getDead(world: string, id: number): DeadRecord | null {
     const row = this.db.prepare('SELECT json FROM dead WHERE world = ? AND id = ?').get(world, id) as { json: string } | undefined;
     return row ? JSON.parse(row.json) : null;
