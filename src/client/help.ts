@@ -20,8 +20,10 @@ const TAG_ORDER: Tag[] = ['breaking', 'new', 'old'];
 
 /** newest first; a new version gets its own entry here */
 export const CHANGELOG: Release[] = [
-  { v: '1.95', items: [
+  { v: '2.0', items: [
     ['385 известни личности вместо 200, а в картата на всяка има кратък живот и любопитни факти.', '385 famous people instead of 200, and each card tells their life in short with a few curious facts.', '385 berühmte Persönlichkeiten statt 200, und jede Karte erzählt kurz ihr Leben und ein paar kuriose Dinge.', 'add'],
+  ] },
+  { v: '1.95', items: [
     ['„Карти“ се вижда от началото и казва кога ще се отключат и какво е нужно.', '“Maps” is there from the start and tells when they unlock and what it takes.', '„Karten“ ist von Anfang an da und sagt, wann sie freigeschaltet werden und was es braucht.', 'add'],
     ['Всички бутони са в меню ☰; на екрана остават само +, −, Карти и Панел.', 'All buttons are in a ☰ menu; only +, −, Maps and Panel stay on screen.', 'Alle Knöpfe sind im Menü ☰; auf dem Bildschirm bleiben nur +, −, Karten und Panel.', 'add'],
     ['Големите градове приемат имена на истински градове, когато им дойде времето: Рим от 753 г. пр.н.е., Атина, Йерусалим, а много по-късно София, Пловдив, Варна (на английски London и York, на немски Berlin и Köln).', 'Big towns take the names of real cities once their time has come: Rome from 753 BC, Athens, Jerusalem, and much later London, York and Bristol (Berlin and Köln in German, Sofia and Plovdiv in Bulgarian).', 'Große Städte nehmen die Namen echter Städte an, sobald ihre Zeit gekommen ist: Rom ab 753 v. Chr., Athen, Jerusalem, und viel später Berlin, Köln und München (London und York auf Englisch, Sofia und Plowdiw auf Bulgarisch).', 'add'],
