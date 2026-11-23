@@ -274,3 +274,8 @@ body.in-app .top { right: 64px; }
 }
 .stats-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 2px; font-size: 13px; color: var(--muted); }
 .stats-nav .btn[disabled] { opacity: 0.35; cursor: default; }
+/* the row on the map: ☰, +, −, Maps and Panel all the same height */
+.controls { align-items: center; }
+.controls > .btn, .controls > .sound-wrap > .btn, .menu-wrap > #menuBtn { height: 38px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; vertical-align: middle; }
+.menu-wrap > #menuBtn { width: 38px; font-size: 18px; }
+.controls > .sound-wrap { display: inline-flex; }
