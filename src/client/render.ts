@@ -271,6 +271,9 @@ export class WorldRenderer {
     this.app = app;
     this.atlas = atlas;
     this.world.addChild(this.farLayer, this.waterLayer, this.terrainLayer, this.snowLayer, this.realmLayer, this.objLayer, this.campLayer, this.peopleLayer, this.fogLayer, this.glowLayer, this.labelLayer);
+    // the ground, water, snow, trees and fog are render groups of their own: Pixi sorts their tens of thousands
+    // of sprites only when they change, not again every frame because somebody walked or an animal moved
+    for (const l of [this.waterLayer, this.terrainLayer, this.snowLayer, this.objLayer, this.fogLayer]) l.isRenderGroup = true;
     this.nightCanvas.width = 8;
     this.nightCanvas.height = 8;
     this.nightSprite = new Sprite(Texture.from(this.nightCanvas));
