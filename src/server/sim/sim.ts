@@ -259,6 +259,7 @@ export class Simulation {
   deadQueue: DeadRecord[] = [];
   goneQueue: GoneBand[] = [];
   exploredDirty = true;
+  private fogChecked = false;
   private cul?: Cultures;
   /** the cultures and their networks (made on first use, also for old worlds) */
   private culs(): Cultures {
@@ -2363,6 +2364,21 @@ export class Simulation {
         const i = idx(x, y);
         if (!this.t.explored[i]) { this.t.explored[i] = 1; this.exploredDirty = true; }
       }
+    }
+    if (this.exploredDirty || !this.fogChecked) { this.fogChecked = true; this.liftFog(); }
+  }
+
+  /** a map that is 80% known has no fog left at all: the last corners are known too */
+  private liftFog() {
+    const S = this.mapSize, ex = this.t.explored;
+    for (let my = 0; my * S < H; my++) for (let mx = 0; mx * S < W; mx++) {
+      const [gx, gy] = this.mapAt(mx * S, my * S);
+      if (!this.isOpen(gx, gy)) continue;
+      let known = 0, all = 0;
+      for (let y = my * S; y < Math.min(H, (my + 1) * S); y++) for (let x = mx * S; x < Math.min(W, (mx + 1) * S); x++) { all++; known += ex[y * W + x]; }
+      if (known === all || known < all * 0.8) continue;
+      for (let y = my * S; y < Math.min(H, (my + 1) * S); y++) ex.fill(1, y * W + mx * S, y * W + Math.min(W, (mx + 1) * S));
+      this.exploredDirty = true;
     }
   }
 
