@@ -209,8 +209,12 @@ function helpHtml(): string {
     <ul class="help">
       ${li('<b>Летопис</b>: всичко, което се случва. Сините имена водят до хората и родовете.', '<b>Chronicle</b>: everything that happens. Blue names lead to the people and clans.', '<b>Chronik</b>: alles, was geschieht. Blaue Namen führen zu den Menschen und Clans.')}
       ${li('<b>Открития</b>: знанията по епохи, кой и кога ги е открил.', '<b>Discoveries</b>: knowledge by age, who found it and when.', '<b>Entdeckungen</b>: das Wissen nach Zeitaltern, wer es wann gefunden hat.')}
-      ${li('<b>Родове</b> и <b>Личности</b>: родовете по големина и най-известните хора.', '<b>Clans</b> and <b>People</b>: the clans by size and the most notable people.', '<b>Clans</b> und <b>Personen</b>: die Clans nach Größe und die bekanntesten Menschen.')}
-      ${li('<b>Статистика</b>: населението във времето. <b>Тайни</b>: кои тайни са намерени.', '<b>Statistics</b>: the population over time. <b>Secrets</b>: which secrets have been found.', '<b>Statistik</b>: die Bevölkerung im Lauf der Zeit. <b>Geheimnisse</b>: welche schon gefunden wurden.')}
+      ${li('<b>Родове</b>: родовете по големина, със селата и знанията им.', '<b>Clans</b>: the clans by size, with their villages and knowledge.', '<b>Clans</b>: die Clans nach Größe, mit ihren Dörfern und ihrem Wissen.')}
+      ${li('<b>Царства</b>: царствата от Желязната епоха нататък, царете им и градовете в тях.', '<b>Kingdoms</b>: the kingdoms from the Iron Age on, their kings and their towns.', '<b>Königreiche</b>: die Königreiche ab der Eisenzeit, ihre Könige und ihre Städte.')}
+      ${li('<b>Личности</b>: най-известните хора на този свят.', '<b>People</b>: the most notable people of this world.', '<b>Personen</b>: die bekanntesten Menschen dieser Welt.')}
+      ${li('<b>Известни личности</b>: хора от истинския свят, родени в своята година. Показват се с червена звезда.', '<b>Famous people</b>: people from the real world, born in their own year. A red star shows them.', '<b>Berühmte Persönlichkeiten</b>: Menschen aus der echten Welt, geboren in ihrem Jahr. Ein roter Stern zeigt sie.')}
+      ${li('<b>Статистика</b>: населението, родовете и откритията във времето.', '<b>Statistics</b>: the population, clans and discoveries over time.', '<b>Statistik</b>: die Bevölkerung, die Clans und die Entdeckungen im Lauf der Zeit.')}
+      ${li('<b>Тайни</b>: кои тайни са намерени.', '<b>Secrets</b>: which secrets have been found.', '<b>Geheimnisse</b>: welche schon gefunden wurden.')}
     </ul>
     <p class="muted">${T('Когато се върнеш след време, ще видиш какво е станало, докато те е нямало.',
       'When you come back after a while, you will see what happened while you were away.',
