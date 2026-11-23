@@ -1010,7 +1010,7 @@ $('#kidsBtn').onclick = () => {
 document.body.classList.toggle('kids', kids);
 // inside the Android app: what the phone should tell you about
 initApp(() => kids);
-if ((window as unknown as { LetopisApp?: unknown }).LetopisApp) setupAppMenu();
+setupMenu(!!(window as unknown as { LetopisApp?: unknown }).LetopisApp);
 $('#kidsBtn').setAttribute('aria-pressed', String(kids));
 // the people as many as live in the game, or as many as lived in the real world that year
 const realBtn = $('#realBtn') as HTMLButtonElement;
@@ -1180,27 +1180,36 @@ function setupMaps() {
 
 // ---------- inside the Android app: everything in a ☰ menu, only the zoom on the map ----------
 
-function setupAppMenu() {
-  document.body.classList.add('in-app');
+/**
+ * The menu ☰: the buttons in groups. In the app the map keeps only the zoom rail;
+ * on the big screen +, −, Maps and Panel stay in the row and the rest goes in the menu.
+ */
+function setupMenu(inApp: boolean) {
   const ctl = $('.controls') as HTMLElement;
-  // the zoom: + on top, a slider, − below, at the bottom right where the thumb is
-  const zoom = document.createElement('div');
-  zoom.className = 'zoom-rail';
-  const slider = document.createElement('input');
-  slider.type = 'range'; slider.min = '0'; slider.max = '1000';
-  slider.setAttribute('aria-label', T('Мащаб', 'Zoom', 'Zoom'));
-  const lo = Math.log(0.18), hi = Math.log(MAX_ZOOM);
-  slider.oninput = () => { cam.tz = Math.exp(lo + (hi - lo) * Number(slider.value) / 1000); };
-  let held = false;
-  slider.onpointerdown = () => { held = true; };
-  slider.onpointerup = slider.onpointercancel = () => { held = false; };
-  zoom.append($('#zoomIn'), slider, $('#zoomOut'));
-  document.body.appendChild(zoom);
-  app.ticker.add(() => { if (!held) slider.value = String(Math.round(((Math.log(cam.tz) - lo) / (hi - lo)) * 1000)); });
-  // the menu: the same buttons as on the big screen, in groups
+  const wraps = [...ctl.querySelectorAll('.sound-wrap')];
+  const maps = wraps.find((w) => w.classList.contains('maps-wrap')) ?? null;
+  if (inApp) {
+    document.body.classList.add('in-app');
+    // the zoom: + on top, a slider, − below, at the bottom right where the thumb is
+    const zoom = document.createElement('div');
+    zoom.className = 'zoom-rail';
+    const slider = document.createElement('input');
+    slider.type = 'range'; slider.min = '0'; slider.max = '1000';
+    slider.setAttribute('aria-label', T('Мащаб', 'Zoom', 'Zoom'));
+    const lo = Math.log(0.18), hi = Math.log(MAX_ZOOM);
+    slider.oninput = () => { cam.tz = Math.exp(lo + (hi - lo) * Number(slider.value) / 1000); };
+    let held = false;
+    slider.onpointerdown = () => { held = true; };
+    slider.onpointerup = slider.onpointercancel = () => { held = false; };
+    zoom.append($('#zoomIn'), slider, $('#zoomOut'));
+    document.body.appendChild(zoom);
+    app.ticker.add(() => { if (!held) slider.value = String(Math.round(((Math.log(cam.tz) - lo) / (hi - lo)) * 1000)); });
+  }
   const btn = document.createElement('button');
   btn.id = 'menuBtn'; btn.className = 'btn round'; btn.textContent = '☰';
   btn.setAttribute('aria-label', T('Меню', 'Menu', 'Menü'));
+  btn.title = T('Меню', 'Menu', 'Menü');
+  btn.setAttribute('aria-expanded', 'false');
   const menu = document.createElement('div');
   menu.id = 'appMenu'; menu.hidden = true;
   const group = (bg: string, en: string, de: string, ...els: (Element | null)[]) => {
@@ -1209,11 +1218,16 @@ function setupAppMenu() {
     for (const el of els) if (el) g.appendChild(el);
     menu.appendChild(g);
   };
-  const wraps = [...ctl.querySelectorAll('.sound-wrap')];
-  group('Изглед', 'View', 'Ansicht', $('#tourBtn'), $('#nightBtn'), wraps.find((w) => w.classList.contains('maps-wrap')) ?? null, $('#planetBtn'), $('#sideToggle'));
+  group('Изглед', 'View', 'Ansicht', $('#tourBtn'), $('#nightBtn'), $('#planetBtn'), ...(inApp ? [maps, $('#sideToggle')] : []));
   group('Звук', 'Sound', 'Ton', wraps.find((w) => w.querySelector('#soundBtn')) ?? null);
   group('Настройки', 'Settings', 'Einstellungen', wraps.find((w) => w.classList.contains('app-wrap')) ?? null, $('#realBtn'), $('#kidsBtn'), $('#langSel'), $('#helpBtn'));
-  document.body.append(btn, menu);
+  if (inApp) document.body.append(btn, menu);
+  else {
+    const wrap = document.createElement('span');
+    wrap.className = 'menu-wrap';
+    wrap.append(btn, menu);
+    ctl.prepend(wrap);
+  }
   $('#helpBtn').textContent = `?  ${T('Помощ и новости', 'Help and news', 'Hilfe und Neues')}`;
   const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
   btn.onclick = (ev) => { ev.stopPropagation(); menu.hidden = !menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden)); };
@@ -1223,7 +1237,10 @@ function setupAppMenu() {
     const b = (ev.target as HTMLElement).closest('button');
     if (b && !b.closest('.sound-wrap')) close();
   });
-  canvas.addEventListener('pointerdown', close);
+  document.addEventListener('pointerdown', (ev) => {
+    const t = ev.target as HTMLElement;
+    if (!menu.hidden && !menu.contains(t) && t !== btn) close();
+  });
 }
 
 // the panel can hide; a small tab at the edge brings it back, and the choice is remembered
@@ -1239,9 +1256,11 @@ langSel.onchange = () => setLang(langSel.value as Lang);
 // "?": what is new and a short help; a dot on it while a new version is unread
 const helpBtn = $('#helpBtn');
 helpBtn.classList.toggle('news', hasNews());
+$('#menuBtn').classList.toggle('news', hasNews());
 helpBtn.onclick = () => {
   openCard(helpWindowHtml(), false, 'help');
   helpBtn.classList.remove('news');
+  $('#menuBtn').classList.remove('news');
 };
 $('#sideHandle').onclick = toggleSide;
 
