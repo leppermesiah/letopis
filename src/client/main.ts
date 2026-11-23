@@ -220,8 +220,9 @@ function bandColors(): Map<number, number> {
 }
 
 /** the number of the real world in that year; every village shows its share of it */
+let realNums = store('letopis.realNums', false);
 function setScale(year: number, population: number) {
-  r.popScale = BASE || !population ? 1 : realPeople(year) / population;
+  r.popScale = BASE || !population || !realNums ? 1 : realPeople(year) / population;
 }
 
 function applyTime(t: TickMessage['time'], population: number) {
@@ -236,7 +237,7 @@ function applyTime(t: TickMessage['time'], population: number) {
   music.setEra(t.era, !!BASE);
   const gate = TECH_LIST.find(([id]) => id === ERA_GATE[t.era + 1]);
   $('#nextEra').textContent = gate ? `${T('следва', 'next', 'als Nächstes')}: ${TECH_ID(gate[0], gate[1])}` : '';
-  $('#pop').textContent = BASE ? num(population) : shortNum(population * r.popScale, LANG);
+  $('#pop').textContent = r.popScale === 1 ? num(population) : shortNum(population * r.popScale, LANG);
   $('#bandsCount').textContent = String(bands.length);
   const days = (Date.now() - t.startedAt) / 86400000;
   $('#age').textContent = days < 1 ? `${Math.round(days * 24)} ${T('ч.', 'h', 'Std.')}` : `${Math.floor(days)} ${T('дни', 'days', 'Tage')}`;
@@ -528,7 +529,7 @@ async function renderStats(body: HTMLElement, force = false) {
     return Math.max(0, (r2[k]! - a[k]!) / Math.max(1, r2.year - a.year));
   });
   const charts: [string, Series[]][] = [
-    [T('Население', 'Population', 'Bevölkerung'), [{ label: '', color: accent, values: rows.map((r2) => (BASE ? r2.population : realPeople(r2.year))) }]],
+    [T('Население', 'Population', 'Bevölkerung'), [{ label: '', color: accent, values: rows.map((r2) => (BASE || !realNums ? r2.population : realPeople(r2.year))) }]],
     [T('Родени и починали на година', 'Born and died per year', 'Geburten und Todesfälle pro Jahr'), [
       { label: T('родени', 'born', 'geboren'), color: CHART_COLORS[3], values: perYear('born') },
       { label: T('починали', 'died', 'gestorben'), color: CHART_COLORS[2], values: perYear('died') }]],
@@ -1010,6 +1011,18 @@ document.body.classList.toggle('kids', kids);
 initApp(() => kids);
 if ((window as unknown as { LetopisApp?: unknown }).LetopisApp) setupAppMenu();
 $('#kidsBtn').setAttribute('aria-pressed', String(kids));
+// the people as many as live in the game, or as many as lived in the real world that year
+const realBtn = $('#realBtn') as HTMLButtonElement;
+realBtn.hidden = !!BASE;
+realBtn.textContent = T('Истински числа', 'Real numbers', 'Echte Zahlen');
+realBtn.title = T('Колко души е имало в истинския свят в тази година', 'How many people lived in the real world that year', 'Wie viele Menschen in jenem Jahr in der echten Welt lebten');
+realBtn.setAttribute('aria-pressed', String(realNums));
+realBtn.onclick = () => {
+  realNums = !realNums;
+  save('letopis.realNums', realNums);
+  realBtn.setAttribute('aria-pressed', String(realNums));
+  location.reload();
+};
 let night = store('letopis.night', true);
 r.night = night;
 $('#nightBtn').setAttribute('aria-pressed', String(night));
@@ -1198,7 +1211,7 @@ function setupAppMenu() {
   const wraps = [...ctl.querySelectorAll('.sound-wrap')];
   group('Изглед', 'View', 'Ansicht', $('#tourBtn'), $('#nightBtn'), wraps.find((w) => w.classList.contains('maps-wrap')) ?? null, $('#planetBtn'), $('#sideToggle'));
   group('Звук', 'Sound', 'Ton', wraps.find((w) => w.querySelector('#soundBtn')) ?? null);
-  group('Настройки', 'Settings', 'Einstellungen', wraps.find((w) => w.classList.contains('app-wrap')) ?? null, $('#kidsBtn'), $('#langSel'), $('#helpBtn'));
+  group('Настройки', 'Settings', 'Einstellungen', wraps.find((w) => w.classList.contains('app-wrap')) ?? null, $('#realBtn'), $('#kidsBtn'), $('#langSel'), $('#helpBtn'));
   document.body.append(btn, menu);
   $('#helpBtn').textContent = `?  ${T('Помощ и новости', 'Help and news', 'Hilfe und Neues')}`;
   const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
