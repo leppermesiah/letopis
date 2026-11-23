@@ -10,6 +10,9 @@ import { Moving, View, movingOf, snapshotFor, tickFor, viewFor, worldInfoFor } f
 import { minimap } from './minimap';
 import { Discovery, SnapshotMessage, TickMessage, WorldInfo, b64encode, formatYear } from '../shared/types';
 import { TECHS } from './sim/tech';
+import { BIO_BG } from '../shared/bio/bg';
+import { BIO_EN } from '../shared/bio/en';
+import { BIO_DE } from '../shared/bio/de';
 
 const PORT = Number(process.env.LETOPIS_PORT ?? 2222);
 const DATA = path.resolve(process.env.LETOPIS_DATA ?? '/data');
@@ -367,6 +370,12 @@ const server = http.createServer((req, res) => {
     }
     if (p === '/api/heroes') return json(res, sim2.heroes());
     if (p === '/api/famous') return json(res, sim2.famousList());
+    // a few lines on who a famous person was: their life, their death and something curious (by the Bulgarian name)
+    if (p === '/api/bio') {
+      const lang = url.searchParams.get('lang');
+      const bio = (lang === 'de' ? BIO_DE : lang === 'en' ? BIO_EN : BIO_BG)[url.searchParams.get('name') ?? ''];
+      return bio ? json(res, { text: bio[0], facts: bio.slice(1) }) : json(res, { error: 'няма' }, 404);
+    }
     if (p === '/api/stats') {
       // a window of years (the page shows a thousand at a time), and where the numbers start and end
       const span = store.statsSpan(world);

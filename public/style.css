@@ -214,6 +214,10 @@ a.ref:hover { border-bottom-style: solid; }
 .fame-star { color: #ff3030; text-shadow: 0 0 4px rgba(255, 48, 48, 0.45); }
 .famous li.found { cursor: pointer; margin-bottom: 4px; line-height: 1.35; }
 .famous li.found .muted { font-size: 12px; }
+.fam-bio { margin: 10px 0; font-size: 13px; line-height: 1.5; }
+.fam-bio p { margin: 0 0 6px; }
+.fam-bio ul { margin: 2px 0 0; padding-left: 18px; }
+.fam-bio li { margin-bottom: 3px; }
 .famous .alive { font-size: 11px; color: #7fd18b; margin-left: 4px; }
 .brand .planet { color: #e0785a; font-size: 0.8em; }
 .sound-wrap { position: relative; display: inline-block; }

@@ -1127,7 +1127,7 @@ export class Simulation {
     // early names come from the older part of the list
     const pool = this.s.era < 2 ? names.slice(0, 40) : names;
     let first = this.rng.pick(pool);
-    const fatherFirst = father ? (father.fame ? father.first.replace(/^(Цар|Хан|Свети|Кралица|Патриарх) /, '').split(' ')[0] : father.first) : '';
+    const fatherFirst = father ? (father.fame ? father.first.replace(/^(Цар|Хан|Свети|Кралица|Патриарх|Княз|Императрица|Капитан|Барон|Майстер) /, '').split(' ')[0] : father.first) : '';
     if (father && this.rng.chance(0.15)) first = sex === 0 ? fatherFirst : first; // named after the father
     const hasFamilies = this.s.era >= 1 && father;
     const p: Person = {

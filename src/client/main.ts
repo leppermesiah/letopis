@@ -469,7 +469,7 @@ function renderSide() {
       body.innerHTML = `<p class="muted">${T(`Родени ${born.length} от ${FAMOUS.length}. Известни хора от истинската история идват на света в годината, в която са се родили, и си отиват на годините, на които са починали. Отбелязани са с червена звезда.`,
         `Born ${born.length} of ${FAMOUS.length}. Famous people of the real world come into it in the year they were born and leave at the age they died. A red star marks them.`,
         `${born.length} von ${FAMOUS.length} geboren. Berühmte Menschen aus der echten Welt kommen im Jahr ihrer Geburt zur Welt und gehen in dem Alter, in dem sie gestorben sind. Ein roter Stern zeigt sie.`)}</p>
-        <ol class="secrets famous">${FAMOUS.map((f, k) => {
+        <ol class="secrets famous">${FAMOUS.map((f, k) => [f, k] as const).sort((a, b) => a[0].born - b[0].born).map(([f, k]) => {
           const b = at.get(k);
           if (!b) return `<li>${T('Предстои', 'Yet to come', 'Kommt noch')}</li>`;
           return `<li class="found" data-person="${b.id}"><span class="fame-star">★</span> <b>${esc(P(f.bg))}</b>${b.died === undefined ? ` <span class="alive">${T('жив', 'alive', 'lebt')}</span>` : ''}
@@ -787,6 +787,7 @@ async function showPerson(id: number) {
       <div class="muted">${alive ? `<span id="pAge">${d.age}</span> ${T('години', 'years', 'Jahre')} · ${esc(BL(d.bandName))}` : `${fmtYear(d.bornYear)} – ${fmtYear(d.diedYear!)}, ${esc(CAUSE(d.cause ?? '', d.age))}`}</div>
       ${d.title ? `<div class="title">${esc(TITLE(d.title, d.sex === 1))}</div>` : ''}
       ${alive && d.task ? `<div>${T('Сега', 'Now', 'Gerade:')} ${esc(TASK(r.nightTask(id) ?? d.task))}</div>` : ''}<div class="muted">${T(`${d.generation}-о поколение`, `generation ${d.generation}`, `${d.generation}. Generation`)}</div></div></div>
+    ${fam ? '<div id="famBio" class="fam-bio"></div>' : ''}
     <div class="genes">${genes}</div>
     <dl class="family">
       <dt>${T('Майка', 'Mother', 'Mutter')}</dt><dd>${link(d.mother)}</dd><dt>${T('Баща', 'Father', 'Vater')}</dt><dd>${link(d.father)}</dd>
@@ -796,6 +797,12 @@ async function showPerson(id: number) {
     <button class="btn tree-btn" data-tree="${d.id}">${T('Родословие', 'Family tree', 'Stammbaum')}</button>
     ${d.deeds.length ? `<h3>${T('Дела', 'Deeds', 'Taten')}</h3><ul class="deeds">${d.deeds.map((x) => `<li>${esc(DEED(x))}</li>`).join('')}</ul>` : ''}`, beside);
   if (live && alive) { follow = id; r.select(id); }
+  // who this person was in the real world: a few lines and something curious
+  if (fam) api<{ text: string; facts: string[] }>(`/api/bio?name=${encodeURIComponent(fam.bg)}&lang=${LANG}`).then((b) => {
+    const el = document.getElementById('famBio');
+    if (!el) return;
+    el.innerHTML = `<p>${esc(b.text)}</p>${b.facts.length ? `<div class="muted">${T('Любопитно', 'Did you know?', 'Wusstest du?')}</div><ul>${b.facts.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`;
+  }).catch(() => {});
 }
 
 /** follow the chosen person and keep the card next to them */
