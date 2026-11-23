@@ -279,3 +279,6 @@ body.in-app .top { right: 64px; }
 .controls > .btn, .controls > .sound-wrap > .btn, .menu-wrap > #menuBtn { height: 38px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; vertical-align: middle; }
 .menu-wrap > #menuBtn { width: 38px; font-size: 18px; }
 .controls > .sound-wrap { display: inline-flex; }
+.controls > .sound-wrap[hidden] { display: none; }
+.maps-locked { max-width: min(320px, calc(100vw - 56px)); padding: 4px 6px; line-height: 1.45; }
+.maps-locked p { margin: 6px 0 0; }

@@ -1129,7 +1129,26 @@ function goView(map: string, at: { x: number; y: number; band?: number }) {
 function setupMaps() {
   const g = info.grid;
   const wrap = $('.maps-wrap') as HTMLElement, btn = $('#mapBtn') as HTMLButtonElement, panel = $('#mapsPanel');
-  if (BASE || !g || !info.view || g.open.length < 2) return;
+  if (BASE) return;
+  if (!g || !info.view || g.open.length < 2) {
+    // no other land yet: the button says when the maps come and what it takes
+    wrap.hidden = false;
+    btn.textContent = T('Карти', 'Maps', 'Karten');
+    btn.title = T('Картите се отключват, когато хората тръгнат да плават', 'The maps unlock once people set sail', 'Die Karten werden freigeschaltet, sobald die Menschen in See stechen');
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      const sail = TECH_ID('sailing', 'Платно');
+      const has = bands.some((b) => b.techs.includes('sailing'));
+      panel.innerHTML = `<div class="maps-locked"><b>🗺️ ${T('Картите още са заключени', 'The maps are still locked', 'Die Karten sind noch gesperrt')}</b><p>${has
+        ? T(`Хората вече знаят „${sail}“. Щом голямо село прати кораб и той намери нова земя, тук ще се появят картите.`, `People already know “${sail}”. As soon as a big village sends a ship and it finds new land, the maps will appear here.`, `Die Menschen kennen schon „${sail}“. Sobald ein großes Dorf ein Schiff schickt und es neues Land findet, erscheinen hier die Karten.`)
+        : T(`Ще се отключат, когато хората тръгнат да плават из света. Нужно е откритието „${sail}“, около ${fmtYear(-3100)}.`, `They unlock once people set sail across the world. It takes the discovery “${sail}”, around ${fmtYear(-3100)}.`, `Sie werden freigeschaltet, sobald die Menschen über die Welt segeln. Dafür braucht es die Entdeckung „${sail}“, etwa ${fmtYear(-3100)}.`)}</p></div>`;
+      panel.hidden = !panel.hidden;
+      btn.setAttribute('aria-expanded', String(!panel.hidden));
+    };
+    panel.onclick = (ev) => { ev.stopPropagation(); panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+    document.addEventListener('click', () => { if (!panel.hidden) { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); } });
+    return;
+  }
   const S = g.size;
   const open = (gx: number, gy: number) => g.open.includes(`${gx},${gy}`);
   const [hx, hy] = info.view;
