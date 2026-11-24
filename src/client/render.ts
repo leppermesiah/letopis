@@ -1,6 +1,6 @@
 import {
   ColorMatrixFilter,
-  AlphaFilter, Application, BlurFilter, Container, Filter, GlProgram, Graphics, ImageSource, Rectangle, Sprite, Text, Texture,
+  AlphaFilter, Application, BlurFilter, Container, Filter, Geometry, GlProgram, Graphics, ImageSource, Mesh, Rectangle, Shader, Sprite, Text, Texture,
 } from 'pixi.js';
 import { Simplex } from '../shared/noise';
 import { Fauna } from './animals';
@@ -38,11 +38,44 @@ function pick<T>(list: T[], n: number): T {
 
 // ---------- sprite atlas (made by tools/build_atlas.py from the AI sheets in art/) ----------
 
+/** one tile of the sloped ground mesh */
+interface GroundQuad { x: number; y: number; name: string; tint: number; blend?: boolean; snow?: number }
+
+const GROUND_VERT = `
+in vec2 aPosition;
+in vec2 aUV;
+in vec4 aColor;
+out vec2 vUV;
+out vec4 vColor;
+uniform mat3 uProjectionMatrix;
+uniform mat3 uWorldTransformMatrix;
+uniform mat3 uTransformMatrix;
+void main() {
+  mat3 mvp = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix;
+  gl_Position = vec4((mvp * vec3(aPosition, 1.0)).xy, 0.0, 1.0);
+  vUV = aUV;
+  vColor = aColor;
+}`;
+const GROUND_FRAG = `
+in vec2 vUV;
+in vec4 vColor;
+uniform sampler2D uTexture;
+uniform vec4 uColor;
+uniform vec4 uWorldColorAlpha;
+void main() {
+  vec4 c = texture2D(uTexture, vUV);
+  // the colours come premultiplied by their alpha
+  float a = uColor.a * uWorldColorAlpha.a * vColor.a;
+  gl_FragColor = vec4(c.rgb * vColor.rgb * vColor.a * uColor.rgb * uWorldColorAlpha.rgb, a);
+}`;
+
 interface Frame { x: number; y: number; w: number; h: number; ax: number; ay: number; s: number; p?: number }
 
 export class Atlas {
   tex: Record<string, Texture> = {};
   frames: Record<string, Frame> = {};
+  /** ground tops unwarped into squares (u: top->right corner, v: top->left corner), for the sloped ground mesh */
+  ground: { source: ImageSource; size: number; cells: Record<string, [number, number, number]> } | null = null;
   private pages: { url: string; size: [number, number] }[] = [];
 
   /** a sprite as a small picture for the page (a span with the atlas as background), fitted into size px */
@@ -74,6 +107,14 @@ export class Atlas {
         maxAnisotropy: 4,
       });
     }));
+    if (meta.ground) {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = `${base}/${meta.ground.file}${v}`;
+      await img.decode();
+      const source = new ImageSource({ resource: img, autoGenerateMipmaps: true, scaleMode: 'linear', mipmapFilter: 'linear', maxAnisotropy: 4, addressMode: 'clamp-to-edge' });
+      a.ground = { source, size: meta.ground.size[0], cells: meta.ground.cells };
+    }
     a.frames = meta.frames;
     a.pages = files.map((file, i) => ({ url: `${base}/${file}${v}`, size: meta.pages?.[i]?.size ?? meta.size ?? [2048, 2048] }));
     for (const [name, f] of Object.entries(a.frames)) {
@@ -225,6 +266,11 @@ export class WorldRenderer {
   far = false;
   info!: WorldInfo;
   level!: Uint8Array;
+  /** height of every tile corner ((w+1)*(h+1), in levels): the ground is one smooth sloped surface over them */
+  vh!: Float32Array;
+  private groundShader: Shader | null = null;
+  /** colour of every tile's ground (forest darker, desert warmer...), blended at the corners */
+  private tints: Uint32Array | null = null;
   biome!: Uint8Array;
   river!: Uint8Array;
   temp!: Uint8Array;
@@ -366,6 +412,8 @@ export class WorldRenderer {
       const v = h[i] / 127.5 - 1;
       this.level[i] = isWater(this.biome[i]) ? 0 : 1 + Math.floor(Math.max(0, v) * 14);
     }
+    this.vh = this.cornerHeights();
+    this.tints = null;
     this.explored = new Uint8Array(info.w * info.h);
     this.treeKind = info.treeKinds ? b64decode(info.treeKinds) : new Uint8Array(info.w * info.h);
     this.treeStage = new Uint8Array(info.w * info.h);
@@ -414,15 +462,20 @@ export class WorldRenderer {
         const cool = new Container();
         const objs = new Container();
         const list: WorldObject[] = [];
+        const ground: GroundQuad[] = [], snowC: GroundQuad[] = [], snowW: GroundQuad[] = [];
         for (let d = 0; d <= 2 * (CHUNK - 1); d++) {
           for (let lx = 0; lx < CHUNK; lx++) {
             const ly = d - lx;
             if (ly < 0 || ly >= CHUNK) continue;
             const x = cx * CHUNK + lx, y = cy * CHUNK + ly;
             if (x >= w || y >= h) continue;
-            this.placeTile(x, y, land, water, cold, cool);
+            this.placeTile(x, y, water, ground, snowC, snowW);
             this.placeObjects(x, y, objs, list);
           }
+        }
+        for (const [q, c] of [[ground, land], [snowC, cold], [snowW, cool]] as [GroundQuad[], Container][]) {
+          const m = this.groundMesh(q);
+          if (m) c.addChild(m);
         }
         objs.sortableChildren = true;
         // bounds of the chunk in world space, so the culler skips chunks off screen
@@ -471,13 +524,11 @@ export class WorldRenderer {
     return { name, tint };
   }
 
-  private placeTile(x: number, y: number, land: Container, water: Container, cold: Container, cool: Container) {
+  private placeTile(x: number, y: number, water: Container, ground: GroundQuad[], cold: GroundQuad[], cool: GroundQuad[]) {
     const { w } = this.info;
     const i = y * w + x;
     const b = this.biome[i];
-    const L = this.level[i];
     const p = iso(x, y);
-    const top = p.y - L * ELEV;
     const n = hash(x, y);
     let { name, tint } = this.groundOf(b, x, y, n);
     // rivers are strips of shallow water on the land
@@ -486,39 +537,167 @@ export class WorldRenderer {
       // water at the map edge shows its side, inside the sea only the surface
       const edge = x === this.info.w - 1 || y === this.info.h - 1;
       const s = this.atlas.sprite(edge ? name : name + '_t');
-      s.position.set(p.x, top + TH / 2);
+      s.position.set(p.x, p.y + TH / 2);
       water.addChild(s);
       return;
     }
-    // light comes from the north-west: tiles facing it are a bit brighter
-    const slope = (this.lv(x - 1, y) - L) + (this.lv(x, y - 1) - L);
-    const light = Math.max(0.78, Math.min(1.05, 1 - slope * 0.04));
-    // cliffs: the tile has its own short wall (one level); deeper drops get stacked earth or rock below it
-    const drop = L - Math.min(this.lv(x, y + 1), this.lv(x + 1, y));
-    if (drop > 1) {
-      const wall = L >= 6 || b === Biome.Mountain || b === Biome.Hills ? `rock${Math.floor(n * 4)}` : 'path0';
-      for (let k = drop - 1; k >= 1; k--) {
-        const s = this.atlas.sprite(wall);
-        s.position.set(p.x, top + TH / 2 + k * ELEV);
-        s.tint = scaleColor(0xd8d0c4, 0.75 + 0.2 * (1 - k / drop));
-        land.addChild(s);
-      }
-    }
-    // the side wall is only drawn where the tile in front is lower; elsewhere just the top, so the ground looks seamless
-    const s = this.atlas.sprite(drop > 0 ? name : name + '_t');
-    s.position.set(p.x, top + TH / 2);
-    s.tint = scaleColor(tint, light);
-    land.addChild(s);
+    // the ground: one sloped quad over the heights of its four corners
+    ground.push({ x, y, name, tint, blend: !this.isRiver(i) });
     // winter snow, faded in by season
     const t = this.temp[i] / 255;
     if (b !== Biome.Snow && !this.isRiver(i)) {
       const target = t < 0.33 ? cold : t < 0.5 ? cool : null;
-      if (target) {
-        const sn = this.atlas.sprite(`snow${Math.floor(hash(x + 5, y) * 4)}${drop > 0 ? '' : '_t'}`);
-        sn.position.set(p.x, top + TH / 2);
-        target.addChild(sn);
+      if (target) target.push({ x, y, name: `snow${Math.floor(hash(x + 5, y) * 4)}`, tint: 0xffffff, snow: target === cold ? 0.33 : 0.5 });
+    }
+  }
+
+  /** corner heights: the mean of the (up to) four tiles that meet there; next to water the ground comes down to it */
+  private cornerHeights(): Float32Array {
+    const { w, h } = this.info;
+    const W = w + 1;
+    const vh = new Float32Array(W * (h + 1));
+    for (let vy = 0; vy <= h; vy++) {
+      for (let vx = 0; vx <= w; vx++) {
+        let sum = 0, n = 0, wet = false;
+        for (let ty = vy - 1; ty <= vy; ty++) {
+          for (let tx = vx - 1; tx <= vx; tx++) {
+            if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+            const i = ty * w + tx;
+            if (isWater(this.biome[i])) wet = true;
+            sum += this.level[i];
+            n++;
+          }
+        }
+        vh[vy * W + vx] = wet || !n ? 0 : sum / n;
       }
     }
+    return vh;
+  }
+
+  private cornerH(vx: number, vy: number): number {
+    const { w, h } = this.info;
+    vx = Math.max(0, Math.min(w, vx));
+    vy = Math.max(0, Math.min(h, vy));
+    return this.vh[vy * (w + 1) + vx];
+  }
+
+  /** height of the ground (in levels) at a point of the grid, between the corners */
+  surfaceAt(gx: number, gy: number): number {
+    const x0 = Math.floor(gx), y0 = Math.floor(gy);
+    const fx = gx - x0, fy = gy - y0;
+    const a = this.cornerH(x0, y0), b = this.cornerH(x0 + 1, y0), c = this.cornerH(x0, y0 + 1), d = this.cornerH(x0 + 1, y0 + 1);
+    return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+  }
+
+  private tintAt(x: number, y: number): number {
+    const { w, h } = this.info;
+    if (!this.tints) {
+      this.tints = new Uint32Array(w * h);
+      for (let i = 0; i < w * h; i++) {
+        const tx = i % w, ty = (i - tx) / w;
+        this.tints[i] = this.groundOf(this.biome[i], tx, ty, hash(tx, ty)).tint;
+      }
+    }
+    return this.tints[Math.max(0, Math.min(h - 1, y)) * w + Math.max(0, Math.min(w - 1, x))];
+  }
+
+  /** the tile colours around a corner, mixed, so a forest darkens the grass gradually */
+  private cornerTint(vx: number, vy: number, own: number): number {
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let ty = vy - 1; ty <= vy; ty++) {
+      for (let tx = vx - 1; tx <= vx; tx++) {
+        if (tx < 0 || ty < 0 || tx >= this.info.w || ty >= this.info.h || !this.level[ty * this.info.w + tx]) continue;
+        const c = this.tintAt(tx, ty);
+        r += c >> 16; g += (c >> 8) & 255; b += c & 255; n++;
+      }
+    }
+    return n ? (Math.round(r / n) << 16) | (Math.round(g / n) << 8) | Math.round(b / n) : own;
+  }
+
+  /** winter snow thins out towards the corners where the tiles around are warmer, so its edge is soft */
+  private snowCover(vx: number, vy: number, below: number): number {
+    const { w, h } = this.info;
+    let k = 0, n = 0;
+    for (let ty = vy - 1; ty <= vy; ty++) {
+      for (let tx = vx - 1; tx <= vx; tx++) {
+        if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+        const i = ty * w + tx;
+        n++;
+        if (this.biome[i] === Biome.Snow || (this.level[i] && this.temp[i] / 255 < below)) k++;
+      }
+    }
+    return n ? k / n : 1;
+  }
+
+  /** light from the north-west: slopes facing it are brighter, the far sides darker */
+  private cornerLight(vx: number, vy: number): number {
+    const g = (this.cornerH(vx + 1, vy) - this.cornerH(vx - 1, vy) + this.cornerH(vx, vy + 1) - this.cornerH(vx, vy - 1)) / 2;
+    return Math.max(0.68, Math.min(1.18, 1 + g * 0.075));
+  }
+
+  private groundMesh(quads: GroundQuad[]): Mesh<Geometry, Shader> | null {
+    const G = this.atlas.ground;
+    if (!G || !quads.length) return null;
+    const { w, h } = this.info;
+    if (!this.groundShader) {
+      this.groundShader = Shader.from({
+        gl: { vertex: GROUND_VERT, fragment: GROUND_FRAG },
+        resources: { uTexture: G.source, uSampler: G.source.style },
+      });
+    }
+    // four corners per tile, and a dark skirt down the map's front edges
+    const edges = quads.reduce((k, q) => k + (q.x === w - 1 ? 1 : 0) + (q.y === h - 1 ? 1 : 0), 0);
+    const nv = (quads.length + edges) * 4;
+    const pos = new Float32Array(nv * 2), uv = new Float32Array(nv * 2), col = new Float32Array(nv * 4);
+    const idx = new Uint32Array((quads.length + edges) * 6);
+    let v = 0, k = 0;
+    const vert = (px: number, py: number, u: number, t: number, c: number, l: number, a = 1) => {
+      pos[v * 2] = px; pos[v * 2 + 1] = py;
+      uv[v * 2] = u / G.size; uv[v * 2 + 1] = t / G.size;
+      col[v * 4] = ((c >> 16) & 255) / 255 * l; col[v * 4 + 1] = ((c >> 8) & 255) / 255 * l; col[v * 4 + 2] = (c & 255) / 255 * l; col[v * 4 + 3] = a;
+      v++;
+    };
+    const quad = (a: number, diag02: boolean) => {
+      const t = diag02 ? [0, 1, 2, 0, 2, 3] : [0, 1, 3, 1, 2, 3];
+      for (const o of t) idx[k++] = a + o;
+    };
+    for (const q of quads) {
+      const cell = G.cells[q.name] ?? G.cells[q.name.replace(/\d+$/, '0')];
+      if (!cell) continue;
+      const [u0, v0, c] = cell;
+      // top, right, bottom, left corner of the tile
+      const C = [[q.x, q.y], [q.x + 1, q.y], [q.x + 1, q.y + 1], [q.x, q.y + 1]];
+      const UV = [[u0, v0], [u0 + c, v0], [u0 + c, v0 + c], [u0, v0 + c]];
+      const H = C.map(([cx, cy]) => this.cornerH(cx, cy));
+      const a = v;
+      for (let j = 0; j < 4; j++) {
+        const p = iso(C[j][0], C[j][1]);
+        const tint = q.blend ? this.cornerTint(C[j][0], C[j][1], q.tint) : q.tint;
+        const a = q.snow ? Math.min(1, this.snowCover(C[j][0], C[j][1], q.snow) * 1.25) : 1;
+        vert(p.x, p.y - H[j] * ELEV, UV[j][0], UV[j][1], tint, this.cornerLight(C[j][0], C[j][1]), a);
+      }
+      // fold the quad along the flatter diagonal
+      quad(a, Math.abs(H[0] - H[2]) <= Math.abs(H[1] - H[3]));
+      const skirt = (j0: number, j1: number) => {
+        const b = v;
+        for (const j of [j0, j1]) {
+          const p = iso(C[j][0], C[j][1]);
+          vert(p.x, p.y - H[j] * ELEV, UV[j][0], UV[j][1], q.tint, 0.5);
+        }
+        for (const j of [j1, j0]) {
+          const p = iso(C[j][0], C[j][1]);
+          vert(p.x, p.y + ELEV, UV[j][0], UV[j][1], q.tint, 0.4);
+        }
+        quad(b, true);
+      };
+      if (q.x === w - 1) skirt(1, 2);
+      if (q.y === h - 1) skirt(2, 3);
+    }
+    const geometry = new Geometry({
+      attributes: { aPosition: pos.subarray(0, v * 2), aUV: uv.subarray(0, v * 2), aColor: col.subarray(0, v * 4) },
+      indexBuffer: idx.subarray(0, k),
+    });
+    return new Mesh({ geometry, shader: this.groundShader });
   }
 
   private placeObjects(x: number, y: number, objs: Container, list: WorldObject[]) {
@@ -538,7 +717,7 @@ export class WorldRenderer {
       const flip = hash(x * 7 + ox, y) < 0.5 ? -1 : 1;
       const sc = this.atlas.scale(name) * mul;
       s.scale.set(flip * sc, sc);
-      s.position.set(p.x + ox, p.y - this.level[i] * ELEV + TH / 2 + oy);
+      s.position.set(p.x + ox, p.y - this.surfaceAt(x + 0.5 + (ox / TW + oy / TH), y + 0.5 + (oy / TH - ox / TW)) * ELEV + TH / 2 + oy);
       s.zIndex = s.y;
       objs.addChild(s);
       list.push({ s, i, kind, base: name, n: hash(x + 3, y + 77), size: mul, flip });
@@ -723,8 +902,8 @@ export class WorldRenderer {
     const s = old ?? this.atlas.sprite(name);
     if (old) this.atlas.set(s, name);
     if (flip) s.scale.x = -Math.abs(s.scale.x);
-    const p = iso(x, y);
-    s.position.set(p.x, p.y - this.level[i] * ELEV + TH / 2);
+    const p = this.tileTop(x, y);
+    s.position.set(p.x, p.y);
     if (!old) { this.roadLayer.addChild(s); this.roadSprites.set(i, s); }
   }
 
@@ -835,14 +1014,11 @@ export class WorldRenderer {
         if (x >= w || y >= h) continue;
         const i = y * w + x;
         if (this.explored[i]) continue;
-        const L = this.level[i];
+        // cover the sloped tile, a little wider so no seam shows between hidden neighbours
         const p = iso(x, y);
-        const top = p.y - L * ELEV;
-        // cover the tile and, when the tile in front is hidden too, its cliff
-        const front = Math.min(this.lv(x + 1, y), this.lv(x, y + 1));
-        const frontHidden = (x + 1 >= w || !this.explored[y * w + x + 1]) && (y + 1 >= h || !this.explored[(y + 1) * w + x]);
-        const skirt = (frontHidden ? Math.max(0, L - front) * ELEV : 0) + ELEV;
-        g.poly([p.x, top - 3, p.x + TW / 2 + 3, top + TH / 2, p.x + TW / 2 + 3, top + TH / 2 + skirt, p.x, top + TH + 3 + skirt, p.x - TW / 2 - 3, top + TH / 2 + skirt, p.x - TW / 2 - 3, top + TH / 2])
+        const t = p.y - this.cornerH(x, y) * ELEV, r = p.y + TH / 2 - this.cornerH(x + 1, y) * ELEV;
+        const bt = p.y + TH - this.cornerH(x + 1, y + 1) * ELEV, l = p.y + TH / 2 - this.cornerH(x, y + 1) * ELEV;
+        g.poly([p.x, t - 3, p.x + TW / 2 + 3, r, p.x + TW / 2 + 3, r + 3, p.x, bt + 3, p.x - TW / 2 - 3, l + 3, p.x - TW / 2 - 3, l])
           .fill(0x0d1424);
       }
     }
@@ -851,9 +1027,8 @@ export class WorldRenderer {
   tileTop(x: number, y: number): { x: number; y: number } {
     const xi = Math.max(0, Math.min(this.info.w - 1, Math.round(x)));
     const yi = Math.max(0, Math.min(this.info.h - 1, Math.round(y)));
-    const L = this.level[yi * this.info.w + xi];
     const p = iso(x, y);
-    return { x: p.x, y: p.y - L * ELEV + TH / 2 };
+    return { x: p.x, y: p.y - this.surfaceAt(Math.max(0, Math.min(this.info.w - 1, x)) + 0.5, Math.max(0, Math.min(this.info.h - 1, y)) + 0.5) * ELEV + TH / 2 };
   }
 
   tempAt(x: number, y: number): number {
@@ -2252,7 +2427,7 @@ export class CampSprite {
     };
     const put = (name: string, x: number, y: number, L: number, z = 0) => {
       const p = iso(x, y);
-      const px = p.x - this.pos.x, py = p.y - L * ELEV + TH / 2 - this.pos.y;
+      const px = p.x - this.pos.x, py = p.y - this.r.surfaceAt(x + 0.5, y + 0.5) * ELEV + TH / 2 - this.pos.y;
       if (WALL_DEBUG && !A.has(name)) {
         const g = new Graphics();
         if (name.includes('tower')) g.circle(0, -4, 3).fill(0xd8c8a0);

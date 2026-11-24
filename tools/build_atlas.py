@@ -663,6 +663,56 @@ def road_frames() -> list:
     return items
 
 
+GROUND_CELL, GROUND_GUT = 96, 4  # square texture per ground tile, with an edge-copied gutter
+GROUND_COLS = 10
+
+
+def ground_square(src: Image.Image) -> Image.Image:
+    """The top diamond of a ground tile unwarped into a square: u runs from the top corner to the right one,
+    v from the top corner to the left one. The game lays these squares over its sloped height mesh."""
+    a = np.array(src)
+    m = a[..., 3] > 0
+    w = src.size[0]
+    cy = corner_y(a)
+    mid = m[:, w // 2 - 3:w // 2 + 4].any(1)
+    t = float(np.nonzero(mid)[0].min())
+    c = np.array([w / 2, cy])
+    k = 0.95  # stay inside the diamond, away from its soft outline
+    q = [c + (np.array(pt) - c) * k for pt in ((w / 2, t), (0, cy), (w / 2, 2 * cy - t), (w, cy))]
+    inner = GROUND_CELL - 2 * GROUND_GUT
+    img = np.array(src.convert('RGB').transform((inner, inner), Image.QUAD, tuple(float(v) for pt in q for v in pt), Image.BICUBIC)).astype(np.float32)
+    # make it tile: towards its edges the square fades into itself shifted by half, so the edges of
+    # neighbouring squares show the same (middle) part of the picture and meet without a seam
+    t = (np.arange(inner) + 0.5) / inner
+    e = np.clip(np.minimum(t, 1 - t) / 0.3, 0, 1)
+    e = e * e * (3 - 2 * e)
+    m = np.minimum(e[:, None], e[None, :])[..., None]
+    img = img * m + np.roll(img, (inner // 2, inner // 2), (0, 1)) * (1 - m)
+    return Image.fromarray(np.pad(img.round().astype(np.uint8), ((GROUND_GUT,) * 2, (GROUND_GUT,) * 2, (0, 0)), mode='edge'))
+
+
+def ground_page() -> dict:
+    names = []
+    for prefix, ids, kind, _world, _tex in GROUPS:
+        if kind != 'tile' or prefix == 'trod' or not all(os.path.exists(os.path.join(CUT, f'{c}.png')) for c in ids):
+            continue
+        for k, cid in enumerate(ids):
+            names.append((prefix if len(ids) == 1 else f'{prefix}{k}', cid))
+    rows = (len(names) + GROUND_COLS - 1) // GROUND_COLS
+    size = 1
+    while size < max(GROUND_COLS, rows) * GROUND_CELL:
+        size *= 2
+    page = Image.new('RGB', (size, size))
+    index = {}
+    for n, (name, cid) in enumerate(names):
+        x, y = (n % GROUND_COLS) * GROUND_CELL, (n // GROUND_COLS) * GROUND_CELL
+        page.paste(ground_square(Image.open(os.path.join(CUT, f'{cid}.png')).convert('RGBA')), (x, y))
+        index[name] = [x + GROUND_GUT, y + GROUND_GUT, GROUND_CELL - 2 * GROUND_GUT]
+    page.save(os.path.join(OUT, 'ground.webp'), 'WEBP', quality=90, method=5)
+    print(f'ground.webp: {len(index)} squares')
+    return {'file': 'ground.webp', 'size': [size, size], 'cells': index}
+
+
 def main() -> int:
     items = []  # (name, image, ax, ay, s)
     for prefix, ids, kind, world, tex in GROUPS:
@@ -820,7 +870,7 @@ def main() -> int:
             return 1
         rest = left
     with open(os.path.join(OUT, 'atlas.json'), 'w', encoding='utf-8') as f:
-        json.dump({'size': pages[0]['size'], 'pages': pages, 'frames': dict(sorted(frames.items()))}, f, separators=(',', ':'))
+        json.dump({'size': pages[0]['size'], 'pages': pages, 'ground': ground_page(), 'frames': dict(sorted(frames.items()))}, f, separators=(',', ':'))
     print(f'{len(frames)} frames on {len(pages)} pages')
     return 0
 
