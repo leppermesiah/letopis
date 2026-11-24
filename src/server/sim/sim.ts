@@ -584,6 +584,8 @@ export class Simulation {
       if (b.kingdom != null || !this.hasTech(b, 'kingdom') || !this.hasTech(b, 'walls')) continue;
       if ((size.get(b.id) ?? 0) < KINGDOM_FOUNDER || !this.rng.chance(0.06)) continue;
       if (ks.some((k) => dist(this.bandById.get(k.capital)!, b) < KINGDOM_REACH * 1.25)) continue;
+      // a crown needs subjects: at least two free towns around that could join later
+      if (towns.filter((o) => o !== b && o.kingdom == null && dist(b, o) < KINGDOM_REACH).length < 2) continue;
       const k: Kingdom = { id: (this.s.nextKingdomId = (this.s.nextKingdomId ?? 0) + 1), place: b.settlementName ?? b.name, capital: b.id, members: [b.id], founded: Math.floor(this.year) };
       ks.push(k);
       b.kingdom = k.id;
@@ -597,13 +599,24 @@ export class Simulation {
         [`${this.bDe(b, 'nom', true)} wurde Hauptstadt ${this.kDe(k, 'gen')}.${king ? ` Erster König ist ${this.nameDe(king)}.` : ''}`,
           `${this.bDe(b, 'nom', true)} ist jetzt die Hauptstadt eines ganzen Königreichs!`]);
     }
-    // the king invites the towns around: they come to a feast and stay
+    // a realm holds together around its capital: a town far off, or behind free towns that are nearer the
+    // capital, slowly drifts away (in some 5-10 years), and the king invites the nearest free towns first
     for (const k of ks) {
       const cap = this.bandById.get(k.capital)!;
-      for (const o of towns) {
-        if (k.members.length >= KINGDOM_MAX) break;
-        if (o.kingdom != null || dist(cap, o) >= KINGDOM_REACH || !this.rng.chance(0.02)) continue;
-        this.joinKingdom(k, o);
+      const reach = KINGDOM_REACH * (k.members.length > KINGDOM_MAX ? 1.5 : 1);
+      const free = towns.filter((o) => o.kingdom == null).sort((x, y) => dist(cap, x) - dist(cap, y));
+      for (const id of [...k.members]) {
+        const m = this.bandById.get(id);
+        if (!m || m === cap || m.colony) continue;
+        const d = dist(cap, m);
+        const cut = d > reach || free.some((f) => dist(cap, f) < d - 4 && dist(f, m) < d);
+        if (cut && this.rng.chance(0.14)) this.leaveKingdom(k, m);
+      }
+      for (const o of free) {
+        if (k.members.length >= KINGDOM_MAX || dist(cap, o) >= KINGDOM_REACH) break;
+        if (o.kingdom != null) continue;
+        if (this.rng.chance(0.15)) this.joinKingdom(k, o);
+        break; // only the nearest free town is asked this year
       }
     }
     for (const k of ks) this.recordKing(k);
@@ -856,6 +869,8 @@ export class Simulation {
         const b = ks.find((k) => k.id === +bid);
         if (!b || !ks.includes(a) || this.year - since < 25 || a.members.length < b.members.length) continue;
         if (a.members.length + b.members.length > UNION_MAX || !this.rng.chance(0.015)) continue;
+        const ca = this.bandById.get(a.capital), cb = this.bandById.get(b.capital);
+        if (!ca || !cb || dist(ca, cb) > KINGDOM_REACH * 1.6) continue; // only realms that border each other become one
         for (const id of b.members) {
           const t = this.bandById.get(id);
           if (!t) continue;
@@ -880,6 +895,14 @@ export class Simulation {
         break;
       }
     }
+  }
+
+  private leaveKingdom(k: Kingdom, b: Band) {
+    k.members = k.members.filter((id) => id !== b.id);
+    b.kingdom = null;
+    this.emit('kingdom', 1, `${this.bandLabel(b, true)} е твърде далеч от столицата и вече не е част от ${this.kBg(k)}.`, undefined, undefined, b.id, [],
+      [`${this.bandEnLabel(b, true)} is too far from the capital and is no longer part of ${this.kEn(k)}.`],
+      [`${this.bDe(b, 'nom', true)} liegt zu weit von der Hauptstadt entfernt und gehört nicht mehr zu ${this.kDe(k, 'dat')}.`]);
   }
 
   private joinKingdom(k: Kingdom, b: Band) {
