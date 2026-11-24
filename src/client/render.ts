@@ -44,8 +44,6 @@ export class Atlas {
   tex: Record<string, Texture> = {};
   frames: Record<string, Frame> = {};
   private pages: { url: string; size: [number, number] }[] = [];
-  /** the decoded atlas pages, for textures made from them at load */
-  images: HTMLImageElement[] = [];
 
   /** a sprite as a small picture for the page (a span with the atlas as background), fitted into size px */
   html(name: string, size: number, cls = 'sprite-ico'): string {
@@ -67,7 +65,6 @@ export class Atlas {
       img.decoding = 'async';
       img.src = `${base}/${file}${v}`;
       await img.decode();
-      a.images[files.indexOf(file)] = img;
       return new ImageSource({
         resource: img,
         alphaMode: 'premultiply-alpha-on-upload',
@@ -82,71 +79,7 @@ export class Atlas {
     for (const [name, f] of Object.entries(a.frames)) {
       a.tex[name] = new Texture({ source: sources[f.p ?? 0], frame: new Rectangle(f.x, f.y, f.w, f.h) });
     }
-    a.makeEdges();
     return a;
-  }
-
-  /**
-   * Each ground top again, four times, fading from one of its edges to nothing in the middle: laid over a tile
-   * where a different ground lies next to it, the neighbour seeps softly in instead of ending in a sharp line.
-   * All of them on one canvas, so they draw in one batch. Edge 0 faces x-1, 1 faces y-1, 2 faces x+1, 3 faces y+1.
-   */
-  private makeEdges() {
-    const names = Object.keys(this.frames).filter((n) => /^(grass|meadow|steppe|sand|hill|rock|crag|snow|tundra|marsh)\d_t$/.test(n));
-    if (!names.length || typeof document === 'undefined') return;
-    const CW = 132, CH = 100, cols = 16;
-    const canvas = document.createElement('canvas');
-    canvas.width = cols * CW;
-    canvas.height = Math.ceil((names.length * 4) / cols) * CH;
-    const g = canvas.getContext('2d');
-    if (!g) return;
-    const cell = document.createElement('canvas');
-    const cg = cell.getContext('2d')!;
-    const pos: [string, number, number, number][] = [];
-    let k = 0;
-    for (const name of names) {
-      const f = this.frames[name], img = this.images[f.p ?? 0];
-      if (!img) continue;
-      cell.width = f.w; cell.height = f.h;
-      // the middle of the diamond, and half its width and height, in texture pixels
-      const cx = f.ax * f.w, cy = f.ay * f.h, hw = TW / 2 / f.s, hh = TH / 2 / f.s;
-      const dirs: [number, number][] = [[-1, -1], [1, -1], [1, 1], [-1, 1]]; // x-1 is up-left on screen, y-1 up-right
-      for (let e = 0; e < 4; e++) {
-        cg.globalCompositeOperation = 'source-over';
-        cg.clearRect(0, 0, f.w, f.h);
-        cg.drawImage(img, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
-        const mx = cx + dirs[e][0] * hw / 2, my = cy + dirs[e][1] * hh / 2;
-        const grad = cg.createLinearGradient(mx + (mx - cx) * 0.1, my + (my - cy) * 0.1, cx + (cx - mx) * 0.15, cy + (cy - my) * 0.15);
-        grad.addColorStop(0, 'rgba(0,0,0,0.9)');
-        grad.addColorStop(0.45, 'rgba(0,0,0,0.35)');
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
-        cg.globalCompositeOperation = 'destination-in';
-        cg.fillStyle = grad;
-        cg.fillRect(0, 0, f.w, f.h);
-        const px = (k % cols) * CW, py = Math.floor(k / cols) * CH;
-        g.drawImage(cell, px, py);
-        pos.push([name, e, px, py]);
-        k++;
-      }
-    }
-    const source = new ImageSource({ resource: canvas, alphaMode: 'premultiply-alpha-on-upload', autoGenerateMipmaps: true, scaleMode: 'linear', mipmapFilter: 'linear' });
-    for (const [name, e, px, py] of pos) {
-      const f = this.frames[name];
-      this.edgeTex[`${name}:${e}`] = new Texture({ source, frame: new Rectangle(px, py, f.w, f.h) });
-    }
-  }
-
-  edgeTex: Record<string, Texture> = {};
-
-  /** the top of a ground tile fading in from one edge (see makeEdges), or null */
-  edge(name: string, e: number): Sprite | null {
-    const t = this.edgeTex[`${name}:${e}`];
-    if (!t) return null;
-    const f = this.frames[name];
-    const s = new Sprite(t);
-    s.anchor.set(f.ax, f.ay);
-    s.scale.set(f.s);
-    return s;
   }
 
   has(name: string): boolean {
@@ -538,21 +471,6 @@ export class WorldRenderer {
     return { name, tint };
   }
 
-  /** the tint of a land tile blended with its land neighbours (water and rivers left out) */
-  private softTint(x: number, y: number, own: number): number {
-    const { w, h } = this.info;
-    let r = ((own >> 16) & 255) * 2, g = ((own >> 8) & 255) * 2, b = (own & 255) * 2, n = 2;
-    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-      const nx = x + dx, ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-      const j = ny * w + nx;
-      if (isWater(this.biome[j]) || this.isRiver(j)) continue;
-      const t = this.groundOf(this.biome[j], nx, ny, hash(nx, ny)).tint;
-      r += (t >> 16) & 255; g += (t >> 8) & 255; b += t & 255; n++;
-    }
-    return (Math.round(r / n) << 16) | (Math.round(g / n) << 8) | Math.round(b / n);
-  }
-
   private placeTile(x: number, y: number, land: Container, water: Container, cold: Container, cool: Container) {
     const { w } = this.info;
     const i = y * w + x;
@@ -586,47 +504,17 @@ export class WorldRenderer {
         land.addChild(s);
       }
     }
-    // the colour drifts slowly over the land and leans towards the neighbours, so no tile stands out as a patch
-    tint = scaleColor(this.softTint(x, y, tint), 0.94 + 0.1 * smoothNoise(x / 9, y / 9));
-    // a step of one level is a grassy bank (the top again, a little darker, just below), not a strip of bare earth;
-    // the side wall of earth is for real slopes only
-    const bank = drop === 1 && !this.isRiver(i);
-    if (bank) {
-      const under = this.atlas.sprite(name + '_t');
-      under.position.set(p.x, top + TH / 2 + ELEV);
-      under.tint = scaleColor(tint, light * 0.74);
-      land.addChild(under);
-    }
     // the side wall is only drawn where the tile in front is lower; elsewhere just the top, so the ground looks seamless
-    const s = this.atlas.sprite(drop > 0 && !bank ? name : name + '_t');
+    const s = this.atlas.sprite(drop > 0 ? name : name + '_t');
     s.position.set(p.x, top + TH / 2);
     s.tint = scaleColor(tint, light);
     land.addChild(s);
-    // a different ground next door at the same height seeps softly over the edge
-    if (!this.isRiver(i)) {
-      const mine = groundFamily(name);
-      const near: [number, number][] = [[-1, 0], [0, -1], [1, 0], [0, 1]];
-      for (let e = 0; e < 4; e++) {
-        const nx = x + near[e][0], ny = y + near[e][1];
-        if (nx < 0 || ny < 0 || nx >= w || ny >= this.info.h) continue;
-        const j = ny * w + nx;
-        if (this.level[j] !== L || isWater(this.biome[j]) || this.isRiver(j)) continue;
-        const other = this.groundOf(this.biome[j], nx, ny, hash(nx, ny));
-        const theirs = groundFamily(other.name);
-        if (theirs === mine || FAMILY_RANK[theirs] <= FAMILY_RANK[mine]) continue;
-        const o = this.atlas.edge(other.name + '_t', e);
-        if (!o) continue;
-        o.position.set(p.x, top + TH / 2);
-        o.tint = scaleColor(scaleColor(this.softTint(nx, ny, other.tint), 0.94 + 0.1 * smoothNoise(nx / 9, ny / 9)), light);
-        land.addChild(o);
-      }
-    }
     // winter snow, faded in by season
     const t = this.temp[i] / 255;
     if (b !== Biome.Snow && !this.isRiver(i)) {
       const target = t < 0.33 ? cold : t < 0.5 ? cool : null;
       if (target) {
-        const sn = this.atlas.sprite(`snow${Math.floor(hash(x + 5, y) * 4)}${drop > 0 && !bank ? '' : '_t'}`);
+        const sn = this.atlas.sprite(`snow${Math.floor(hash(x + 5, y) * 4)}${drop > 0 ? '' : '_t'}`);
         sn.position.set(p.x, top + TH / 2);
         target.addChild(sn);
       }
@@ -1510,23 +1398,6 @@ export class WorldRenderer {
     this.trains.frame(performance.now(), Math.min(0.1, dt / 60));
     this.secretFrame(nowMs, zoom, winter);
   }
-}
-
-/** grounds that look alike count as one, so only real changes of ground get a soft edge */
-function groundFamily(name: string): string {
-  const f = name.replace(/\d.*$/, '');
-  return f === 'meadow' ? 'grass' : f === 'crag' ? 'rock' : f;
-}
-/** who seeps over whom: snow over everything, grass over steppe, steppe over sand, anything over bare rock */
-const FAMILY_RANK: Record<string, number> = { snow: 6, marsh: 5, grass: 4, hill: 3, tundra: 3, steppe: 2, sand: 1, rock: 0 };
-
-/** smooth value noise in [0, 1], for colours that drift slowly over the land */
-function smoothNoise(x: number, y: number): number {
-  const x0 = Math.floor(x), y0 = Math.floor(y);
-  const fx = x - x0, fy = y - y0;
-  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
-  const a = hash(x0 + 101, y0 + 7), b = hash(x0 + 102, y0 + 7), c = hash(x0 + 101, y0 + 8), d = hash(x0 + 102, y0 + 8);
-  return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
 }
 
 function scaleColor(c: number, f: number): number {
