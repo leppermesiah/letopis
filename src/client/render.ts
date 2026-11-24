@@ -32,6 +32,30 @@ function hash(x: number, y: number): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
+/** light stripes across the rim of a kingdom town's name tag (a pill w x h, its bottom at 0) */
+function stripes(g: Graphics, w: number, h: number) {
+  const r = h / 2, straight = w - h;
+  const len = 2 * straight + 2 * Math.PI * r;
+  const at = (d: number): [number, number] => {
+    d = ((d % len) + len) % len;
+    if (d < straight) return [-straight / 2 + d, -h];
+    d -= straight;
+    if (d < Math.PI * r) { const a = -Math.PI / 2 + d / r; return [straight / 2 + Math.cos(a) * r, -r + Math.sin(a) * r]; }
+    d -= Math.PI * r;
+    if (d < straight) return [straight / 2 - d, 0];
+    d -= straight;
+    const a = Math.PI / 2 + d / r;
+    return [-straight / 2 + Math.cos(a) * r, -r + Math.sin(a) * r];
+  };
+  const n = Math.max(8, Math.round(len / 7));
+  for (let k = 0; k < n; k++) {
+    const d0 = (k / n) * len, d1 = d0 + len / n / 2;
+    const p0 = at(d0), pm = at((d0 + d1) / 2), p1 = at(d1);
+    g.moveTo(p0[0], p0[1]).lineTo(pm[0], pm[1]).lineTo(p1[0], p1[1]);
+  }
+  g.stroke({ color: 0xffffff, width: 3, alpha: 0.75 });
+}
+
 function pick<T>(list: T[], n: number): T {
   return list[Math.min(list.length - 1, Math.floor(n * list.length))];
 }
@@ -248,9 +272,8 @@ export class WorldRenderer {
   capitals = new Set<number>();
   fogLayer = new Container();
   campLayer = new Container();
-  /** kingdoms: a soft patch of the capital's colour under every town of the realm */
+  /** kept empty: kingdoms are shown by the colour of the name tags, not on the map */
   realmLayer = new Container();
-  private realmKey = '';
   peopleLayer = new Container();
   glowLayer = new Container();
   labelLayer = new Container();
@@ -1223,34 +1246,6 @@ export class WorldRenderer {
     this.fleet.updateBands(bands);
     this.canoes.updateBands(bands);
     this.trains.updateBands(bands);
-    this.updateRealms(bands);
-  }
-
-  /** every kingdom as one shape: a patch around each town and a road of colour to the capital, drawn once and faded as a whole */
-  private updateRealms(bands: BandView[]) {
-    const realms = new Map<number, BandView[]>();
-    for (const b of bands) if (b.kingdom) (realms.get(b.kingdom.id) ?? realms.set(b.kingdom.id, []).get(b.kingdom.id)!).push(b);
-    const key = [...realms].map(([id, m]) => `${id}:${m[0].kingdom!.color}:${m.map((b) => `${b.id}@${Math.round(b.x)},${Math.round(b.y)}`).join('|')}`).join(';');
-    if (key === this.realmKey) return;
-    this.realmKey = key;
-    for (const c of this.realmLayer.removeChildren()) c.destroy({ children: true });
-    const R = 7; // tiles around each town
-    const rx = R * TW * 0.75, ry = rx / 2;
-    for (const members of realms.values()) {
-      const color = members[0].kingdom!.color;
-      const cap = members.find((b) => b.kingdom!.capital) ?? members[0];
-      const g = new Graphics();
-      const cp = this.tileTop(cap.x, cap.y);
-      for (const b of members) {
-        const p = this.tileTop(b.x, b.y);
-        g.ellipse(p.x, p.y, rx, ry).fill(color);
-        if (b !== cap) g.moveTo(p.x, p.y).lineTo(cp.x, cp.y).stroke({ color, width: TW * 0.9 });
-      }
-      const box = new Container();
-      box.addChild(g);
-      box.alpha = 0.38;
-      this.realmLayer.addChild(box);
-    }
   }
 
   /** red outline around the chosen person (null clears it) */
@@ -2491,13 +2486,18 @@ export class CampSprite {
     this.label.style.fontSize = kids ? 16 : 12;
     this.bannerCloth.tint = b.color;
     this.tag.position.set(p.x, p.y - 30);
-    if (this.label.text !== this.tagText) {
-      this.tagText = this.label.text;
+    // a kingdom: all its towns get a thicker striped rim in its colour (the capital also has the crown)
+    const rim = b.kingdom ? b.kingdom.color : b.color;
+    const realm = !!b.kingdom;
+    const tagKey = `${this.label.text}|${rim}|${realm}`;
+    if (tagKey !== this.tagText) {
+      this.tagText = tagKey;
       const w = this.label.width + 14, h = this.label.height + 4;
       this.tagBg.clear()
         .roundRect(-w / 2, -h, w, h, h / 2).fill({ color: 0x101626, alpha: 0.78 })
-        .roundRect(-w / 2, -h, w, h, h / 2).stroke({ color: b.color, width: 2 })
-        .poly([-4, 0, 4, 0, 0, 5]).fill(b.color);
+        .roundRect(-w / 2, -h, w, h, h / 2).stroke({ color: rim, width: realm ? 3 : 2 })
+        .poly([-4, 0, 4, 0, 0, 5]).fill(rim);
+      if (realm) stripes(this.tagBg, w, h);
       this.label.position.set(0, -2);
     }
     this.updateTrodden(b);

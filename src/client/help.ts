@@ -21,6 +21,7 @@ const TAG_ORDER: Tag[] = ['breaking', 'new', 'old'];
 /** newest first; a new version gets its own entry here */
 export const CHANGELOG: Release[] = [
   { v: '2.0', items: [
+    ['Царствата вече не оцветяват картата: селата им имат раирана рамка около името в цвета на царството.', 'Kingdoms no longer colour the map: their towns have a striped rim around the name in the kingdom’s colour.', 'Königreiche färben die Karte nicht mehr: Ihre Orte haben einen gestreiften Rahmen um den Namen in der Farbe des Königreichs.', 'fix'],
     ['Хълмовете и планините се издигат плавно, без стъпала, а цветовете и снегът се преливат към съседите.', 'Hills and mountains rise smoothly with no steps, and colours and snow blend into their neighbours.', 'Hügel und Berge steigen sanft an, ohne Stufen, und Farben und Schnee gehen weich ineinander über.', 'add'],
     ['Известните умират както в действителност: в битка, по присъда, при злополука и т.н., а не всички „от болест“.', 'The famous die as they did in reality: in battle, put to death, in an accident and so on, not all “of illness”.', 'Die Berühmten sterben wie in Wirklichkeit: in der Schlacht, hingerichtet, bei einem Unglück und so weiter, nicht alle „an einer Krankheit“.', 'fix'],
     ['Когато 80% от една карта е открита, мъглата по нея изчезва изцяло.', 'Once 80% of a map is explored, its fog lifts completely.', 'Sobald 80 % einer Karte erkundet sind, verschwindet ihr Nebel ganz.', 'add'],
