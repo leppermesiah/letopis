@@ -421,6 +421,13 @@ export const CAUSE_EN: Record<string, string> = {
   'почина от болест': 'died of illness',
   'загина при наводнение': 'drowned in a flood',
   'почина при епидемията': 'died in the epidemic',
+  'загина в битка': 'fell in battle',
+  'загина от чужда ръка': 'was killed',
+  'загина по присъда': 'was put to death',
+  'сложи край на живота си': 'took their own life',
+  'загина при злополука': 'died in an accident',
+  'се удави': 'drowned',
+  'загина при изригване на вулкан': 'died in a volcanic eruption',
 };
 export const causeEn = (bg: string) => CAUSE_EN[bg] ?? bg;
 

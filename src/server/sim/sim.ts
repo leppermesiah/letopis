@@ -17,7 +17,7 @@ const STYLE: Record<Job, [string, string, string]> = {
   build: ['строят', 'building', 'vom Bauen'],
   forage: ['ловуват и събират', 'hunting and gathering', 'von der Jagd und vom Sammeln'],
 };
-import { FAMOUS, fameRole } from '../../shared/famous';
+import { FAMOUS, fameRole, famousDeath } from '../../shared/famous';
 import { realPeople } from '../../shared/people';
 import { CITIES, cityYear, isCity } from '../../shared/cities';
 import { BIG, startStage, treeKinds } from '../../shared/trees';
@@ -1820,7 +1820,7 @@ export class Simulation {
           pm = a >= f.age && (f.born < 0 && f.died > 0 || Math.floor(this.year) >= f.died) ? 1 : 0;
         }
         if (this.rng.chance(pm)) {
-          const cause = p.fame ? (a >= 60 ? 'почина от старост' : 'почина от болест') : hungry > 0.25 && this.rng.chance(0.6) ? 'почина в гладна година'
+          const cause = p.fame ? famousDeath(FAMOUS[p.fame - 1], a) : hungry > 0.25 && this.rng.chance(0.6) ? 'почина в гладна година'
             : coldRisk > 0.004 && this.rng.chance(0.5) ? 'почина в лютата зима'
             : a > 55 ? 'почина от старост' : a < 5 ? 'почина като дете' : 'почина от болест';
           this.die(p, cause, m);

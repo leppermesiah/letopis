@@ -9,7 +9,7 @@ import {
   BandView, ChronicleEntry, Discovery, FamilyTree, GoneBand, TreeNode, PersonDetail, PersonRow, SnapshotMessage, TASKS, TASK_NAMES, TickMessage, WorldInfo, b64decode,
 } from '../shared/types';
 import { SECRET_COUNT, SECRET_KINDS, SecretFind, SecretSpot } from '../shared/secrets';
-import { FAMOUS, Famous, famousByName, fameRole } from '../shared/famous';
+import { FAMOUS, Famous, famousByName, fameRole, famousDeath } from '../shared/famous';
 import { ERAS_BG, ERAS_EN, ERA_GATE, TECH_DESC, TECH_LIST } from '../shared/i18n';
 import { ERAS_DE, TECH_DESC_DE, bandTextCaseDe } from '../shared/i18n-de';
 import { isWoman } from '../shared/people-l10n';
@@ -784,7 +784,7 @@ async function showPerson(id: number) {
     <div class="person-head"><div class="avatar ${d.sex ? 'f' : 'm'}">${d.sex ? '👩' : '👨'}</div>
       <div><h2>${fam ? '<span class="fame-star">★</span> ' : ''}${esc(P(d.name))}</h2>
       ${fam ? `<div class="title">${esc(FAME_LINE(fam))}</div>` : ''}
-      <div class="muted">${alive ? `<span id="pAge">${d.age}</span> ${T('години', 'years', 'Jahre')} · ${esc(BL(d.bandName))}` : `${fmtYear(d.bornYear)} – ${fmtYear(d.diedYear!)}, ${esc(CAUSE(d.cause ?? '', d.age))}`}</div>
+      <div class="muted">${alive ? `<span id="pAge">${d.age}</span> ${T('години', 'years', 'Jahre')} · ${esc(BL(d.bandName))}` : fam ? esc(CAUSE(famousDeath(fam, d.age), d.age)) : `${fmtYear(d.bornYear)} – ${fmtYear(d.diedYear!)}, ${esc(CAUSE(d.cause ?? '', d.age))}`}</div>
       ${d.title ? `<div class="title">${esc(TITLE(d.title, d.sex === 1))}</div>` : ''}
       ${alive && d.task ? `<div>${T('Сега', 'Now', 'Gerade:')} ${esc(TASK(r.nightTask(id) ?? d.task))}</div>` : ''}<div class="muted">${T(`${d.generation}-о поколение`, `generation ${d.generation}`, `${d.generation}. Generation`)}</div></div></div>
     ${fam ? '<div id="famBio" class="fam-bio"></div>' : ''}

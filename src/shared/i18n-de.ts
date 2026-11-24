@@ -463,6 +463,13 @@ const CAUSE_DE: Record<string, string> = {
   'почина от болест': 'starb mit {a} Jahren an einer Krankheit',
   'загина при наводнение': 'ertrank mit {a} Jahren bei einem Hochwasser',
   'почина при епидемията': 'starb mit {a} Jahren an der Seuche',
+  'загина в битка': 'fiel mit {a} Jahren in einer Schlacht',
+  'загина от чужда ръка': 'wurde mit {a} Jahren getötet',
+  'загина по присъда': 'wurde mit {a} Jahren hingerichtet',
+  'сложи край на живота си': 'nahm sich mit {a} Jahren das Leben',
+  'загина при злополука': 'kam mit {a} Jahren bei einem Unglück ums Leben',
+  'се удави': 'ertrank mit {a} Jahren',
+  'загина при изригване на вулкан': 'kam mit {a} Jahren bei einem Vulkanausbruch ums Leben',
 };
 export function causeDe(bg: string, age: number): string {
   if (age < 1 && bg === 'почина като дете') return 'starb kurz nach der Geburt';

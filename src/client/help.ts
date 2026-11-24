@@ -21,6 +21,7 @@ const TAG_ORDER: Tag[] = ['breaking', 'new', 'old'];
 /** newest first; a new version gets its own entry here */
 export const CHANGELOG: Release[] = [
   { v: '2.0', items: [
+    ['Известните умират както в действителност: в битка, по присъда, при злополука и т.н., а не всички „от болест“.', 'The famous die as they did in reality: in battle, put to death, in an accident and so on, not all “of illness”.', 'Die Berühmten sterben wie in Wirklichkeit: in der Schlacht, hingerichtet, bei einem Unglück und so weiter, nicht alle „an einer Krankheit“.', 'fix'],
     ['Когато 80% от една карта е открита, мъглата по нея изчезва изцяло.', 'Once 80% of a map is explored, its fog lifts completely.', 'Sobald 80 % einer Karte erkundet sind, verschwindet ihr Nebel ganz.', 'add'],
     ['385 известни личности вместо 200, а в картата на всяка има кратък живот и любопитни факти.', '385 famous people instead of 200, and each card tells their life in short with a few curious facts.', '385 berühmte Persönlichkeiten statt 200, und jede Karte erzählt kurz ihr Leben und ein paar kuriose Dinge.', 'add'],
   ] },
