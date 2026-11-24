@@ -20,7 +20,7 @@ const STYLE: Record<Job, [string, string, string]> = {
 import { FAMOUS, fameRole, famousDeath } from '../../shared/famous';
 import { realPeople } from '../../shared/people';
 import { CITIES, cityYear, isCity } from '../../shared/cities';
-import { BIG, startStage, treeKinds } from '../../shared/trees';
+import { BIG, startStage, treeKinds, wildForest } from '../../shared/trees';
 import { findRoad } from './roads';
 import { BEAST_EN, ERAS_EN, FEATURE_EN, SECRET_HEROES_EN, SECRET_KINDS_EN, TECH_EN, bandEn, bandLabelEn, bandThe, villageEn, causeEn, chiefEn, deedEn, personEn, translit } from '../../shared/i18n';
 import {
@@ -249,6 +249,10 @@ export class Simulation {
   private regions: Int32Array = new Int32Array(0);
   /** which tree can grow on each tile (0 none), and how big it is now (0..4) */
   treeKind: Uint8Array = new Uint8Array(0);
+  /** tiles of the old wild woods, never cut */
+  private wild = new Uint8Array(0);
+  /** camps that have cut all they may around them: nomads move on */
+  private woodGone = new Set<number>();
   trees: Uint8Array = new Uint8Array(0);
   /** trees that changed this month, as [tile, stage, tile, stage, ...] for the viewers */
   treeChanges: number[] = [];
@@ -339,7 +343,11 @@ export class Simulation {
 
   private kindsOfTrees(): Uint8Array {
     const [ox, oy] = this.origin();
-    return treeKinds(W, H, this.t.biome, this.t.river, this.t.temp, ox, oy);
+    const kinds = treeKinds(W, H, this.t.biome, this.t.river, this.t.temp, ox, oy);
+    // the wild woods: nobody cuts there
+    this.wild = new Uint8Array(W * H);
+    for (let i = 0; i < kinds.length; i++) if (kinds[i] && wildForest(i % W + ox, Math.floor(i / W) + oy)) this.wild[i] = 1;
+    return kinds;
   }
 
   /** the Earth and Mars share the size of the map: whoever is worked on sets it first */
@@ -975,7 +983,7 @@ export class Simulation {
     for (let i = 0; i < kinds.length; i++) {
       if (!kinds[i]) continue;
       const st = trees[i];
-      const k = tended.has(i) ? 3 : 1;
+      const k = this.wild[i] ? 4 : tended.has(i) ? 3 : 1;
       if (st === 0) {
         if (this.rng.next() < seed * k && !blocked.has(i) && !this.roads[i]) this.setTree(i, 1);
       } else if (st < BIG && this.rng.next() < grow * k) this.setTree(i, st + 1);
@@ -991,20 +999,34 @@ export class Simulation {
     b.wood = (b.wood ?? 0) + (0.08 + n * 0.004) * winter * fire * (b.settled ? (this.hasTech(b, 'mudbrick') ? 0.9 : 1.3) : 1);
     const R = b.settled ? 7 : 4;
     const cx = Math.round(b.cx), cy = Math.round(b.cy);
-    for (let guard = 0; b.wood >= 1 && guard < 6; guard++) {
+    // they leave at least two trees out of five standing around them; villages never cut the wild woods
+    // (a wandering band takes the little it needs from them)
+    const tame = (i: number) => !b.settled || !this.wild[i];
+    let room = 0, standing = 0;
+    for (let y = cy - R; y <= cy + R; y++) for (let x = cx - R; x <= cx + R; x++) {
+      if (!inBounds(x, y)) continue;
+      const i = idx(x, y);
+      if (!this.treeKind[i] || !tame(i)) continue;
+      room++;
+      if (this.trees[i] >= 2) standing++;
+    }
+    let spare = Math.floor(standing - room * 0.4);
+    if (spare <= 0 && b.wood >= 1) this.woodGone.add(b.id); else this.woodGone.delete(b.id);
+    for (let guard = 0; b.wood >= 1 && guard < 6 && spare > 0; guard++, spare--) {
       let best = -1, bestD = Infinity;
       for (let y = cy - R; y <= cy + R; y++) for (let x = cx - R; x <= cx + R; x++) {
         if (!inBounds(x, y)) continue;
         const i = idx(x, y);
-        if (this.trees[i] < (b.settled ? 3 : 2)) continue; // saplings are left to grow; a village waits for grown trees
+        if (this.trees[i] < (b.settled ? 3 : 2) || !tame(i)) continue; // saplings are left to grow; a village waits for grown trees
         const d = (x - cx) ** 2 + (y - cy) ** 2 + this.rng.next() * 6;
         if (d < bestD && d <= R * R + 6) { bestD = d; best = i; }
       }
-      if (best < 0) { b.wood = Math.min(b.wood, 3); break; }
+      if (best < 0) break;
       b.wood -= this.trees[best] - 1;
       // a village cuts the way a coppice is cut: the stump sprouts again
       this.setTree(best, b.settled ? 1 : 0);
     }
+    b.wood = Math.min(b.wood, 3);
     // a woodcutter is seen at work by the nearest tree (or carrying the log home)
     let near = -1, nd = Infinity;
     for (let y = cy - R; y <= cy + R; y++) for (let x = cx - R; x <= cx + R; x++) {
@@ -2026,7 +2048,8 @@ export class Simulation {
       // nomads move with the seasons and the game
       // nomads stay while there is wood around the camp; only a real famine drives them off earlier
       if (!b.settled && !b.scout) {
-        const noWood = this.treesNear(b.cx, b.cy, 4, 2) === 0;
+        const noWood = this.woodGone.has(b.id) || this.treesNear(b.cx, b.cy, 4, 2) === 0;
+        if (noWood) this.woodGone.delete(b.id);
         const starving = (b.fed ?? 1) < 0.7 && this.rng.chance(0.08);
         if (noWood || starving) this.moveCamp(b, m, noWood ? 22 : 16);
       }

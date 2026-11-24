@@ -25,6 +25,12 @@ function pick<T>(list: readonly T[], n: number): T {
 
 const K = (name: (typeof TREE_KINDS)[number]) => TREE_KINDS.indexOf(name);
 
+const wildNoise = new Simplex(new Rng(20261125));
+/** old wild woods (in the coordinates of the first map): thick forest that nobody cuts */
+export function wildForest(gx: number, gy: number): boolean {
+  return wildNoise.noise(gx * 0.05, gy * 0.05) + 0.25 * wildNoise.noise(gx * 0.17 + 40, gy * 0.17) > 0.42;
+}
+
 /** which tree may grow on each tile (groves and clearings, like the old hand-placed forests) */
 /** ox, oy: where tile (0, 0) lies in the coordinates of the first map (the world can grow to the west and north) */
 export function treeKinds(w: number, h: number, biome: ArrayLike<number>, river: ArrayLike<number>, temp: ArrayLike<number>, ox = 0, oy = 0): Uint8Array {
@@ -41,6 +47,12 @@ export function treeKinds(w: number, h: number, biome: ArrayLike<number>, river:
       const t = temp[i];
       const dense = 0.5 + 0.55 * clumps.noise(gx * 0.11, gy * 0.11);
       let k = 0;
+      // the wild woods are thick, and reach out over the grass and the hills too
+      if (wildForest(gx, gy) && (b === Biome.Forest || b === Biome.Taiga || b === Biome.Grassland || b === Biome.Hills || b === Biome.Plains) && n < 0.8) {
+        out[i] = t < 0.42 || b === Biome.Taiga ? pick([K('spruceL'), K('spruceD'), K('pine'), K('birch'), K('spruceL')], n2)
+          : pick([K('oak'), K('oakL'), K('oakOld'), K('birch'), K('oak'), K('pine'), K('oakL')], n2);
+        continue;
+      }
       switch (b) {
         case Biome.Forest:
           if (n < dense - 0.12) k = t < 0.42 ? pick([K('pine'), K('birch'), K('birch'), K('oakL'), K('spruceL')], n2)
