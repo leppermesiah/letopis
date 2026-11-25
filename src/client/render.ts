@@ -286,6 +286,15 @@ void main(void) {
   vec4 c = texture(uTexture, vTextureCoord + off * vTexel);
   float crest = (a * b + 0.6 * d) * 0.5;
   c.rgb += c.a * vec3(0.03, 0.045, 0.055) * crest;
+  // light under the water: a net of soft caustics drifting the other way than the swells
+  vec2 q = p * 0.11 - vec2(t * 0.9, -t * 0.6);
+  float k = abs(sin(q.x + sin(q.y * 1.3)) + sin(q.y * 0.9 + sin(q.x * 1.1 + t * 0.7)));
+  float caustic = pow(clamp(1.0 - k * 0.5, 0.0, 1.0), 6.0);
+  // and the white crests shimmer, the glint running against the swell
+  float lum = dot(c.rgb, vec3(0.3, 0.5, 0.2)) / max(c.a, 0.001);
+  float white = smoothstep(0.55, 0.85, lum);
+  float run = 0.5 + 0.5 * sin(p.x * -0.12 + p.y * 0.08 - t * 2.4);
+  c.rgb += c.a * (vec3(0.07, 0.09, 0.1) * caustic + vec3(0.12, 0.13, 0.14) * white * run * run);
   finalColor = c;
 }
 `;
