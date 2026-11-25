@@ -550,6 +550,7 @@ export class WorldRenderer {
   /** land reaching into a water tile: broken shore pieces over its edges */
   private shoreQuads(x: number, y: number, H: number[] | undefined, out: GroundQuad[]) {
     const dry = (j: number) => !isWater(this.biome[j]) && !this.bigRiver(j);
+    this.blendQuads(x, y, out, H ?? [0, 0, 0, 0]);
     for (const k of this.edgeKeys(x, y, dry)) {
       out.push({ x, y, name: `shore_${k}`, tint: 0xffffff, flat: true, over: true, h: H ?? [0, 0, 0, 0] });
     }
@@ -587,20 +588,24 @@ export class WorldRenderer {
   }
 
   /** stronger grounds next to this tile reach into it through ragged masks, so tiles of two grounds do not meet in a straight line */
-  private blendQuads(x: number, y: number, out: GroundQuad[]) {
+  private blendQuads(x: number, y: number, out: GroundQuad[], h0?: number[]) {
     if (this.mars) return;
     const { w, h } = this.info;
-    const own = this.groundFamily(y * w + x);
+    // a water tile is the weakest of all: the land around reaches into it (under its shore)
+    const own = h0 ? { fam: 'water', rank: 0, name: '' } : this.groundFamily(y * w + x);
     if (!own) return;
+    // the sands are drawn in a few unlike pictures: they also reach into each other
+    const over = (f: { fam: string; rank: number; name: string }) =>
+      f.rank > own.rank ? f.fam !== own.fam : f.fam === own.fam && f.fam === 'sand' && f.name > own.name;
     const found = new Map<string, { rank: number; name: string; tint: number }>();
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       if ((!dx && !dy) || x + dx < 0 || y + dy < 0 || x + dx >= w || y + dy >= h) continue;
       const f = this.groundFamily((y + dy) * w + x + dx);
-      if (f && f.rank > own.rank && f.fam !== own.fam && !found.has(f.fam)) found.set(f.fam, f);
+      if (f && over(f) && !found.has(f.name)) found.set(f.name, f);
     }
-    for (const [fam, f] of [...found].sort((a, b) => a[1].rank - b[1].rank)) {
-      for (const k of this.edgeKeys(x, y, (j) => this.groundFamily(j)?.fam === fam)) {
-        out.push({ x, y, name: f.name, tint: f.tint, blend: true, over: true, mask: `mask_${k}` });
+    for (const [name, f] of [...found].sort((a, b) => a[1].rank - b[1].rank || (a[0] < b[0] ? -1 : 1))) {
+      for (const k of this.edgeKeys(x, y, (j) => this.groundFamily(j)?.name === name)) {
+        out.push({ x, y, name, tint: f.tint, blend: true, h: h0, over: true, mask: `mask_${k}` });
       }
     }
   }
