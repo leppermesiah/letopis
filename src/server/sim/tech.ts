@@ -166,7 +166,7 @@ export const TECHS: Tech[] = [
   { id: 'knighthood', name: 'Рицарство', era: 4, target: 750, prereq: ['horse', 'iron', 'kingdom'], need: null, base: 0.0015, gene: 'str',
     text: '{name} от {band} се закле пред царя да пази слабите и пътниците. Първият рицар се появи на кон, в желязна ризница, и с меч, който никога не вдига първи.',
     kids: '{name} стана рицар: язди голям кон и пази пътниците по пътя!' },
-  { id: 'three_field', name: 'Трипольна система', era: 4, target: 800, prereq: ['heavy_plough', 'calendar'], need: 'grain', base: 0.0015, gene: 'int',
+  { id: 'three_field', name: 'Триполна система', era: 4, target: 800, prereq: ['heavy_plough', 'calendar'], need: 'grain', base: 0.0015, gene: 'int',
     text: '{name} от {band} раздели нивите на три: в едната зимно жито, в другата пролетен ечемик, а третата почива. Земята вече не се изтощава.',
     kids: '{name} измисли нивата да почива всяка трета година, за да ражда повече.' },
   { id: 'castle', name: 'Замък', era: 4, target: 900, prereq: ['walls', 'arch', 'kingdom'], need: null, base: 0.0015, gene: 'str',
