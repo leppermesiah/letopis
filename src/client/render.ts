@@ -730,10 +730,23 @@ export class WorldRenderer {
     }
     // winter snow, faded in by season
     const t = this.temp[i] / 255;
-    if (b !== Biome.Snow) {
-      const target = t < 0.33 ? cold : t < 0.5 ? cool : null;
-      if (target) target.push({ x, y, name: `snow${Math.floor(hash(x + 5, y) * 4)}`, tint: 0xffffff, snow: target === cold ? 0.33 : 0.5 });
+    const own = this.snowClass(i);
+    if (own) (own === 2 ? cold : cool).push({ x, y, name: `snow${Math.floor(hash(x + 5, y) * 4)}`, tint: 0xffffff });
+    // and it ends in a ragged edge, reaching into the warmer tiles next to it
+    for (const k of [1, 2]) {
+      if (k <= own) continue;
+      for (const key of this.edgeKeys(x, y, (j) => this.snowClass(j) === k)) {
+        (k === 2 ? cold : cool).push({ x, y, name: `snow${Math.floor(hash(x + 7, y + key.length) * 4)}`, tint: 0xffffff, over: true, mask: `mask_${key}` });
+      }
     }
+  }
+
+  /** winter snow on a tile: 2 in the cold (every winter), 1 in the cool lands (only in deep winter), 0 none */
+  private snowClass(j: number): number {
+    const b = this.biome[j];
+    if (b === Biome.Snow || isWater(b) || this.bigRiver(j)) return 0;
+    const t = this.temp[j] / 255;
+    return t < 0.33 ? 2 : t < 0.5 ? 1 : 0;
   }
 
   /** corner heights: the mean of the (up to) four tiles that meet there; next to water the ground comes down to it */
