@@ -891,6 +891,29 @@ def road_squares() -> list:
     return out
 
 
+def fade_to_land(sq: Image.Image, key: str) -> Image.Image:
+    """A shore piece thins out raggedly towards the land it touches, so the grass reaching in under it
+    shows through and the shore has no straight back edge along the tile's side."""
+    a = np.array(sq).astype(np.float32)
+    n = a.shape[0]
+    g = (np.arange(n) - GROUND_GUT + 0.5) / (n - 2 * GROUND_GUT)
+    v, u = np.meshgrid(g, g, indexing='ij')
+    d = np.full((n, n), 9.0)
+    bits = int(key.rstrip('ab')) if key[0].isdigit() else 0
+    if bits & 1: d = np.minimum(d, u)
+    if bits & 2: d = np.minimum(d, v)
+    if bits & 4: d = np.minimum(d, 1 - u)
+    if bits & 8: d = np.minimum(d, 1 - v)
+    corner = {'t': (0, 0), 'r': (1, 0), 'b': (1, 1), 'l': (0, 1)}.get(key)
+    if corner:
+        d = np.minimum(d, np.hypot(u - corner[0], v - corner[1]) * 0.6)
+    rng = np.random.default_rng(sum(map(ord, key)))
+    noise = np.array(Image.fromarray((rng.random((10, 10)) * 255).astype(np.uint8)).resize((n, n), Image.BICUBIC)).astype(np.float32) / 255
+    k = np.clip((d - 0.03 - noise * 0.12) / 0.06, 0, 1)
+    a[..., 3] *= k
+    return Image.fromarray(a.round().astype(np.uint8))
+
+
 def ground_page(overlays: list, squares: list = ()) -> dict:
     names = []
     for prefix, ids, kind, _world, _tex in GROUPS:
@@ -911,7 +934,10 @@ def ground_page(overlays: list, squares: list = ()) -> dict:
     for k, (name, img, ay, top) in enumerate(overlays):
         n = len(names) + k
         x, y = (n % GROUND_COLS) * GROUND_CELL, (n // GROUND_COLS) * GROUND_CELL
-        page.paste(overlay_square(img, ay * img.size[1], top), (x, y))
+        sq = overlay_square(img, ay * img.size[1], top)
+        if name.startswith('shore_'):
+            sq = fade_to_land(sq, name[6:])
+        page.paste(sq, (x, y))
         index[name] = [x + GROUND_GUT, y + GROUND_GUT, GROUND_CELL - 2 * GROUND_GUT]
     for k, (name, img, wrap) in enumerate(squares):
         n = len(names) + len(overlays) + k
