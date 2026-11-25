@@ -737,6 +737,13 @@ export class WorldRenderer {
     // the ground: one sloped quad over the heights of its four corners
     ground.push({ x, y, name, tint, blend: true });
     this.blendQuads(x, y, ground);
+    // a ragged strip of the shore's sand on the land along the water, so the shore does not end in the tile's straight edge
+    const CH = [[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]].map(([a, c]) => this.cornerH(a, c));
+    if (!this.mars && b !== Biome.Beach && b !== Biome.Desert && b !== Biome.Marsh && Math.max(...CH) - Math.min(...CH) < 1.2) {
+      for (const k of this.edgeKeys(x, y, (j) => isWater(this.biome[j]) || this.bigRiver(j))) {
+        ground.push({ x, y, name: 'sand0', tint: 0xeedcb8, blend: false, over: true, mask: `mask_${k}` });
+      }
+    }
     if (this.isStream(i)) {
       // a thin stream through the grass, joined to the streams, rivers and sea next to it
       // joined only along its own course: downstream, and to the streams that flow into it
@@ -1019,6 +1026,24 @@ export class WorldRenderer {
       else if (n > 0.985 && b === Biome.Desert && this.atlas.has('mcrater')) add('mcrater', 'other', 0, 0);
       else if (n > 0.9975 && this.atlas.has('mcairn')) add('mcairn', 'other', 0, 0);
       return;
+    }
+    // stones, reeds and ferns right on the waterline, so the bank does not run as one straight edge
+    const wet = this.sides(x, y, (j) => isWater(this.biome[j]) || this.bigRiver(j));
+    if (wet && this.atlas.has('w_stones')) {
+      const cold = this.temp[i] / 255 < 0.4;
+      const set = cold ? ['w_stones', 'w_boulder', 'w_sedge', 'w_stones'] : ['w_stones', 'w_reeds', 'w_sedge', 'w_fern0', 'w_horsetail', 'w_stones', 'w_boulder', 'w_fern2'];
+      // the middle of each edge (in screen px from the tile's middle) and the way along it
+      const EDGE: Record<number, [number, number, number, number]> = { 1: [-8, -4, -8, 4], 2: [8, -4, 8, 4], 4: [8, 4, -8, 4], 8: [-8, 4, 8, 4] };
+      for (const bit of [1, 2, 4, 8]) {
+        if (!(wet & bit)) continue;
+        for (let k = 0; k < 2; k++) {
+          const hh = hash(x * 13 + bit * 7 + k, y * 5 + k * 31);
+          if (hh > 0.55) continue;
+          const [mx, my, ax, ay] = EDGE[bit];
+          const t = (hash(x + k * 17, y * 3 + bit) - 0.5) * 0.8;
+          add(pick(set, hh / 0.55), 'other', mx * 0.8 + ax * t, my * 0.8 + ay * t, 0.75);
+        }
+      }
     }
     // trees: where they can grow comes from the server, their size from every tick
     const tk = this.treeKind[i];
