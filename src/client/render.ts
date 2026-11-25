@@ -78,14 +78,18 @@ interface GroundQuad {
   page?: number; uv?: number[][];
   /** a see-through square laid over the tile (stream, shore): no face down at the map's edge */
   over?: boolean;
+  /** the ragged mask (on the ground page) that cuts this ground where it reaches into a neighbour */
+  mask?: string;
 }
 
 const GROUND_VERT = `
 in vec2 aPosition;
 in vec2 aUV;
 in vec4 aColor;
+in vec2 aMask;
 out vec2 vUV;
 out vec4 vColor;
+out vec2 vMask;
 uniform mat3 uProjectionMatrix;
 uniform mat3 uWorldTransformMatrix;
 uniform mat3 uTransformMatrix;
@@ -94,15 +98,19 @@ void main() {
   gl_Position = vec4((mvp * vec3(aPosition, 1.0)).xy, 0.0, 1.0);
   vUV = aUV;
   vColor = aColor;
+  vMask = aMask;
 }`;
 const GROUND_FRAG = `
 in vec2 vUV;
 in vec4 vColor;
+in vec2 vMask;
 uniform sampler2D uTexture;
 uniform vec4 uColor;
 uniform vec4 uWorldColorAlpha;
 void main() {
   vec4 c = texture2D(uTexture, vUV);
+  // a ground reaching over the edge into the tile next to it shows only where its mask is white
+  if (vMask.x >= 0.0) c *= texture2D(uTexture, vMask).r;
   // the colours come premultiplied by their alpha
   float a = uColor.a * uWorldColorAlpha.a * vColor.a;
   gl_FragColor = vec4(c.rgb * vColor.rgb * vColor.a * uColor.rgb * uWorldColorAlpha.rgb, a * c.a);
@@ -541,8 +549,16 @@ export class WorldRenderer {
 
   /** land reaching into a water tile: broken shore pieces over its edges */
   private shoreQuads(x: number, y: number, H: number[] | undefined, out: GroundQuad[]) {
-    const { w, h } = this.info;
     const dry = (j: number) => !isWater(this.biome[j]) && !this.bigRiver(j);
+    for (const k of this.edgeKeys(x, y, dry)) {
+      out.push({ x, y, name: `shore_${k}`, tint: 0xffffff, flat: true, over: true, h: H ?? [0, 0, 0, 0] });
+    }
+  }
+
+  /** the pieces (as on the shore and mask sheets) that cover the edges and corners of a tile where ok() holds next to it */
+  private edgeKeys(x: number, y: number, ok: (j: number) => boolean): string[] {
+    const { w, h } = this.info;
+    const dry = ok;
     const m = this.sides(x, y, dry);
     const keys: string[] = [];
     if (m === 3 || m === 6 || m === 12 || m === 9) keys.push(String(m));
@@ -553,8 +569,39 @@ export class WorldRenderer {
     if (!(m & 6) && at(1, -1)) keys.push('r');
     if (!(m & 12) && at(1, 1)) keys.push('b');
     if (!(m & 9) && at(-1, 1)) keys.push('l');
-    for (const k of keys) {
-      out.push({ x, y, name: `shore_${k}`, tint: 0xffffff, flat: true, over: true, h: H ?? [0, 0, 0, 0] });
+    return keys;
+  }
+
+  /** which grounds reach into which at their edges: the higher reaches into the lower */
+  private static RANK: Record<string, number> = { marsh: 1, sand: 2, steppe: 3, grass: 4, meadow: 4, tundra: 5, hill: 6, rock: 7, crag: 7, snow: 8 };
+
+  private groundFamily(j: number): { fam: string; rank: number; name: string; tint: number } | null {
+    const { w } = this.info;
+    if (isWater(this.biome[j]) || this.bigRiver(j)) return null;
+    const x = j % w, y = (j - x) / w;
+    const g = this.groundOf(this.biome[j], x, y, hash(x, y));
+    let fam = g.name.replace(/\d+$/, '');
+    if (fam === 'meadow') fam = 'grass';
+    const rank = WorldRenderer.RANK[fam];
+    return rank ? { fam, rank, name: g.name, tint: g.tint } : null;
+  }
+
+  /** stronger grounds next to this tile reach into it through ragged masks, so tiles of two grounds do not meet in a straight line */
+  private blendQuads(x: number, y: number, out: GroundQuad[]) {
+    if (this.mars) return;
+    const { w, h } = this.info;
+    const own = this.groundFamily(y * w + x);
+    if (!own) return;
+    const found = new Map<string, { rank: number; name: string; tint: number }>();
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if ((!dx && !dy) || x + dx < 0 || y + dy < 0 || x + dx >= w || y + dy >= h) continue;
+      const f = this.groundFamily((y + dy) * w + x + dx);
+      if (f && f.rank > own.rank && f.fam !== own.fam && !found.has(f.fam)) found.set(f.fam, f);
+    }
+    for (const [fam, f] of [...found].sort((a, b) => a[1].rank - b[1].rank)) {
+      for (const k of this.edgeKeys(x, y, (j) => this.groundFamily(j)?.fam === fam)) {
+        out.push({ x, y, name: f.name, tint: f.tint, blend: true, over: true, mask: `mask_${k}` });
+      }
     }
   }
 
@@ -674,6 +721,7 @@ export class WorldRenderer {
     }
     // the ground: one sloped quad over the heights of its four corners
     ground.push({ x, y, name, tint, blend: true });
+    this.blendQuads(x, y, ground);
     if (this.isStream(i)) {
       // a thin stream through the grass, joined to the streams, rivers and sea next to it
       // joined only along its own course: downstream, and to the streams that flow into it
@@ -834,11 +882,14 @@ export class WorldRenderer {
     const G = { size: page ? page.width : G0.size, cells: G0.cells };
     const sizeV = page ? page.height : G0.size;
     const { w, h } = this.info;
-    const pos: number[] = [], uv: number[] = [], col: number[] = [], idx: number[] = [];
+    const pos: number[] = [], uv: number[] = [], col: number[] = [], idx: number[] = [], mk: number[] = [];
     let v = 0;
+    let MK: number[][] | null = null;
+    let mj = 0;
     const vert = (px: number, py: number, u: number, t: number, c: number, l: number, a = 1) => {
       pos.push(px, py);
       uv.push(u / G.size, t / sizeV);
+      if (MK) mk.push(MK[mj][0] / G.size, MK[mj][1] / sizeV); else mk.push(-1, -1);
       col.push(((c >> 16) & 255) / 255 * l, ((c >> 8) & 255) / 255 * l, (c & 255) / 255 * l, a);
       v++;
     };
@@ -853,6 +904,12 @@ export class WorldRenderer {
         const [u0, v0, c] = cell;
         UV = [[u0, v0], [u0 + c, v0], [u0 + c, v0 + c], [u0, v0 + c]];
       }
+      MK = null;
+      const mc = q.mask ? G.cells[q.mask] : undefined;
+      if (mc) {
+        const [m0, n0, mcs] = mc;
+        MK = [[m0, n0], [m0 + mcs, n0], [m0 + mcs, n0 + mcs], [m0, n0 + mcs]];
+      }
       // top, right, bottom, left corner of the tile
       const C = [[q.x, q.y], [q.x + 1, q.y], [q.x + 1, q.y + 1], [q.x, q.y + 1]];
       const H = q.h ?? C.map(([cx, cy]) => this.cornerH(cx, cy));
@@ -861,6 +918,7 @@ export class WorldRenderer {
         const p = iso(C[j][0], C[j][1]);
         const tint = q.tints ? q.tints[j] : q.blend ? this.cornerTint(C[j][0], C[j][1], q.tint) : q.tint;
         const al = q.alpha ? q.alpha[j] : q.snow ? Math.min(1, this.snowCover(C[j][0], C[j][1], q.snow) * 1.25) : 1;
+        mj = j;
         vert(p.x, p.y - H[j] * ELEV, UV[j][0], UV[j][1], tint, q.flat ? 1 : this.cornerLight(C[j][0], C[j][1]), al);
       }
       // fold the quad along the flatter diagonal
@@ -879,12 +937,13 @@ export class WorldRenderer {
         quad(b, true);
       };
       const ground = [-1, -1, -1, -1];
+      MK = null;
       const edgeFace = !q.uv && !q.over && (!q.h || q.alpha); // a sea floor needs none, the water over it has it
       if (edgeFace && q.x === w - 1) skirt(1, 2, ground, 0.5, 0.4, q.alpha ? 0.9 : 1);
       if (edgeFace && q.y === h - 1) skirt(2, 3, ground, 0.5, 0.4, q.alpha ? 0.9 : 1);
     }
     const geometry = new Geometry({
-      attributes: { aPosition: new Float32Array(pos), aUV: new Float32Array(uv), aColor: new Float32Array(col) },
+      attributes: { aPosition: new Float32Array(pos), aUV: new Float32Array(uv), aColor: new Float32Array(col), aMask: new Float32Array(mk) },
       indexBuffer: new Uint32Array(idx),
     });
     return new Mesh({ geometry, shader: this.shaderFor(src) });

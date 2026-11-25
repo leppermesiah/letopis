@@ -771,6 +771,30 @@ def water_frames() -> list:
     return items
 
 
+def blend_masks() -> list:
+    """(name, image, ay, diamond top) of the masks (sheet DY, laid out like the shores): white is where
+    a stronger ground reaches into the tile next to it with a ragged edge, black the tile's own ground"""
+    out = []
+    for key, c in SHORE_CELLS.items():
+        path = os.path.join(CUT, f'DY{c}.png')
+        if not os.path.exists(path):
+            continue
+        src = Image.open(path).convert('RGBA')
+        a = np.array(src)
+        w0, h0 = src.size
+        h = max(1, round(h0 * 128 / w0))
+        cy = corner_y(a) / h0
+        top = diamond_top(a, w0) * h / h0
+        lum = np.array(src.convert('L')).astype(np.float32)
+        lum = np.where(a[..., 3] > 0, np.clip((lum - 64) * 2, 0, 255), 0).astype(np.uint8)
+        # past the (eroded) outline the white is carried on, so a white edge stays white to its very end
+        grown = np.array(Image.fromarray(lum).filter(ImageFilter.MaxFilter(9)))
+        lum = np.where(a[..., 3] > 0, lum, grown)
+        g = Image.fromarray(lum).resize((128, h), Image.LANCZOS)
+        out.append((f'mask_{key}', Image.merge('RGBA', (g, g, g, Image.new('L', g.size, 255))), cy, top))
+    return out
+
+
 GROUND_CELL, GROUND_GUT = 96, 4  # square texture per ground tile, with an edge-copied gutter
 GROUND_COLS = 10
 
@@ -953,8 +977,8 @@ def main() -> int:
     for name, img, ax, ay, s, top in road_frames():
         items.append((name, img, ax, ay, s))
         dtop[name] = top
-    # streams and shores go onto the ground page
-    overlays = [(name, img, ay, top) for name, img, ax, ay, s, top in water_frames()]
+    # streams and shores go onto the ground page, and so do the masks for the edges between grounds
+    overlays = [(name, img, ay, top) for name, img, ax, ay, s, top in water_frames()] + blend_masks()
 
     # shelf packing, tallest first; a new page (atlas1.webp, ...) when one is full.
     # The first page keeps the sheets it always had, so the order of GROUPS decides what goes where.
