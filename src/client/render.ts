@@ -704,10 +704,19 @@ export class WorldRenderer {
       const alpha = D.map((d) => Math.min(0.92, 0.45 + d * 0.2));
       sea.push({ x, y, name, tint: 0xffffff, flat: true, h: [0, 0, 0, 0], alpha });
       // deep water reaches into the shallows with a ragged edge, as the grounds do
-      if (!name.startsWith('deep')) {
-        const deepAt = (j: number) => isWater(this.biome[j]) && this.groundOf(this.biome[j], j % this.info.w, Math.floor(j / this.info.w), hash(j % this.info.w, Math.floor(j / this.info.w))).name.startsWith('deep');
-        for (const key of this.edgeKeys(x, y, deepAt)) {
-          sea.push({ x, y, name: `deep${hash(x + key.length, y + 3) < 0.7 ? 0 : 1}`, tint: 0xffffff, flat: true, over: true, h: [0, 0, 0, 0], alpha, mask: `mask_${key}` });
+      // and the unlike pictures of the same water reach into each other, so no diamonds show
+      const W0 = this.info.w;
+      const waterName = (j: number) => isWater(this.biome[j]) ? this.groundOf(this.biome[j], j % W0, Math.floor(j / W0), hash(j % W0, Math.floor(j / W0))).name : '';
+      const rank = (n: string) => (n.startsWith('deep') ? 2 : 1);
+      const names = new Set<string>();
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if ((!dx && !dy) || x + dx < 0 || y + dy < 0 || x + dx >= W0 || y + dy >= this.info.h) continue;
+        const n = waterName((y + dy) * W0 + x + dx);
+        if (n && n !== name && (rank(n) > rank(name) || (rank(n) === rank(name) && n > name))) names.add(n);
+      }
+      for (const n of [...names].sort((a, b) => rank(a) - rank(b) || (a < b ? -1 : 1))) {
+        for (const key of this.edgeKeys(x, y, (j) => waterName(j) === n)) {
+          sea.push({ x, y, name: n, tint: 0xffffff, flat: true, over: true, h: [0, 0, 0, 0], alpha, mask: `mask_${key}` });
         }
       }
       this.shoreQuads(x, y, undefined, ground);
@@ -731,7 +740,7 @@ export class WorldRenderer {
       const rapid = Math.max(...H) - Math.min(...H) > 0.3;
       ground.push({ x, y, name: 'sand0', tint: 0x6f7860 });
       ground.push({ x, y, name, tint: rapid ? 0xf2fbff : 0xd4e8f2, flat: true, h: H, alpha: H.map(() => (rapid ? 0.88 : 0.78)) });
-      if (!rapid) this.shoreQuads(x, y, H, ground);
+      this.shoreQuads(x, y, H, ground);
       return;
     }
     // the ground: one sloped quad over the heights of its four corners
@@ -793,7 +802,8 @@ export class WorldRenderer {
     }
     // rivers cut a shallow channel: the corners around them come down a little
     for (let ty = 0; ty < h; ty++) for (let tx = 0; tx < w; tx++) {
-      if (!this.bigRiver(ty * w + tx)) continue;
+      // (streams too: the big river's water then lies level where the streams run into it)
+      if (!this.isRiver(ty * w + tx)) continue;
       for (const [vx, vy] of [[tx, ty], [tx + 1, ty], [tx + 1, ty + 1], [tx, ty + 1]]) {
         const k = vy * W + vx;
         if (!this.cutDone.has(k)) { this.cutDone.add(k); vh[k] = Math.max(0, vh[k] - 0.4); }
@@ -1029,7 +1039,8 @@ export class WorldRenderer {
     }
     // stones, reeds and ferns right on the waterline, so the bank does not run as one straight edge
     const wet = this.sides(x, y, (j) => isWater(this.biome[j]) || this.bigRiver(j));
-    if (wet && this.atlas.has('w_stones')) {
+    const CH = [[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]].map(([a, c]) => this.cornerH(a, c));
+    if (wet && this.atlas.has('w_stones') && Math.max(...CH) - Math.min(...CH) < 1.2) {
       const cold = this.temp[i] / 255 < 0.4;
       const set = cold ? ['w_stones', 'w_boulder', 'w_sedge', 'w_stones'] : ['w_stones', 'w_reeds', 'w_sedge', 'w_fern0', 'w_horsetail', 'w_stones', 'w_boulder', 'w_fern2'];
       // the middle of each edge (in screen px from the tile's middle) and the way along it
