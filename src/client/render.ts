@@ -278,11 +278,11 @@ uniform vec4 uCam; // x, y offset, scale, unused
 // floor a little (as light does through real water) and lighten their crests faintly
 void main(void) {
   vec2 p = (gl_FragCoord.xy - uCam.xy) / uCam.z;
-  float t = uTime;
+  float t = uTime * 0.25; // slow, like a calm sea seen from far above
   float a = sin(p.x * 0.050 + p.y * 0.090 + t * 1.30);
   float b = sin(p.x * -0.080 + p.y * 0.060 + t * 0.95);
   float d = sin(p.x * 0.140 - p.y * 0.030 - t * 1.70);
-  vec2 off = vec2(a + 0.5 * d, b + 0.5 * a) * 1.6 * uCam.z;
+  vec2 off = vec2(a + 0.5 * d, b + 0.5 * a) * 0.6 * uCam.z;
   vec4 c = texture(uTexture, vTextureCoord + off * vTexel);
   float crest = (a * b + 0.6 * d) * 0.5;
   c.rgb += c.a * vec3(0.03, 0.045, 0.055) * crest;
