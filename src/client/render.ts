@@ -72,6 +72,8 @@ interface GroundQuad {
   x: number; y: number; name: string; tint: number; blend?: boolean; snow?: number;
   /** own corner heights (water surfaces, sea and river beds), colours and transparency instead of the ground's */
   h?: number[]; tints?: number[]; alpha?: number[]; flat?: boolean;
+  /** a sprite laid over the tile instead of a ground square: its page and the diamond's corners on it */
+  page?: number; uv?: number[][];
 }
 
 const GROUND_VERT = `
@@ -99,10 +101,10 @@ void main() {
   vec4 c = texture2D(uTexture, vUV);
   // the colours come premultiplied by their alpha
   float a = uColor.a * uWorldColorAlpha.a * vColor.a;
-  gl_FragColor = vec4(c.rgb * vColor.rgb * vColor.a * uColor.rgb * uWorldColorAlpha.rgb, a);
+  gl_FragColor = vec4(c.rgb * vColor.rgb * vColor.a * uColor.rgb * uWorldColorAlpha.rgb, a * c.a);
 }`;
 
-interface Frame { x: number; y: number; w: number; h: number; ax: number; ay: number; s: number; p?: number }
+interface Frame { x: number; y: number; w: number; h: number; ax: number; ay: number; s: number; p?: number; dt?: number }
 
 export class Atlas {
   tex: Record<string, Texture> = {};
@@ -110,6 +112,8 @@ export class Atlas {
   /** ground tops unwarped into squares (u: top->right corner, v: top->left corner), for the sloped ground mesh */
   ground: { source: ImageSource; size: number; cells: Record<string, [number, number, number]> } | null = null;
   private pages: { url: string; size: [number, number] }[] = [];
+  /** the atlas pages as textures, for meshes that lay a sprite over the sloped ground */
+  sources: ImageSource[] = [];
 
   /** a sprite as a small picture for the page (a span with the atlas as background), fitted into size px */
   html(name: string, size: number, cls = 'sprite-ico'): string {
@@ -148,12 +152,21 @@ export class Atlas {
       const source = new ImageSource({ resource: img, autoGenerateMipmaps: true, scaleMode: 'linear', mipmapFilter: 'linear', maxAnisotropy: 4, addressMode: 'clamp-to-edge' });
       a.ground = { source, size: meta.ground.size[0], cells: meta.ground.cells };
     }
+    a.sources = sources;
     a.frames = meta.frames;
     a.pages = files.map((file, i) => ({ url: `${base}/${file}${v}`, size: meta.pages?.[i]?.size ?? meta.size ?? [2048, 2048] }));
     for (const [name, f] of Object.entries(a.frames)) {
       a.tex[name] = new Texture({ source: sources[f.p ?? 0], frame: new Rectangle(f.x, f.y, f.w, f.h) });
     }
     return a;
+  }
+
+  /** where the diamond of a tile frame lies on its page: top, right, bottom, left corner in pixels */
+  diamond(name: string): { page: number; uv: number[][] } | null {
+    const f = this.frames[name];
+    if (!f || f.dt === undefined) return null;
+    const cy = f.y + f.ay * f.h, top = f.y + f.dt;
+    return { page: f.p ?? 0, uv: [[f.x + f.w / 2, top], [f.x + f.w, cy], [f.x + f.w / 2, 2 * cy - top], [f.x, cy]] };
   }
 
   has(name: string): boolean {
@@ -271,6 +284,8 @@ export class WorldRenderer {
   roadLayer = new Container();
   roads = new Uint8Array(0);
   roadSprites = new Map<number, Sprite>();
+  /** the roads of a chunk, laid over the sloped ground as meshes */
+  roadChunks = new Map<number, Container>();
   /** railway tracks, over the roads and the snow */
   railLayer = new Container();
   railSprites = new Map<number, Sprite>();
@@ -300,7 +315,7 @@ export class WorldRenderer {
   level!: Uint8Array;
   /** height of every tile corner ((w+1)*(h+1), in levels): the ground is one smooth sloped surface over them */
   vh!: Float32Array;
-  private groundShader: Shader | null = null;
+  private meshShaders = new Map<ImageSource, Shader>();
   /** depth of the sea floor at every corner, in levels below the water */
   private wd = new Float32Array(0);
   private cutDone = new Set<number>();
@@ -463,6 +478,7 @@ export class WorldRenderer {
     this.buildTerrain();
     this.roads = new Uint8Array(info.w * info.h);
     this.roadSprites.clear();
+    this.roadChunks.clear();
     this.roadLayer = new Container();
     this.terrainLayer.addChild(this.roadLayer);
     this.railSprites.clear();
@@ -726,21 +742,37 @@ export class WorldRenderer {
     return Math.max(0.68, Math.min(1.18, 1 + g * 0.075));
   }
 
-  private groundMesh(quads: GroundQuad[]): Mesh<Geometry, Shader> | null {
-    const G = this.atlas.ground;
-    if (!G || !quads.length) return null;
-    const { w, h } = this.info;
-    if (!this.groundShader) {
-      this.groundShader = Shader.from({
-        gl: { vertex: GROUND_VERT, fragment: GROUND_FRAG },
-        resources: { uTexture: G.source, uSampler: G.source.style },
-      });
+  private shaderFor(src: ImageSource): Shader {
+    let sh = this.meshShaders.get(src);
+    if (!sh) {
+      sh = Shader.from({ gl: { vertex: GROUND_VERT, fragment: GROUND_FRAG }, resources: { uTexture: src, uSampler: src.style } });
+      this.meshShaders.set(src, sh);
     }
+    return sh;
+  }
+
+  /** the sprites laid over the ground (streams, shores), one mesh per atlas page */
+  private overlayMeshes(quads: GroundQuad[], into: Container) {
+    const pages = new Map<number, GroundQuad[]>();
+    for (const q of quads) (pages.get(q.page!) ?? pages.set(q.page!, []).get(q.page!)!).push(q);
+    for (const [pg, list] of pages) {
+      const m = this.groundMesh(list, this.atlas.sources[pg]);
+      if (m) into.addChild(m);
+    }
+  }
+
+  private groundMesh(quads: GroundQuad[], page?: ImageSource): Mesh<Geometry, Shader> | null {
+    const G0 = this.atlas.ground;
+    if (!G0 || !quads.length) return null;
+    const src = page ?? G0.source;
+    const G = { size: page ? page.width : G0.size, cells: G0.cells };
+    const sizeV = page ? page.height : G0.size;
+    const { w, h } = this.info;
     const pos: number[] = [], uv: number[] = [], col: number[] = [], idx: number[] = [];
     let v = 0;
     const vert = (px: number, py: number, u: number, t: number, c: number, l: number, a = 1) => {
       pos.push(px, py);
-      uv.push(u / G.size, t / G.size);
+      uv.push(u / G.size, t / sizeV);
       col.push(((c >> 16) & 255) / 255 * l, ((c >> 8) & 255) / 255 * l, (c & 255) / 255 * l, a);
       v++;
     };
@@ -748,12 +780,15 @@ export class WorldRenderer {
       for (const o of diag02 ? [0, 1, 2, 0, 2, 3] : [0, 1, 3, 1, 2, 3]) idx.push(a + o);
     };
     for (const q of quads) {
-      const cell = G.cells[q.name] ?? G.cells[q.name.replace(/\d+$/, '0')];
-      if (!cell) continue;
-      const [u0, v0, c] = cell;
+      let UV = q.uv;
+      if (!UV) {
+        const cell = G.cells[q.name] ?? G.cells[q.name.replace(/\d+$/, '0')];
+        if (!cell) continue;
+        const [u0, v0, c] = cell;
+        UV = [[u0, v0], [u0 + c, v0], [u0 + c, v0 + c], [u0, v0 + c]];
+      }
       // top, right, bottom, left corner of the tile
       const C = [[q.x, q.y], [q.x + 1, q.y], [q.x + 1, q.y + 1], [q.x, q.y + 1]];
-      const UV = [[u0, v0], [u0 + c, v0], [u0 + c, v0 + c], [u0, v0 + c]];
       const H = q.h ?? C.map(([cx, cy]) => this.cornerH(cx, cy));
       const a = v;
       for (let j = 0; j < 4; j++) {
@@ -778,7 +813,7 @@ export class WorldRenderer {
         quad(b, true);
       };
       const ground = [-1, -1, -1, -1];
-      const edgeFace = !q.h || q.alpha; // a sea floor needs none, the water over it has it
+      const edgeFace = !q.uv && (!q.h || q.alpha); // a sea floor needs none, the water over it has it
       if (edgeFace && q.x === w - 1) skirt(1, 2, ground, 0.5, 0.4, q.alpha ? 0.9 : 1);
       if (edgeFace && q.y === h - 1) skirt(2, 3, ground, 0.5, 0.4, q.alpha ? 0.9 : 1);
     }
@@ -786,7 +821,7 @@ export class WorldRenderer {
       attributes: { aPosition: new Float32Array(pos), aUV: new Float32Array(uv), aColor: new Float32Array(col) },
       indexBuffer: new Uint32Array(idx),
     });
-    return new Mesh({ geometry, shader: this.groundShader });
+    return new Mesh({ geometry, shader: this.shaderFor(src) });
   }
 
   private placeObjects(x: number, y: number, objs: Container, list: WorldObject[]) {
@@ -935,7 +970,15 @@ export class WorldRenderer {
       if (y > 0) redo.add(i - w);
       if (y < h - 1) redo.add(i + w);
     }
-    for (const i of redo) { this.drawRoad(i); this.drawRail(i); }
+    const chunks = new Set<number>();
+    const nch = Math.ceil(w / CHUNK);
+    for (const i of redo) {
+      this.drawRoad(i);
+      this.drawRail(i);
+      const x = i % w, y = (i - x) / w;
+      chunks.add(Math.floor(y / CHUNK) * nch + Math.floor(x / CHUNK));
+    }
+    for (const c of chunks) this.drawRoadChunk(c);
     // bushes and stones do not stand on a road
     for (const list of this.objChunks.values()) for (const o of list) if (o.kind === 'other' && !o.isStump && this.roads[o.i]) o.s.visible = false;
     // keep the road sprites in drawing order (back to front)
@@ -972,21 +1015,23 @@ export class WorldRenderer {
     if (!old) { this.railLayer.addChild(s); this.railSprites.set(i, s); }
   }
 
+  private roadMask(x: number, y: number): number {
+    const { w } = this.info;
+    const has = (xx: number, yy: number) => xx >= 0 && yy >= 0 && xx < w && yy < this.info.h && (this.roads[yy * w + xx] & 3) > 0;
+    // 1 upper-left (-x), 2 upper-right (-y), 4 lower-right (+x), 8 lower-left (+y)
+    return (has(x - 1, y) ? 1 : 0) | (has(x, y - 1) ? 2 : 0) | (has(x + 1, y) ? 4 : 0) | (has(x, y + 1) ? 8 : 0);
+  }
+
+  /** bridges stand as sprites; the roads on land follow the slopes (drawRoadChunk) */
   private drawRoad(i: number) {
     const { w } = this.info;
     const lvl = this.roads[i] & 3;
     const old = this.roadSprites.get(i);
-    if (!lvl) { if (old) { old.destroy(); this.roadSprites.delete(i); } return; }
+    if (!lvl || !this.isRiver(i)) { if (old) { old.destroy(); this.roadSprites.delete(i); } return; }
     const x = i % w, y = (i - x) / w;
-    const has = (xx: number, yy: number) => xx >= 0 && yy >= 0 && xx < w && yy < this.info.h && (this.roads[yy * w + xx] & 3) > 0;
-    // 1 upper-left (-x), 2 upper-right (-y), 4 lower-right (+x), 8 lower-left (+y)
-    const mask = (has(x - 1, y) ? 1 : 0) | (has(x, y - 1) ? 2 : 0) | (has(x + 1, y) ? 4 : 0) | (has(x, y + 1) ? 8 : 0);
-    let name = `road${lvl}_${mask || 5}`;
-    let flip = false;
-    if (this.isRiver(i)) {
-      name = `bridge${lvl}`;
-      flip = (mask & 10) === 0; // the drawn bridge goes along y; along x it is mirrored
-    }
+    const mask = this.roadMask(x, y);
+    const name = `bridge${lvl}`;
+    const flip = (mask & 10) === 0; // the drawn bridge goes along y; along x it is mirrored
     if (!this.atlas.has(name)) return;
     const s = old ?? this.atlas.sprite(name);
     if (old) this.atlas.set(s, name);
@@ -994,6 +1039,30 @@ export class WorldRenderer {
     const p = this.tileTop(x, y);
     s.position.set(p.x, p.y);
     if (!old) { this.roadLayer.addChild(s); this.roadSprites.set(i, s); }
+  }
+
+  private drawRoadChunk(c: number) {
+    const { w, h } = this.info;
+    const nch = Math.ceil(w / CHUNK);
+    const cx = (c % nch) * CHUNK, cy = Math.floor(c / nch) * CHUNK;
+    this.roadChunks.get(c)?.destroy({ children: true });
+    this.roadChunks.delete(c);
+    const quads: GroundQuad[] = [];
+    for (let y = cy; y < Math.min(h, cy + CHUNK); y++) {
+      for (let x = cx; x < Math.min(w, cx + CHUNK); x++) {
+        const i = y * w + x;
+        const lvl = this.roads[i] & 3;
+        if (!lvl || this.isRiver(i)) continue;
+        const d = this.atlas.diamond(`road${lvl}_${this.roadMask(x, y) || 5}`);
+        if (!d) continue;
+        quads.push({ x, y, name: '', tint: 0xffffff, page: d.page, uv: d.uv });
+      }
+    }
+    if (!quads.length) return;
+    const box = new Container();
+    this.overlayMeshes(quads, box);
+    this.roadLayer.addChildAt(box, 0);
+    this.roadChunks.set(c, box);
   }
 
   /** all the trees at once (snapshot), base64 bytes 0..4 */

@@ -502,6 +502,12 @@ for pre, a, b in (('e2', 'BS', 'BT'), ('e4', 'BU', 'BV'), ('e5', 'BW', 'BX'), ('
 group('sym', 'AQ101 AQ102 AQ103 AQ104 AQ105 AQ106 AQ107 AQ108 AQ109 AQ110 AQ201 AQ202 AQ203 AQ204 AQ205 AQ206 AQ207 AQ208 AQ209 AQ210 AQ301 AQ302 AQ303 AQ304 AQ305 AQ306 AQ307 AQ308 AQ309 AQ310 AQ401 AQ402 AQ403 AQ404 AQ405 AQ406 AQ407 AQ408 AQ409 AQ410 AQ501 AQ502 AQ503 AQ504 AQ505 AQ506 AQ507 AQ508 AQ509 AQ510 AR101 AR102 AR103 AR104 AR105 AR106 AR107 AR108 AR109 AR110 AR201 AR202 AR203 AR204 AR205 AR206 AR207 AR208 AR209 AR210 AR301 AR302 AR303 AR304 AR305 AR306 AR307 AR308 AR309 AR310 AR401 AR402 AR403 AR404 AR405 AR406 AR407 AR408 AR409 AR410 AR501 AR502 AR503 AR504 AR505 AR506 AR507 AR508 AR509 AR510', 'symbol', 6, 64)
 
 
+# plants and stones by the water (sheet DX), placed along rivers, streams and shores
+for _k, _n in enumerate(['fern0', 'fern1', 'fern2', 'fern3', 'reeds', 'cattail', 'iris', 'sedge',
+                         'lily0', 'lily1', 'stones', 'boulder', 'willow', 'log', 'horsetail', 'marigold']):
+    group('w_' + _n, f'DX{_k // 4 + 1}{_k % 4 + 1}', 'thing', 0.042, 0)
+
+
 def resize(img: Image.Image, w: int, h: int) -> Image.Image:
     return img.convert('RGBa').resize((w, h), Image.LANCZOS).convert('RGBA')
 
@@ -609,11 +615,16 @@ ROAD_CELLS = {5: '11', 10: '12', 15: '13', 4: '14', 6: '22', 9: '24', 14: '31', 
 ROAD_ENDS = {1: '42', 2: '43', 4: '14', 8: '41'}
 
 
-def road_overlay(img: Image.Image, cy: float) -> Image.Image:
+def road_overlay(img: Image.Image, cy: float, mesh: bool = False) -> Image.Image:
     """Only the road of a road tile, as an overlay on any ground: the grass around it, stray tufts and
     the tile's front rim are cut away, and only the big connected pieces of road stay."""
-    t = np.array(top_only(img, cy)).astype(np.float32)
+    # a road laid as a mesh shows only the tile's diamond, so the paving keeps its own colours up to
+    # the edges and reaches the next tile; a sprite (bridge) needs its side wall cut away
+    t = np.array(img if mesh else top_only(img, cy)).astype(np.float32)
     h, w = t.shape[:2]
+    if mesh:
+        ys, xs = np.mgrid[0:h, 0:w]
+        t[ys > cy + (w / 4) * (1 - np.abs(xs - w / 2) / (w / 2)) + 1, 3] = 0
     rgb = t[..., :3] / 255
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
     mx, mn = rgb.max(-1), rgb.min(-1)
@@ -665,14 +676,14 @@ def road_frames() -> list:
             h = max(1, round(h0 * 128 / w0))
             img = resize(src, 128, h)
             ay = corner_y(a) / h0
-            over[key] = (road_overlay(img, ay * h), ay)
+            over[key] = (road_overlay(img, ay * h, key != 'bridge'), ay, round(diamond_top(a, w0) * h / h0, 2))
             if geo is None:
-                geo = (ay, (TW + 3) / 128, h)
-        ay, s, h = geo
+                geo = (ay, (TW + 3) / 128, h, over[key][2])
+        ay, s, h, top = geo
         for mask in range(1, 16):
             if mask in over:
-                im, a_y = over[mask]
-                items.append((f'road{lvl}_{mask}', im, 0.5, a_y, s))
+                im, a_y, t = over[mask]
+                items.append((f'road{lvl}_{mask}', im, 0.5, a_y, s, t))
                 continue
             # no drawn tile for this shape: the dead ends of its edges meet in the middle
             im = Image.new('RGBA', (128, h), (0, 0, 0, 0))
@@ -680,9 +691,83 @@ def road_frames() -> list:
                 if mask & bit:
                     e = over[bit][0]
                     im.alpha_composite(e.crop((0, 0, 128, h)) if e.size[1] >= h else e, (0, 0))
-            items.append((f'road{lvl}_{mask}', im, 0.5, ay, s))
-        im, a_y = over['bridge']
-        items.append((f'bridge{lvl}', im, 0.5, a_y, s))
+            items.append((f'road{lvl}_{mask}', im, 0.5, ay, s, top))
+        im, a_y, t = over['bridge']
+        items.append((f'bridge{lvl}', im, 0.5, a_y, s, t))
+    return items
+
+
+# thin streams (sheet DV), laid like the roads: the bits say which edges the stream leaves by
+STREAM_CELLS = {5: '11', 10: '12', 15: '13', 4: '14', 3: '21', 6: '22', 12: '23', 9: '24',
+                14: '31', 13: '32', 11: '33', 7: '34', 8: '41', 1: '42', 2: '43'}
+# shores (sheet DW): land reaching into a water tile from its edges (1 upper-left, 2 upper-right,
+# 4 lower-right, 8 lower-left), two shapes each; bays over two edges; points at a corner (t, r, b, l)
+SHORE_CELLS = {'1a': '11', '2a': '12', '4a': '13', '8a': '14', '1b': '21', '2b': '22', '4b': '23', '8b': '24',
+               '3': '31', '6': '32', '12': '33', '9': '34', 't': '41', 'r': '42', 'b': '43', 'l': '44'}
+
+
+def diamond_top(a: np.ndarray, w: int) -> float:
+    m = a[..., 3] > 0
+    return float(np.nonzero(m[:, w // 2 - 3:w // 2 + 4].any(1))[0].min())
+
+
+def water_overlay(img: Image.Image) -> Image.Image:
+    """The land of a shore tile, without its water: sand, stones, reeds and the foam at the waterline stay."""
+    t = np.array(img).astype(np.float32)
+    rgb = t[..., :3] / 255
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    mx, mn = rgb.max(-1), rgb.min(-1)
+    d = np.maximum(mx - mn, 1e-6)
+    sat = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-6), 0)
+    hue = np.where(mx == r, ((g - b) / d) % 6, np.where(mx == g, (b - r) / d + 2, (r - g) / d + 4)) * 60
+    water = (hue > 160) & (hue < 230) & (sat > 0.22)
+    m = Image.fromarray((((t[..., 3] > 200) & ~water) * 255).astype(np.uint8))
+    m = m.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.GaussianBlur(0.8))
+    out = t.copy()
+    out[..., 3] = np.minimum(np.array(m).astype(np.float32), t[..., 3])
+    out[out[..., 3] == 0, :3] = 0
+    return Image.fromarray(out.astype(np.uint8))
+
+
+def stream_overlay(img: Image.Image, cy: float) -> Image.Image:
+    """Only the stream of a stream tile: its water and the stones and earth right along it; the grass goes."""
+    t = np.array(top_only(img, cy)).astype(np.float32)
+    rgb = t[..., :3] / 255
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    mx, mn = rgb.max(-1), rgb.min(-1)
+    d = np.maximum(mx - mn, 1e-6)
+    sat = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-6), 0)
+    hue = np.where(mx == r, ((g - b) / d) % 6, np.where(mx == g, (b - r) / d + 2, (r - g) / d + 4)) * 60
+    solid = t[..., 3] > 200
+    water = solid & (hue > 155) & (hue < 235) & (sat > 0.18)
+    grass = (hue > 50) & (hue < 150) & (sat > 0.3)
+    near = np.array(Image.fromarray((water * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(9))) > 0
+    keep = water | (near & solid & ~grass)
+    m = Image.fromarray((keep * 255).astype(np.uint8))
+    m = m.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.7))
+    out = t.copy()
+    out[..., 3] = np.minimum(np.array(m).astype(np.float32), t[..., 3])
+    out[out[..., 3] == 0, :3] = 0
+    return Image.fromarray(out.astype(np.uint8))
+
+
+def water_frames() -> list:
+    """(name, image, ax, ay, s, diamond top y) for the stream and shore overlays"""
+    items = []
+    for sheet, cells, prefix, cut in (('DV', STREAM_CELLS, 'stream', stream_overlay), ('DW', SHORE_CELLS, 'shore', None)):
+        for key, c in cells.items():
+            path = os.path.join(CUT, f'{sheet}{c}.png')
+            if not os.path.exists(path):
+                continue
+            src = Image.open(path).convert('RGBA')
+            a = np.array(src)
+            w0, h0 = src.size
+            h = max(1, round(h0 * 128 / w0))
+            img = resize(src, 128, h)
+            ay = corner_y(a) / h0
+            top = diamond_top(a, w0) * h / h0
+            over = cut(img, ay * h) if cut else water_overlay(img)
+            items.append((f'{prefix}_{key}', over, 0.5, ay, (TW + 3) / 128, round(top, 2)))
     return items
 
 
@@ -849,7 +934,10 @@ def main() -> int:
             else:
                 items.append((name, img, 0.5, ay, s))
 
-    items += road_frames()
+    dtop = {}
+    for name, img, ax, ay, s, top in road_frames() + water_frames():
+        items.append((name, img, ax, ay, s))
+        dtop[name] = top
 
     # shelf packing, tallest first; a new page (atlas1.webp, ...) when one is full.
     # The first page keeps the sheets it always had, so the order of GROUPS decides what goes where.
@@ -875,6 +963,8 @@ def main() -> int:
                 continue
             atlas.paste(img, (x, y))
             frames[name] = {'x': x, 'y': y, 'w': w, 'h': h, 'ax': ax, 'ay': round(ay, 4), 's': round(s, 5), 'p': len(pages)}
+            if name in dtop:
+                frames[name]['dt'] = dtop[name]  # where the top corner of the tile's diamond lies in the frame
             x += w + PAD
             shelf = max(shelf, h)
             bottom = max(bottom, y + h)
