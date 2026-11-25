@@ -72,8 +72,6 @@ interface GroundQuad {
   x: number; y: number; name: string; tint: number; blend?: boolean; snow?: number;
   /** own corner heights (water surfaces, sea and river beds), colours and transparency instead of the ground's */
   h?: number[]; tints?: number[]; alpha?: number[]; flat?: boolean;
-  /** river: the water level of the tile to the right and in front where it is lower, for a small waterfall */
-  falls?: (number | null)[];
 }
 
 const GROUND_VERT = `
@@ -580,16 +578,22 @@ export class WorldRenderer {
     }
     if (this.isRiver(i)) {
       // the river bed follows the slope; the water lies level in it and steps down in small falls
-      const top = this.riverTop(x, y);
-      // a fall only where the water in front lies clearly lower
-      const front = (fx: number, fy: number) => {
-        if (fx >= this.info.w || fy >= this.info.h) return null;
-        const j = fy * this.info.w + fx;
-        const t = isWater(this.biome[j]) ? 0 : this.isRiver(j) ? this.riverTop(fx, fy) : null;
-        return t !== null && t < top - 0.3 ? t : null;
-      };
-      ground.push({ x, y, name: 'sand0', tint: 0x9c8c6c });
-      ground.push({ x, y, name, tint: 0xd4e8f2, flat: true, h: [top, top, top, top], alpha: [0.78, 0.78, 0.78, 0.78], falls: [front(x + 1, y), front(x, y + 1)] });
+      // the water at each corner lies as low as the lowest water touching it: level where the river is level,
+      // a sloping rapid on the tile where it comes down
+      const H = [[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]].map(([cx, cy]) => {
+        let t = Infinity;
+        for (let ty = cy - 1; ty <= cy; ty++) for (let tx = cx - 1; tx <= cx; tx++) {
+          if (tx < 0 || ty < 0 || tx >= this.info.w || ty >= this.info.h) continue;
+          const j = ty * this.info.w + tx;
+          if (isWater(this.biome[j])) t = Math.min(t, 0);
+          else if (this.isRiver(j)) t = Math.min(t, this.riverTop(tx, ty));
+        }
+        // at the banks the water meets the ground exactly, so no strip of the bed shows under its edge
+        return Math.min(t, this.cornerH(cx, cy) + 0.02);
+      });
+      const rapid = Math.max(...H) - Math.min(...H) > 0.3;
+      ground.push({ x, y, name: 'sand0', tint: 0x6f7860 });
+      ground.push({ x, y, name, tint: rapid ? 0xf2fbff : 0xd4e8f2, flat: true, h: H, alpha: H.map(() => (rapid ? 0.88 : 0.78)) });
       return;
     }
     // the ground: one sloped quad over the heights of its four corners
@@ -663,7 +667,7 @@ export class WorldRenderer {
     return this.vh[vy * (w + 1) + vx];
   }
 
-  /** a river lies level on its tile, a little under the tile's own height; it steps down where the land does */
+  /** a river lies level on its tile, a little under the tile's own height; it runs down in rapids where the land does */
   private riverTop(x: number, y: number): number {
     return Math.max(0.05, this.level[y * this.info.w + x] - 0.2);
   }
@@ -777,11 +781,6 @@ export class WorldRenderer {
       const edgeFace = !q.h || q.alpha; // a sea floor needs none, the water over it has it
       if (edgeFace && q.x === w - 1) skirt(1, 2, ground, 0.5, 0.4, q.alpha ? 0.9 : 1);
       if (edgeFace && q.y === h - 1) skirt(2, 3, ground, 0.5, 0.4, q.alpha ? 0.9 : 1);
-      if (q.falls) {
-        const [r, f] = q.falls;
-        if (r !== null) skirt(1, 2, [r, r, r, r], 1.25, 1, 0.85);
-        if (f !== null) skirt(2, 3, [f, f, f, f], 1.25, 1, 0.85);
-      }
     }
     const geometry = new Geometry({
       attributes: { aPosition: new Float32Array(pos), aUV: new Float32Array(uv), aColor: new Float32Array(col) },
