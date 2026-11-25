@@ -82,6 +82,10 @@ interface GroundQuad {
   mask?: string;
   /** the ground square turned a quarter (roads along y: their ruts and rows of stones go along the road) */
   rot?: boolean;
+  /** water running across the tile: [along u (+x), along v (+y)] in squares per second */
+  flow?: [number, number];
+  /** light ripples running along the flow over the water of a drawn stream */
+  ripple?: boolean;
 }
 
 const GROUND_VERT = `
@@ -89,9 +93,13 @@ in vec2 aPosition;
 in vec2 aUV;
 in vec4 aColor;
 in vec2 aMask;
+in vec3 aFlow;
+in vec3 aCell;
 out vec2 vUV;
 out vec4 vColor;
 out vec2 vMask;
+out vec3 vFlow;
+out vec3 vCell;
 uniform mat3 uProjectionMatrix;
 uniform mat3 uWorldTransformMatrix;
 uniform mat3 uTransformMatrix;
@@ -101,16 +109,40 @@ void main() {
   vUV = aUV;
   vColor = aColor;
   vMask = aMask;
+  vFlow = aFlow;
+  vCell = aCell;
 }`;
 const GROUND_FRAG = `
 in vec2 vUV;
 in vec4 vColor;
 in vec2 vMask;
+in vec3 vFlow;
+in vec3 vCell;
 uniform sampler2D uTexture;
+uniform float uTime;
 uniform vec4 uColor;
 uniform vec4 uWorldColorAlpha;
 void main() {
-  vec4 c = texture2D(uTexture, vUV);
+  vec2 uv = vUV;
+  // river water runs downstream: its square slides along the flow, wrapping round (the squares tile)
+  // river water runs downstream: small swells travel along the flow and bend its picture
+  // (no sliding with a wrap: without derivatives in this shader the wrap would show as seams)
+  vec2 dir = vFlow.z > 0.5 ? normalize(vFlow.xy) : vec2(0.0);
+  float speed = length(vFlow.xy);
+  if (vFlow.z > 0.5 && vFlow.z < 1.5) {
+    vec2 local = (vUV - vCell.xy) / vCell.z;
+    float ph = dot(local, dir) * 12.566 - uTime * speed * 40.0;
+    local += dir * 0.035 * sin(ph) + vec2(-dir.y, dir.x) * 0.015 * sin(ph * 0.7 + local.x * 5.0);
+    uv = vCell.xy + clamp(local, 0.005, 0.995) * vCell.z;
+  }
+  vec4 c = texture2D(uTexture, uv);
+  // a thin stream is drawn with its banks, so it does not slide: light ripples run down its water instead
+  if (vFlow.z > 0.5) {
+    vec2 local = (vUV - vCell.xy) / vCell.z;
+    float wet = vFlow.z > 1.5 ? clamp((c.b - c.r) * 4.0 - 0.4, 0.0, 1.0) : 1.0;
+    float band = 0.5 + 0.5 * sin(dot(local, dir) * 28.0 - uTime * (vFlow.z > 1.5 ? 3.0 : speed * 30.0) + sin(dot(local, vec2(-dir.y, dir.x)) * 9.0));
+    c.rgb += wet * c.a * vec3(0.10, 0.12, 0.13) * band * band * band;
+  }
   // a ground reaching over the edge into the tile next to it shows only where its mask is white
   // (red: how much shows, green: how bright, for the darker edges of a road)
   if (vMask.x >= 0.0) { vec4 m = texture2D(uTexture, vMask); c *= m.r; c.rgb *= m.g; }
@@ -555,6 +587,23 @@ export class WorldRenderer {
     return best;
   }
 
+  /** which way a big river runs on its tile: towards the sea or lake next to it, else to the next river
+   * tile that carries more water, else downhill; [dx, dy] */
+  private riverFlow(i: number): [number, number] {
+    const { w, h } = this.info;
+    const x = i % w, y = (i - x) / w;
+    let best: [number, number] = [0, 0], score = -Infinity;
+    for (const [dx, dy] of [[-1, 0], [0, -1], [1, 0], [0, 1]]) {
+      if (x + dx < 0 || y + dy < 0 || x + dx >= w || y + dy >= h) continue;
+      const j = i + dy * w + dx;
+      let sc = -Infinity;
+      if (isWater(this.biome[j])) sc = 1e6;
+      else if (this.isRiver(j)) sc = (this.river[j] - this.river[i]) + (this.level[i] - this.level[j]) * 50;
+      if (sc > score) { score = sc; best = [dx, dy]; }
+    }
+    return best;
+  }
+
   /** neighbours (1 = -x, 2 = -y, 4 = +x, 8 = +y) for which ok() holds */
   private sides(x: number, y: number, ok: (j: number) => boolean): number {
     const { w, h } = this.info;
@@ -755,7 +804,9 @@ export class WorldRenderer {
       });
       const rapid = Math.max(...H) - Math.min(...H) > 0.3;
       ground.push({ x, y, name: 'sand0', tint: 0x6f7860 });
-      ground.push({ x, y, name, tint: rapid ? 0xf2fbff : 0xd4e8f2, flat: true, h: H, alpha: H.map(() => (rapid ? 0.88 : 0.78)) });
+      const dir = this.riverFlow(i);
+      const sp = rapid ? 0.35 : 0.1;
+      ground.push({ x, y, name, tint: rapid ? 0xf2fbff : 0xd4e8f2, flat: true, h: H, alpha: H.map(() => (rapid ? 0.88 : 0.78)), flow: [dir[0] * sp, dir[1] * sp] });
       this.shoreQuads(x, y, H, ground);
       return;
     }
@@ -773,7 +824,9 @@ export class WorldRenderer {
       // a thin stream through the grass, joined to the streams, rivers and sea next to it
       // joined only along its own course: downstream, and to the streams that flow into it
       const down = this.downstream(i);
-      ground.push({ x, y, name: `stream_${this.sides(x, y, (j) => j === down || (this.isStream(j) && this.downstream(j) === i)) || 4}`, tint: 0xffffff, over: true });
+      const W0 = this.info.w;
+      const f: [number, number] = down >= 0 ? [down % W0 - x, Math.floor(down / W0) - y] : [1, 0];
+      ground.push({ x, y, name: `stream_${this.sides(x, y, (j) => j === down || (this.isStream(j) && this.downstream(j) === i)) || 4}`, tint: 0xffffff, over: true, flow: f, ripple: true });
     }
     // winter snow, faded in by season
     const t = this.temp[i] / 255;
@@ -920,7 +973,7 @@ export class WorldRenderer {
   private shaderFor(src: ImageSource): Shader {
     let sh = this.meshShaders.get(src);
     if (!sh) {
-      sh = Shader.from({ gl: { vertex: GROUND_VERT, fragment: GROUND_FRAG }, resources: { uTexture: src, uSampler: src.style } });
+      sh = Shader.from({ gl: { vertex: GROUND_VERT, fragment: GROUND_FRAG }, resources: { uTexture: src, uSampler: src.style, groundUniforms: { uTime: { value: 0, type: 'f32' } } } });
       this.meshShaders.set(src, sh);
     }
     return sh;
@@ -943,14 +996,17 @@ export class WorldRenderer {
     const G = { size: page ? page.width : G0.size, cells: G0.cells };
     const sizeV = page ? page.height : G0.size;
     const { w, h } = this.info;
-    const pos: number[] = [], uv: number[] = [], col: number[] = [], idx: number[] = [], mk: number[] = [];
+    const pos: number[] = [], uv: number[] = [], col: number[] = [], idx: number[] = [], mk: number[] = [], fl: number[] = [], ce: number[] = [];
     let v = 0;
+    let FL: number[] = [0, 0, 0], CE: number[] = [0, 0, 1];
     let MK: number[][] | null = null;
     let mj = 0;
     const vert = (px: number, py: number, u: number, t: number, c: number, l: number, a = 1) => {
       pos.push(px, py);
       uv.push(u / G.size, t / sizeV);
       if (MK) mk.push(MK[mj][0] / G.size, MK[mj][1] / sizeV); else mk.push(-1, -1);
+      fl.push(FL[0], FL[1], FL[2]);
+      ce.push(CE[0], CE[1], CE[2]);
       col.push(((c >> 16) & 255) / 255 * l, ((c >> 8) & 255) / 255 * l, (c & 255) / 255 * l, a);
       v++;
     };
@@ -965,6 +1021,13 @@ export class WorldRenderer {
         const [u0, v0, c] = cell;
         UV = [[u0, v0], [u0 + c, v0], [u0 + c, v0 + c], [u0, v0 + c]];
         if (q.rot) UV = [UV[3], UV[0], UV[1], UV[2]];
+      }
+      FL = [0, 0, 0];
+      CE = [0, 0, 1];
+      if (q.flow && !q.uv) {
+        const cell = G.cells[q.name] ?? G.cells[q.name.replace(/\d+$/, '0')];
+        FL = [q.flow[0], q.flow[1], q.ripple ? 2 : 1];
+        CE = [cell[0] / G.size, cell[1] / sizeV, cell[2] / G.size];
       }
       MK = null;
       const mc = q.mask ? G.cells[q.mask] : undefined;
@@ -1005,7 +1068,7 @@ export class WorldRenderer {
       if (edgeFace && q.y === h - 1) skirt(2, 3, ground, 0.5, 0.4, q.alpha ? 0.9 : 1);
     }
     const geometry = new Geometry({
-      attributes: { aPosition: new Float32Array(pos), aUV: new Float32Array(uv), aColor: new Float32Array(col), aMask: new Float32Array(mk) },
+      attributes: { aPosition: new Float32Array(pos), aUV: new Float32Array(uv), aColor: new Float32Array(col), aMask: new Float32Array(mk), aFlow: new Float32Array(fl), aCell: new Float32Array(ce) },
       indexBuffer: new Uint32Array(idx),
     });
     return new Mesh({ geometry, shader: this.shaderFor(src) });
@@ -1855,6 +1918,7 @@ export class WorldRenderer {
       if ((this.waterLayer.filters?.length ?? 0) !== (want?.length ?? 0)) this.waterLayer.filters = want;
       const u = this.waterFilter.resources.waterUniforms.uniforms;
       u.uTime = this.time;
+      for (const sh of this.meshShaders.values()) sh.resources.groundUniforms.uniforms.uTime = this.time;
       const s = this.world.scale.x;
       const res = this.app.renderer.resolution;
       const H = this.app.renderer.height;
