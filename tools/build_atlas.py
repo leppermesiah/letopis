@@ -16,6 +16,7 @@ from PIL import Image, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CUT = os.path.join(ROOT, 'art', 'cut')
+SHEETS = os.path.join(ROOT, 'art', 'sheets')
 OUT = os.path.join(ROOT, 'public', 'sprites')
 ATLAS = 2048
 PAD = 4
@@ -791,7 +792,8 @@ def blend_masks() -> list:
         grown = np.array(Image.fromarray(lum).filter(ImageFilter.MaxFilter(9)))
         lum = np.where(a[..., 3] > 0, lum, grown)
         g = Image.fromarray(lum).resize((128, h), Image.LANCZOS)
-        out.append((f'mask_{key}', Image.merge('RGBA', (g, g, g, Image.new('L', g.size, 255))), cy, top))
+        # red: how much shows; green: its brightness (full here)
+        out.append((f'mask_{key}', Image.merge('RGBA', (g, Image.new('L', g.size, 255), g, Image.new('L', g.size, 255))), cy, top))
     return out
 
 
@@ -833,14 +835,70 @@ def overlay_square(img: Image.Image, cy: float, top: float) -> Image.Image:
     return Image.fromarray(np.pad(sq, ((GROUND_GUT,) * 2, (GROUND_GUT,) * 2, (0, 0)), mode='edge'))
 
 
-def ground_page(overlays: list) -> dict:
+def seamless(img: np.ndarray) -> np.ndarray:
+    """Towards its edges a picture fades into itself shifted by half, so it repeats without a seam."""
+    n = img.shape[0]
+    t = (np.arange(n) + 0.5) / n
+    e = np.clip(np.minimum(t, 1 - t) / 0.3, 0, 1)
+    e = e * e * (3 - 2 * e)
+    m = np.minimum(e[:, None], e[None, :])[..., None]
+    return img * m + np.roll(img, (n // 2, n // 2), (0, 1)) * (1 - m)
+
+
+def road_squares() -> list:
+    """(name, square, wrap) for the roads: the surfaces (sheet DZ: dirt, cobbles, asphalt, slabs; seen from
+    above, laid along u) and the shapes of the road on a tile (rmask_<bits>, bits as for the roads:
+    1 = -x, 2 = -y, 4 = +x, 8 = +y; u runs along +x, v along +y). Red is how much of the road shows,
+    green its brightness: a little darker at its edges."""
+    path = os.path.join(SHEETS, 'DZ-road-textures.png')
+    if not os.path.exists(path):
+        return []
+    inner = GROUND_CELL - 2 * GROUND_GUT
+    sheet = Image.open(path).convert('RGB')
+    W, H = sheet.size
+    out = []
+    for k in range(4):
+        x0, y0 = (k % 2) * W // 2, (k // 2) * H // 2
+        q = W // 2
+        # half of the picture over a tile: the stones keep a size that fits a road a third of a tile wide
+        crop = sheet.crop((x0 + q // 8, y0 + q // 8, x0 + q // 8 + q // 2, y0 + q // 8 + q // 2)).resize((inner, inner), Image.LANCZOS)
+        out.append((f'road_tex{k + 1}', Image.fromarray(seamless(np.array(crop).astype(np.float32)).round().astype(np.uint8)), True))
+    N = inner * 4  # drawn large, then scaled down for soft edges
+    ys, xs = np.mgrid[0:N, 0:N]
+    u, v = (xs + 0.5) / N, (ys + 0.5) / N
+    rng = np.random.default_rng(7)
+    noise = np.array(Image.fromarray((rng.random((24, 24)) * 255).astype(np.uint8)).resize((N, N), Image.BICUBIC)).astype(np.float32) / 255 - 0.5
+    # the ragged edge stays straight near the tile's edges, so neighbours meet exactly
+    near_edge = np.clip(np.minimum.reduce([u, v, 1 - u, 1 - v]) / 0.15, 0, 1)
+    half = 0.17
+    ends = {1: (0.0, 0.5), 2: (0.5, 0.0), 4: (1.0, 0.5), 8: (0.5, 1.0)}
+    for bits in range(16):
+        d = np.full((N, N), 9.0)
+        arms = [b for b in (1, 2, 4, 8) if bits & b] or [1, 4]
+        for b in arms:
+            ex, ey = ends[b]
+            # distance to the segment from the middle to the edge
+            px, py = u - 0.5, v - 0.5
+            dx, dy = ex - 0.5, ey - 0.5
+            tt = np.clip((px * dx + py * dy) / (dx * dx + dy * dy), 0, 1)
+            d = np.minimum(d, np.hypot(px - tt * dx, py - tt * dy))
+        d = d + noise * 0.05 * near_edge
+        cover = np.clip((half - d) * N / 3, 0, 1)
+        bright = 0.72 + 0.28 * np.clip((half - d) / 0.05, 0, 1)
+        r = Image.fromarray((cover * 255).astype(np.uint8)).resize((inner, inner), Image.LANCZOS)
+        g = Image.fromarray((bright * 255).astype(np.uint8)).resize((inner, inner), Image.LANCZOS)
+        out.append((f'rmask_{bits}', Image.merge('RGB', (r, g, Image.new('L', r.size, 0))), False))
+    return out
+
+
+def ground_page(overlays: list, squares: list = ()) -> dict:
     names = []
     for prefix, ids, kind, _world, _tex in GROUPS:
         if kind != 'tile' or prefix == 'trod' or not all(os.path.exists(os.path.join(CUT, f'{c}.png')) for c in ids):
             continue
         for k, cid in enumerate(ids):
             names.append((prefix if len(ids) == 1 else f'{prefix}{k}', cid))
-    rows = (len(names) + len(overlays) + GROUND_COLS - 1) // GROUND_COLS
+    rows = (len(names) + len(overlays) + len(squares) + GROUND_COLS - 1) // GROUND_COLS
     size = 1
     while size < max(GROUND_COLS, rows) * GROUND_CELL:
         size *= 2
@@ -854,6 +912,12 @@ def ground_page(overlays: list) -> dict:
         n = len(names) + k
         x, y = (n % GROUND_COLS) * GROUND_CELL, (n // GROUND_COLS) * GROUND_CELL
         page.paste(overlay_square(img, ay * img.size[1], top), (x, y))
+        index[name] = [x + GROUND_GUT, y + GROUND_GUT, GROUND_CELL - 2 * GROUND_GUT]
+    for k, (name, img, wrap) in enumerate(squares):
+        n = len(names) + len(overlays) + k
+        x, y = (n % GROUND_COLS) * GROUND_CELL, (n // GROUND_COLS) * GROUND_CELL
+        a = np.array(img.convert('RGBA'))
+        page.paste(Image.fromarray(np.pad(a, ((GROUND_GUT,) * 2, (GROUND_GUT,) * 2, (0, 0)), mode='wrap' if wrap else 'edge')), (x, y))
         index[name] = [x + GROUND_GUT, y + GROUND_GUT, GROUND_CELL - 2 * GROUND_GUT]
     page.save(os.path.join(OUT, 'ground.webp'), 'WEBP', quality=90, method=5, exact=True)
     print(f'ground.webp: {len(index)} squares')
@@ -1024,7 +1088,7 @@ def main() -> int:
             return 1
         rest = left
     with open(os.path.join(OUT, 'atlas.json'), 'w', encoding='utf-8') as f:
-        json.dump({'size': pages[0]['size'], 'pages': pages, 'ground': ground_page(overlays), 'frames': dict(sorted(frames.items()))}, f, separators=(',', ':'))
+        json.dump({'size': pages[0]['size'], 'pages': pages, 'ground': ground_page(overlays, road_squares()), 'frames': dict(sorted(frames.items()))}, f, separators=(',', ':'))
     print(f'{len(frames)} frames on {len(pages)} pages')
     return 0
 

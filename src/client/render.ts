@@ -80,6 +80,8 @@ interface GroundQuad {
   over?: boolean;
   /** the ragged mask (on the ground page) that cuts this ground where it reaches into a neighbour */
   mask?: string;
+  /** the ground square turned a quarter (roads along y: their ruts and rows of stones go along the road) */
+  rot?: boolean;
 }
 
 const GROUND_VERT = `
@@ -110,7 +112,8 @@ uniform vec4 uWorldColorAlpha;
 void main() {
   vec4 c = texture2D(uTexture, vUV);
   // a ground reaching over the edge into the tile next to it shows only where its mask is white
-  if (vMask.x >= 0.0) c *= texture2D(uTexture, vMask).r;
+  // (red: how much shows, green: how bright, for the darker edges of a road)
+  if (vMask.x >= 0.0) { vec4 m = texture2D(uTexture, vMask); c *= m.r; c.rgb *= m.g; }
   // the colours come premultiplied by their alpha
   float a = uColor.a * uWorldColorAlpha.a * vColor.a;
   gl_FragColor = vec4(c.rgb * vColor.rgb * vColor.a * uColor.rgb * uWorldColorAlpha.rgb, a * c.a);
@@ -929,6 +932,7 @@ export class WorldRenderer {
         if (!cell) continue;
         const [u0, v0, c] = cell;
         UV = [[u0, v0], [u0 + c, v0], [u0 + c, v0 + c], [u0, v0 + c]];
+        if (q.rot) UV = [UV[3], UV[0], UV[1], UV[2]];
       }
       MK = null;
       const mc = q.mask ? G.cells[q.mask] : undefined;
@@ -1225,14 +1229,14 @@ export class WorldRenderer {
         const i = y * w + x;
         const lvl = this.roads[i] & 3;
         if (!lvl || this.isRiver(i)) continue;
-        const d = this.atlas.diamond(`road${lvl}_${this.roadMask(x, y) || 5}`);
-        if (!d) continue;
-        quads.push({ x, y, name: '', tint: 0xffffff, page: d.page, uv: d.uv });
+        const m = this.roadMask(x, y);
+        quads.push({ x, y, name: `road_tex${lvl}`, tint: 0xffffff, over: true, mask: `rmask_${m}`, rot: (m & 5) === 0 && m !== 0 });
       }
     }
     if (!quads.length) return;
     const box = new Container();
-    this.overlayMeshes(quads, box);
+    const mesh = this.groundMesh(quads);
+    if (mesh) box.addChild(mesh);
     this.roadLayer.addChildAt(box, 0);
     this.roadChunks.set(c, box);
   }
