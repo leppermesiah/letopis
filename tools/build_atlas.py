@@ -610,18 +610,41 @@ ROAD_ENDS = {1: '42', 2: '43', 4: '14', 8: '41'}
 
 
 def road_overlay(img: Image.Image, cy: float) -> Image.Image:
+    """Only the road of a road tile, as an overlay on any ground: the grass around it, stray tufts and
+    the tile's front rim are cut away, and only the big connected pieces of road stay."""
     t = np.array(top_only(img, cy)).astype(np.float32)
+    h, w = t.shape[:2]
     rgb = t[..., :3] / 255
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
     mx, mn = rgb.max(-1), rgb.min(-1)
     d = np.maximum(mx - mn, 1e-6)
     sat = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-6), 0)
     hue = np.where(mx == r, ((g - b) / d) % 6, np.where(mx == g, (b - r) / d + 2, (r - g) / d + 4)) * 60
-    grass = (hue > 62) & (hue < 170) & (sat > 0.2)
+    # green grass, and the olive of dry grass (the paving is a paler, more orange tan)
+    grass = (((hue > 62) & (sat > 0.2)) | ((hue > 46) & (sat > 0.3))) & (hue < 170)
     road = (t[..., 3] > 200) & ~grass
     m = Image.fromarray((road * 255).astype(np.uint8))
     m = m.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.MaxFilter(5))  # flowers and pebbles out
-    m = m.filter(ImageFilter.GaussianBlur(0.8))
+    m = m.filter(ImageFilter.MaxFilter(7)).filter(ImageFilter.MinFilter(7))  # small holes in the paving closed
+    keep = np.array(m) > 127
+    # connected pieces: small ones are tufts and stones, not road
+    seen = np.zeros_like(keep)
+    for y0, x0 in zip(*np.nonzero(keep)):
+        if seen[y0, x0]:
+            continue
+        stack, comp = [(y0, x0)], []
+        seen[y0, x0] = True
+        while stack:
+            y, x = stack.pop()
+            comp.append((y, x))
+            for yy, xx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                if 0 <= yy < h and 0 <= xx < w and keep[yy, xx] and not seen[yy, xx]:
+                    seen[yy, xx] = True
+                    stack.append((yy, xx))
+        if len(comp) < 250:
+            for y, x in comp:
+                keep[y, x] = False
+    m = Image.fromarray((keep * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.8))
     out = t.copy()
     out[..., 3] = np.minimum(np.array(m).astype(np.float32), t[..., 3])
     out[out[..., 3] == 0, :3] = 0
