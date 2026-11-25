@@ -56,6 +56,11 @@ function stripes(g: Graphics, w: number, h: number) {
   g.stroke({ color: 0xffffff, width: 3, alpha: 0.75 });
 }
 
+function mixColor(a: number, b: number, t: number): number {
+  const ch = (s: number) => Math.round(((a >> s) & 255) * (1 - t) + ((b >> s) & 255) * t) << s;
+  return ch(16) | ch(8) | ch(0);
+}
+
 function pick<T>(list: T[], n: number): T {
   return list[Math.min(list.length - 1, Math.floor(n * list.length))];
 }
@@ -63,7 +68,13 @@ function pick<T>(list: T[], n: number): T {
 // ---------- sprite atlas (made by tools/build_atlas.py from the AI sheets in art/) ----------
 
 /** one tile of the sloped ground mesh */
-interface GroundQuad { x: number; y: number; name: string; tint: number; blend?: boolean; snow?: number }
+interface GroundQuad {
+  x: number; y: number; name: string; tint: number; blend?: boolean; snow?: number;
+  /** own corner heights (water surfaces, sea and river beds), colours and transparency instead of the ground's */
+  h?: number[]; tints?: number[]; alpha?: number[]; flat?: boolean;
+  /** river: the water level of the tile to the right and in front where it is lower, for a small waterfall */
+  falls?: (number | null)[];
+}
 
 const GROUND_VERT = `
 in vec2 aPosition;
@@ -292,6 +303,9 @@ export class WorldRenderer {
   /** height of every tile corner ((w+1)*(h+1), in levels): the ground is one smooth sloped surface over them */
   vh!: Float32Array;
   private groundShader: Shader | null = null;
+  /** depth of the sea floor at every corner, in levels below the water */
+  private wd = new Float32Array(0);
+  private cutDone = new Set<number>();
   /** colour of every tile's ground (forest darker, desert warmer...), blended at the corners */
   private tints: Uint32Array | null = null;
   biome!: Uint8Array;
@@ -485,18 +499,18 @@ export class WorldRenderer {
         const cool = new Container();
         const objs = new Container();
         const list: WorldObject[] = [];
-        const ground: GroundQuad[] = [], snowC: GroundQuad[] = [], snowW: GroundQuad[] = [];
+        const ground: GroundQuad[] = [], snowC: GroundQuad[] = [], snowW: GroundQuad[] = [], seabed: GroundQuad[] = [], sea: GroundQuad[] = [];
         for (let d = 0; d <= 2 * (CHUNK - 1); d++) {
           for (let lx = 0; lx < CHUNK; lx++) {
             const ly = d - lx;
             if (ly < 0 || ly >= CHUNK) continue;
             const x = cx * CHUNK + lx, y = cy * CHUNK + ly;
             if (x >= w || y >= h) continue;
-            this.placeTile(x, y, water, ground, snowC, snowW);
+            this.placeTile(x, y, seabed, sea, ground, snowC, snowW);
             this.placeObjects(x, y, objs, list);
           }
         }
-        for (const [q, c] of [[ground, land], [snowC, cold], [snowW, cool]] as [GroundQuad[], Container][]) {
+        for (const [q, c] of [[seabed, water], [sea, water], [ground, land], [snowC, cold], [snowW, cool]] as [GroundQuad[], Container][]) {
           const m = this.groundMesh(q);
           if (m) c.addChild(m);
         }
@@ -547,7 +561,7 @@ export class WorldRenderer {
     return { name, tint };
   }
 
-  private placeTile(x: number, y: number, water: Container, ground: GroundQuad[], cold: GroundQuad[], cool: GroundQuad[]) {
+  private placeTile(x: number, y: number, seabed: GroundQuad[], sea: GroundQuad[], ground: GroundQuad[], cold: GroundQuad[], cool: GroundQuad[]) {
     const { w } = this.info;
     const i = y * w + x;
     const b = this.biome[i];
@@ -557,15 +571,29 @@ export class WorldRenderer {
     // rivers are strips of shallow water on the land
     if (this.isRiver(i)) { name = `shallow${hash(x, y + 3) < 0.7 ? 0 : 1}`; tint = 0xe8f4ff; }
     if (isWater(b)) {
-      // water at the map edge shows its side, inside the sea only the surface
-      const edge = x === this.info.w - 1 || y === this.info.h - 1;
-      const s = this.atlas.sprite(edge ? name : name + '_t');
-      s.position.set(p.x, p.y + TH / 2);
-      water.addChild(s);
+      // a sandy floor that sinks away from the shore, and over it a level, see-through water surface
+      const W1 = this.info.w + 1;
+      const D = [y * W1 + x, y * W1 + x + 1, (y + 1) * W1 + x + 1, (y + 1) * W1 + x].map((k) => this.wd[k]);
+      seabed.push({ x, y, name: 'sand1', tint: 0xffffff, flat: true, h: D.map((d) => -d), tints: D.map((d) => mixColor(0xe4d4ac, 0x3c5a66, Math.min(1, d / 2.4))) });
+      sea.push({ x, y, name, tint: 0xffffff, flat: true, h: [0, 0, 0, 0], alpha: D.map((d) => Math.min(0.92, 0.45 + d * 0.2)) });
+      return;
+    }
+    if (this.isRiver(i)) {
+      // the river bed follows the slope; the water lies level in it and steps down in small falls
+      const top = this.riverTop(x, y);
+      // a fall only where the water in front lies clearly lower
+      const front = (fx: number, fy: number) => {
+        if (fx >= this.info.w || fy >= this.info.h) return null;
+        const j = fy * this.info.w + fx;
+        const t = isWater(this.biome[j]) ? 0 : this.isRiver(j) ? this.riverTop(fx, fy) : null;
+        return t !== null && t < top - 0.3 ? t : null;
+      };
+      ground.push({ x, y, name: 'sand0', tint: 0x9c8c6c });
+      ground.push({ x, y, name, tint: 0xd4e8f2, flat: true, h: [top, top, top, top], alpha: [0.78, 0.78, 0.78, 0.78], falls: [front(x + 1, y), front(x, y + 1)] });
       return;
     }
     // the ground: one sloped quad over the heights of its four corners
-    ground.push({ x, y, name, tint, blend: !this.isRiver(i) });
+    ground.push({ x, y, name, tint, blend: true });
     // winter snow, faded in by season
     const t = this.temp[i] / 255;
     if (b !== Biome.Snow && !this.isRiver(i)) {
@@ -594,6 +622,37 @@ export class WorldRenderer {
         vh[vy * W + vx] = wet || !n ? 0 : sum / n;
       }
     }
+    // rivers cut a shallow channel: the corners around them come down a little
+    for (let ty = 0; ty < h; ty++) for (let tx = 0; tx < w; tx++) {
+      if (!this.isRiver(ty * w + tx)) continue;
+      for (const [vx, vy] of [[tx, ty], [tx + 1, ty], [tx + 1, ty + 1], [tx, ty + 1]]) {
+        const k = vy * W + vx;
+        if (!this.cutDone.has(k)) { this.cutDone.add(k); vh[k] = Math.max(0, vh[k] - 0.4); }
+        // and never above the water lying on it
+        vh[k] = Math.min(vh[k], Math.max(0, this.riverTop(tx, ty) - 0.25));
+      }
+    }
+    this.cutDone.clear();
+    // depth of the sea floor at every corner out in the water (0 at the shore)
+    const depthOf = (i: number) => {
+      const b = this.biome[i];
+      if (b === Biome.DeepWater) return 2.6;
+      if (b === Biome.Lake) return 1.1;
+      return this.groundOf(b, i % w, Math.floor(i / w), 0).name.startsWith('deep') ? 2.2 : 0.9;
+    };
+    this.wd = new Float32Array(W * (h + 1));
+    for (let vy = 0; vy <= h; vy++) {
+      for (let vx = 0; vx <= w; vx++) {
+        let sum = 0, n = 0, dry = false;
+        for (let ty = vy - 1; ty <= vy; ty++) for (let tx = vx - 1; tx <= vx; tx++) {
+          if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+          const i = ty * w + tx;
+          if (!isWater(this.biome[i])) { dry = true; break; }
+          sum += depthOf(i); n++;
+        }
+        this.wd[vy * W + vx] = dry || !n ? 0 : sum / n;
+      }
+    }
     return vh;
   }
 
@@ -602,6 +661,11 @@ export class WorldRenderer {
     vx = Math.max(0, Math.min(w, vx));
     vy = Math.max(0, Math.min(h, vy));
     return this.vh[vy * (w + 1) + vx];
+  }
+
+  /** a river lies level on its tile, a little under the tile's own height; it steps down where the land does */
+  private riverTop(x: number, y: number): number {
+    return Math.max(0.05, this.level[y * this.info.w + x] - 0.2);
   }
 
   /** height of the ground (in levels) at a point of the grid, between the corners */
@@ -668,21 +732,16 @@ export class WorldRenderer {
         resources: { uTexture: G.source, uSampler: G.source.style },
       });
     }
-    // four corners per tile, and a dark skirt down the map's front edges
-    const edges = quads.reduce((k, q) => k + (q.x === w - 1 ? 1 : 0) + (q.y === h - 1 ? 1 : 0), 0);
-    const nv = (quads.length + edges) * 4;
-    const pos = new Float32Array(nv * 2), uv = new Float32Array(nv * 2), col = new Float32Array(nv * 4);
-    const idx = new Uint32Array((quads.length + edges) * 6);
-    let v = 0, k = 0;
+    const pos: number[] = [], uv: number[] = [], col: number[] = [], idx: number[] = [];
+    let v = 0;
     const vert = (px: number, py: number, u: number, t: number, c: number, l: number, a = 1) => {
-      pos[v * 2] = px; pos[v * 2 + 1] = py;
-      uv[v * 2] = u / G.size; uv[v * 2 + 1] = t / G.size;
-      col[v * 4] = ((c >> 16) & 255) / 255 * l; col[v * 4 + 1] = ((c >> 8) & 255) / 255 * l; col[v * 4 + 2] = (c & 255) / 255 * l; col[v * 4 + 3] = a;
+      pos.push(px, py);
+      uv.push(u / G.size, t / G.size);
+      col.push(((c >> 16) & 255) / 255 * l, ((c >> 8) & 255) / 255 * l, (c & 255) / 255 * l, a);
       v++;
     };
     const quad = (a: number, diag02: boolean) => {
-      const t = diag02 ? [0, 1, 2, 0, 2, 3] : [0, 1, 3, 1, 2, 3];
-      for (const o of t) idx[k++] = a + o;
+      for (const o of diag02 ? [0, 1, 2, 0, 2, 3] : [0, 1, 3, 1, 2, 3]) idx.push(a + o);
     };
     for (const q of quads) {
       const cell = G.cells[q.name] ?? G.cells[q.name.replace(/\d+$/, '0')];
@@ -691,34 +750,42 @@ export class WorldRenderer {
       // top, right, bottom, left corner of the tile
       const C = [[q.x, q.y], [q.x + 1, q.y], [q.x + 1, q.y + 1], [q.x, q.y + 1]];
       const UV = [[u0, v0], [u0 + c, v0], [u0 + c, v0 + c], [u0, v0 + c]];
-      const H = C.map(([cx, cy]) => this.cornerH(cx, cy));
+      const H = q.h ?? C.map(([cx, cy]) => this.cornerH(cx, cy));
       const a = v;
       for (let j = 0; j < 4; j++) {
         const p = iso(C[j][0], C[j][1]);
-        const tint = q.blend ? this.cornerTint(C[j][0], C[j][1], q.tint) : q.tint;
-        const a = q.snow ? Math.min(1, this.snowCover(C[j][0], C[j][1], q.snow) * 1.25) : 1;
-        vert(p.x, p.y - H[j] * ELEV, UV[j][0], UV[j][1], tint, this.cornerLight(C[j][0], C[j][1]), a);
+        const tint = q.tints ? q.tints[j] : q.blend ? this.cornerTint(C[j][0], C[j][1], q.tint) : q.tint;
+        const al = q.alpha ? q.alpha[j] : q.snow ? Math.min(1, this.snowCover(C[j][0], C[j][1], q.snow) * 1.25) : 1;
+        vert(p.x, p.y - H[j] * ELEV, UV[j][0], UV[j][1], tint, q.flat ? 1 : this.cornerLight(C[j][0], C[j][1]), al);
       }
       // fold the quad along the flatter diagonal
       quad(a, Math.abs(H[0] - H[2]) <= Math.abs(H[1] - H[3]));
-      const skirt = (j0: number, j1: number) => {
+      // a face down from the front edge: the map's edge, or a little waterfall where a river steps down
+      const skirt = (j0: number, j1: number, to: number[], l0: number, l1: number, al = 1) => {
         const b = v;
         for (const j of [j0, j1]) {
           const p = iso(C[j][0], C[j][1]);
-          vert(p.x, p.y - H[j] * ELEV, UV[j][0], UV[j][1], q.tint, 0.5);
+          vert(p.x, p.y - H[j] * ELEV, UV[j][0], UV[j][1], q.tint, l0, al);
         }
         for (const j of [j1, j0]) {
           const p = iso(C[j][0], C[j][1]);
-          vert(p.x, p.y + ELEV, UV[j][0], UV[j][1], q.tint, 0.4);
+          vert(p.x, p.y - to[j] * ELEV, UV[j][0], UV[j][1], q.tint, l1, al);
         }
         quad(b, true);
       };
-      if (q.x === w - 1) skirt(1, 2);
-      if (q.y === h - 1) skirt(2, 3);
+      const ground = [-1, -1, -1, -1];
+      const edgeFace = !q.h || q.alpha; // a sea floor needs none, the water over it has it
+      if (edgeFace && q.x === w - 1) skirt(1, 2, ground, 0.5, 0.4, q.alpha ? 0.9 : 1);
+      if (edgeFace && q.y === h - 1) skirt(2, 3, ground, 0.5, 0.4, q.alpha ? 0.9 : 1);
+      if (q.falls) {
+        const [r, f] = q.falls;
+        if (r !== null) skirt(1, 2, [r, r, r, r], 1.25, 1, 0.85);
+        if (f !== null) skirt(2, 3, [f, f, f, f], 1.25, 1, 0.85);
+      }
     }
     const geometry = new Geometry({
-      attributes: { aPosition: pos.subarray(0, v * 2), aUV: uv.subarray(0, v * 2), aColor: col.subarray(0, v * 4) },
-      indexBuffer: idx.subarray(0, k),
+      attributes: { aPosition: new Float32Array(pos), aUV: new Float32Array(uv), aColor: new Float32Array(col) },
+      indexBuffer: new Uint32Array(idx),
     });
     return new Mesh({ geometry, shader: this.groundShader });
   }
