@@ -736,8 +736,8 @@ export class WorldRenderer {
         break;
       }
       case Biome.Lake: name = n < 0.35 ? `lily${v}` : `shallow${v % 2}`; break;
-      case Biome.Beach: name = `sand${v}`; break;
-      case Biome.Desert: name = this.mars ? 'sand0' : `sand${v % 2}`; tint = 0xf2d6a8; break; // no sea shells on Mars
+      case Biome.Beach: name = hash(x + 5, y * 7 + 3) < 0.12 ? `sand${1 + (v % 3)}` : 'sand0'; break; // shells only here and there
+      case Biome.Desert: name = !this.mars && hash(x + 5, y * 7 + 3) < 0.04 ? 'sand1' : 'sand0'; tint = 0xf2d6a8; break; // a rare shell, none on Mars
       case Biome.Grassland: name = n < 0.22 ? `meadow${v}` : `grass${v}`; break;
       case Biome.Plains: name = `steppe${v}`; break;
       case Biome.Forest: name = `grass${v}`; tint = 0xd6e8c8; break;
