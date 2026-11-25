@@ -2045,6 +2045,8 @@ export class Simulation {
       }
       // on Mars nobody wanders: a group that leaves builds its own dome at once
       if (this.mars && !b.settled) this.settleNew(b);
+      // from the iron age on nobody wanders any more: a clan on the move settles down (herders and fishers too)
+      if (!this.mars && !b.settled && !b.scout && this.s.era >= 3 && this.rng.chance(0.03)) this.settle(b, m);
       // nomads move with the seasons and the game
       // nomads stay while there is wood around the camp; only a real famine drives them off earlier
       if (!b.settled && !b.scout) {
@@ -2347,9 +2349,10 @@ export class Simulation {
           a.met.push(b.id);
           b.met.push(a.id);
           if (this.rng.chance(0.4)) {
-            this.emit('meet', 1, `${this.bandLabel(a, true)} и ${this.bandLabel(b)} се срещнаха край ${this.featureNear(a)}. Размениха си кремък и истории.`, undefined, undefined, a.id, this.bRefs(b),
-              [`${this.bandEnLabel(a, true)} and ${this.bandEnLabel(b)} met by ${FEATURE_EN[this.featureNear(a)] ?? 'the river'}. They traded flint and stories.`],
-              [`${this.bDe(a, 'nom', true)} und ${this.bDe(b, 'nom')} trafen sich ${FEATURE_DE[this.featureNear(a)] ?? 'am Fluss'}. Sie tauschten Feuerstein und Geschichten.`]);
+            const [gBg, gEn, gDe] = this.meetGoods(a, b);
+            this.emit('meet', 1, `${this.bandLabel(a, true)} и ${this.bandLabel(b)} се срещнаха край ${this.featureNear(a)}. ${gBg}`, undefined, undefined, a.id, this.bRefs(b),
+              [`${this.bandEnLabel(a, true)} and ${this.bandEnLabel(b)} met by ${FEATURE_EN[this.featureNear(a)] ?? 'the river'}. ${gEn}`],
+              [`${this.bDe(a, 'nom', true)} und ${this.bDe(b, 'nom')} trafen sich ${FEATURE_DE[this.featureNear(a)] ?? 'am Fluss'}. ${gDe}`]);
           }
         }
         // knowledge travels between neighbours
@@ -2376,6 +2379,19 @@ export class Simulation {
         }
       }
     }
+  }
+
+  /** what two bands trade when they first meet, by what both of them know */
+  private meetGoods(a: Band, b: Band): [string, string, string] {
+    const both = (t: string) => this.hasTech(a, t) && this.hasTech(b, t);
+    if (both('internet') || both('computer')) return ['Сключиха търговски договор.', 'They signed a trade agreement.', 'Sie schlossen ein Handelsabkommen.'];
+    if (both('factory')) return ['Размениха си стоки от фабриките.', 'They traded goods from their factories.', 'Sie tauschten Waren aus ihren Fabriken.'];
+    if (both('banking') || both('caravel')) return ['Сключиха сделка за подправки и платове.', 'They struck a deal for spices and cloth.', 'Sie schlossen einen Handel über Gewürze und Tuch.'];
+    if (both('guilds')) return ['Размениха си платове, сол и новини.', 'They traded cloth, salt and news.', 'Sie tauschten Tuch, Salz und Neuigkeiten.'];
+    if (both('coins')) return ['Размениха си зърно, сол и сребърни монети.', 'They traded grain, salt and silver coins.', 'Sie tauschten Getreide, Salz und Silbermünzen.'];
+    if (both('trade')) return ['Размениха си мед, сол и истории.', 'They traded copper, salt and stories.', 'Sie tauschten Kupfer, Salz und Geschichten.'];
+    if (both('pottery')) return ['Размениха си гърнета, зърно и истории.', 'They traded pots, grain and stories.', 'Sie tauschten Töpfe, Getreide und Geschichten.'];
+    return ['Размениха си кремък и истории.', 'They traded flint and stories.', 'Sie tauschten Feuerstein und Geschichten.'];
   }
 
   private canUse(b: Band, tech: string): boolean {
