@@ -2427,6 +2427,18 @@ export class Simulation {
         if (!this.t.explored[i]) { this.t.explored[i] = 1; this.exploredDirty = true; }
       }
     }
+    // and every person sees 3 tiles around where they are (hunting, gathering, out in the fields)
+    const seen = new Set<number>();
+    for (const p of this.s.people) {
+      const cx = Math.round(p.x), cy = Math.round(p.y);
+      if (!inBounds(cx, cy) || seen.has(idx(cx, cy))) continue;
+      seen.add(idx(cx, cy));
+      for (let y = cy - 3; y <= cy + 3; y++) for (let x = cx - 3; x <= cx + 3; x++) {
+        if (!inBounds(x, y) || (x - cx) ** 2 + (y - cy) ** 2 > 9) continue;
+        const i = idx(x, y);
+        if (!this.t.explored[i]) { this.t.explored[i] = 1; this.exploredDirty = true; }
+      }
+    }
     if (this.exploredDirty || !this.fogChecked) { this.fogChecked = true; this.liftFog(); }
   }
 
