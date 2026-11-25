@@ -694,7 +694,15 @@ export class WorldRenderer {
       const W1 = this.info.w + 1;
       const D = [y * W1 + x, y * W1 + x + 1, (y + 1) * W1 + x + 1, (y + 1) * W1 + x].map((k) => this.wd[k]);
       seabed.push({ x, y, name: 'sand1', tint: 0xffffff, flat: true, h: D.map((d) => -d), tints: D.map((d) => mixColor(0xe4d4ac, 0x3c5a66, Math.min(1, d / 2.4))) });
-      sea.push({ x, y, name, tint: 0xffffff, flat: true, h: [0, 0, 0, 0], alpha: D.map((d) => Math.min(0.92, 0.45 + d * 0.2)) });
+      const alpha = D.map((d) => Math.min(0.92, 0.45 + d * 0.2));
+      sea.push({ x, y, name, tint: 0xffffff, flat: true, h: [0, 0, 0, 0], alpha });
+      // deep water reaches into the shallows with a ragged edge, as the grounds do
+      if (!name.startsWith('deep')) {
+        const deepAt = (j: number) => isWater(this.biome[j]) && this.groundOf(this.biome[j], j % this.info.w, Math.floor(j / this.info.w), hash(j % this.info.w, Math.floor(j / this.info.w))).name.startsWith('deep');
+        for (const key of this.edgeKeys(x, y, deepAt)) {
+          sea.push({ x, y, name: `deep${hash(x + key.length, y + 3) < 0.7 ? 0 : 1}`, tint: 0xffffff, flat: true, over: true, h: [0, 0, 0, 0], alpha, mask: `mask_${key}` });
+        }
+      }
       this.shoreQuads(x, y, undefined, ground);
       return;
     }
