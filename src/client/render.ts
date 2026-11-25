@@ -254,6 +254,7 @@ export function bandSymbol(name: string, id: number): number {
 const WATER_VERT = `
 in vec2 aPosition;
 out vec2 vTextureCoord;
+out vec2 vTexel;
 uniform vec4 uInputSize;
 uniform vec4 uOutputFrame;
 uniform vec4 uOutputTexture;
@@ -264,21 +265,27 @@ vec4 filterVertexPosition(void) {
   return vec4(position, 0.0, 1.0);
 }
 vec2 filterTextureCoord(void) { return aPosition * (uOutputFrame.zw * uInputSize.zw); }
-void main(void) { gl_Position = filterVertexPosition(); vTextureCoord = filterTextureCoord(); }
+void main(void) { gl_Position = filterVertexPosition(); vTextureCoord = filterTextureCoord(); vTexel = uInputSize.zw; }
 `;
 const WATER_FRAG = `
 in vec2 vTextureCoord;
+in vec2 vTexel;
 out vec4 finalColor;
 uniform sampler2D uTexture;
 uniform float uTime;
 uniform vec4 uCam; // x, y offset, scale, unused
+// the water moves: a few slow swells, crossing each other, bend the picture of the water and the sea
+// floor a little (as light does through real water) and lighten their crests faintly
 void main(void) {
-  vec4 c = texture(uTexture, vTextureCoord);
   vec2 p = (gl_FragCoord.xy - uCam.xy) / uCam.z;
-  float w = sin(p.x * 0.09 + uTime * 1.1) * sin(p.y * 0.21 - uTime * 0.8)
-          + 0.5 * sin((p.x + p.y) * 0.05 - uTime * 0.6);
-  float glint = smoothstep(1.1, 1.45, w);
-  c.rgb += c.a * (vec3(0.02, 0.035, 0.05) * w + vec3(0.16, 0.2, 0.22) * glint);
+  float t = uTime;
+  float a = sin(p.x * 0.050 + p.y * 0.090 + t * 1.30);
+  float b = sin(p.x * -0.080 + p.y * 0.060 + t * 0.95);
+  float d = sin(p.x * 0.140 - p.y * 0.030 - t * 1.70);
+  vec2 off = vec2(a + 0.5 * d, b + 0.5 * a) * 1.6 * uCam.z;
+  vec4 c = texture(uTexture, vTextureCoord + off * vTexel);
+  float crest = (a * b + 0.6 * d) * 0.5;
+  c.rgb += c.a * vec3(0.03, 0.045, 0.055) * crest;
   finalColor = c;
 }
 `;
