@@ -799,24 +799,39 @@ def ground_square(src: Image.Image) -> Image.Image:
     return Image.fromarray(np.pad(img.round().astype(np.uint8), ((GROUND_GUT,) * 2, (GROUND_GUT,) * 2, (0, 0)), mode='edge'))
 
 
-def ground_page() -> dict:
+def overlay_square(img: Image.Image, cy: float, top: float) -> Image.Image:
+    """An overlay (stream, shore) unwarped like the ground squares, keeping its transparency, so the game
+    lays it over the ground in the same mesh, tile by tile, and hills in front still hide it."""
+    w = img.size[0]
+    q = ((w / 2, top), (0, cy), (w / 2, 2 * cy - top), (w, cy))
+    inner = GROUND_CELL - 2 * GROUND_GUT
+    sq = np.array(img.transform((inner, inner), Image.QUAD, tuple(float(v) for pt in q for v in pt), Image.BICUBIC))
+    return Image.fromarray(np.pad(sq, ((GROUND_GUT,) * 2, (GROUND_GUT,) * 2, (0, 0)), mode='edge'))
+
+
+def ground_page(overlays: list) -> dict:
     names = []
     for prefix, ids, kind, _world, _tex in GROUPS:
         if kind != 'tile' or prefix == 'trod' or not all(os.path.exists(os.path.join(CUT, f'{c}.png')) for c in ids):
             continue
         for k, cid in enumerate(ids):
             names.append((prefix if len(ids) == 1 else f'{prefix}{k}', cid))
-    rows = (len(names) + GROUND_COLS - 1) // GROUND_COLS
+    rows = (len(names) + len(overlays) + GROUND_COLS - 1) // GROUND_COLS
     size = 1
     while size < max(GROUND_COLS, rows) * GROUND_CELL:
         size *= 2
-    page = Image.new('RGB', (size, size))
+    page = Image.new('RGBA', (size, size), (0, 0, 0, 255))
     index = {}
     for n, (name, cid) in enumerate(names):
         x, y = (n % GROUND_COLS) * GROUND_CELL, (n // GROUND_COLS) * GROUND_CELL
         page.paste(ground_square(Image.open(os.path.join(CUT, f'{cid}.png')).convert('RGBA')), (x, y))
         index[name] = [x + GROUND_GUT, y + GROUND_GUT, GROUND_CELL - 2 * GROUND_GUT]
-    page.save(os.path.join(OUT, 'ground.webp'), 'WEBP', quality=90, method=5)
+    for k, (name, img, ay, top) in enumerate(overlays):
+        n = len(names) + k
+        x, y = (n % GROUND_COLS) * GROUND_CELL, (n // GROUND_COLS) * GROUND_CELL
+        page.paste(overlay_square(img, ay * img.size[1], top), (x, y))
+        index[name] = [x + GROUND_GUT, y + GROUND_GUT, GROUND_CELL - 2 * GROUND_GUT]
+    page.save(os.path.join(OUT, 'ground.webp'), 'WEBP', quality=90, method=5, exact=True)
     print(f'ground.webp: {len(index)} squares')
     return {'file': 'ground.webp', 'size': [size, size], 'cells': index}
 
@@ -935,9 +950,11 @@ def main() -> int:
                 items.append((name, img, 0.5, ay, s))
 
     dtop = {}
-    for name, img, ax, ay, s, top in road_frames() + water_frames():
+    for name, img, ax, ay, s, top in road_frames():
         items.append((name, img, ax, ay, s))
         dtop[name] = top
+    # streams and shores go onto the ground page
+    overlays = [(name, img, ay, top) for name, img, ax, ay, s, top in water_frames()]
 
     # shelf packing, tallest first; a new page (atlas1.webp, ...) when one is full.
     # The first page keeps the sheets it always had, so the order of GROUPS decides what goes where.
@@ -983,7 +1000,7 @@ def main() -> int:
             return 1
         rest = left
     with open(os.path.join(OUT, 'atlas.json'), 'w', encoding='utf-8') as f:
-        json.dump({'size': pages[0]['size'], 'pages': pages, 'ground': ground_page(), 'frames': dict(sorted(frames.items()))}, f, separators=(',', ':'))
+        json.dump({'size': pages[0]['size'], 'pages': pages, 'ground': ground_page(overlays), 'frames': dict(sorted(frames.items()))}, f, separators=(',', ':'))
     print(f'{len(frames)} frames on {len(pages)} pages')
     return 0
 

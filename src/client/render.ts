@@ -21,6 +21,8 @@ type Role = 'guard' | 'bodyguard' | 'teller' | 'listener';
 /** most people of one band drawn on the map */
 const PER_BAND = 36; // pixels per height level
 const CHUNK = 16;
+/** from this much flow a river fills its tile; below it is a thin stream */
+const BIG_RIVER = 120;
 
 export function iso(x: number, y: number): { x: number; y: number } {
   return { x: (x - y) * (TW / 2), y: (x + y) * (TH / 2) };
@@ -74,6 +76,8 @@ interface GroundQuad {
   h?: number[]; tints?: number[]; alpha?: number[]; flat?: boolean;
   /** a sprite laid over the tile instead of a ground square: its page and the diamond's corners on it */
   page?: number; uv?: number[][];
+  /** a see-through square laid over the tile (stream, shore): no face down at the map's edge */
+  over?: boolean;
 }
 
 const GROUND_VERT = `
@@ -500,6 +504,60 @@ export class WorldRenderer {
     return this.river[i] >= RIVER_WATER && !isWater(this.biome[i]);
   }
 
+  /** a river big enough to fill its tile with water; a smaller one runs as a thin stream through the grass */
+  private bigRiver(i: number): boolean {
+    return this.river[i] >= BIG_RIVER && !isWater(this.biome[i]);
+  }
+
+  private isStream(i: number): boolean {
+    return this.isRiver(i) && this.river[i] < BIG_RIVER;
+  }
+
+  /** where the water of a river tile flows on: into the sea or a big river next to it, or else to the
+   * neighbour carrying the most water (more than this one); -1 at none */
+  private downstream(i: number): number {
+    const { w, h } = this.info;
+    const x = i % w, y = (i - x) / w;
+    let best = -1, flow = this.river[i];
+    for (const [dx, dy] of [[-1, 0], [0, -1], [1, 0], [0, 1]]) {
+      if (x + dx < 0 || y + dy < 0 || x + dx >= w || y + dy >= h) continue;
+      const j = i + dy * w + dx;
+      if (isWater(this.biome[j]) || this.bigRiver(j)) return j;
+      if (this.river[j] > flow) { flow = this.river[j]; best = j; }
+    }
+    return best;
+  }
+
+  /** neighbours (1 = -x, 2 = -y, 4 = +x, 8 = +y) for which ok() holds */
+  private sides(x: number, y: number, ok: (j: number) => boolean): number {
+    const { w, h } = this.info;
+    let m = 0;
+    if (x > 0 && ok(y * w + x - 1)) m |= 1;
+    if (y > 0 && ok((y - 1) * w + x)) m |= 2;
+    if (x < w - 1 && ok(y * w + x + 1)) m |= 4;
+    if (y < h - 1 && ok((y + 1) * w + x)) m |= 8;
+    return m;
+  }
+
+  /** land reaching into a water tile: broken shore pieces over its edges */
+  private shoreQuads(x: number, y: number, H: number[] | undefined, out: GroundQuad[]) {
+    const { w, h } = this.info;
+    const dry = (j: number) => !isWater(this.biome[j]) && !this.bigRiver(j);
+    const m = this.sides(x, y, dry);
+    const keys: string[] = [];
+    if (m === 3 || m === 6 || m === 12 || m === 9) keys.push(String(m));
+    else for (const bit of [1, 2, 4, 8]) if (m & bit) keys.push(`${bit}${hash(x * 5 + bit, y * 3) < 0.5 ? 'a' : 'b'}`);
+    // a point of land at a corner whose two edges are water
+    const at = (dx: number, dy: number) => x + dx >= 0 && y + dy >= 0 && x + dx < w && y + dy < h && dry((y + dy) * w + x + dx);
+    if (!(m & 3) && at(-1, -1)) keys.push('t');
+    if (!(m & 6) && at(1, -1)) keys.push('r');
+    if (!(m & 12) && at(1, 1)) keys.push('b');
+    if (!(m & 9) && at(-1, 1)) keys.push('l');
+    for (const k of keys) {
+      out.push({ x, y, name: `shore_${k}`, tint: 0xffffff, flat: true, over: true, h: H ?? [0, 0, 0, 0] });
+    }
+  }
+
   private buildTerrain() {
     const { w, h } = this.info;
     const nch = Math.ceil(w / CHUNK);
@@ -583,16 +641,17 @@ export class WorldRenderer {
     const n = hash(x, y);
     let { name, tint } = this.groundOf(b, x, y, n);
     // rivers are strips of shallow water on the land
-    if (this.isRiver(i)) { name = `shallow${hash(x, y + 3) < 0.7 ? 0 : 1}`; tint = 0xe8f4ff; }
+    if (this.bigRiver(i)) { name = `shallow${hash(x, y + 3) < 0.7 ? 0 : 1}`; tint = 0xe8f4ff; }
     if (isWater(b)) {
       // a sandy floor that sinks away from the shore, and over it a level, see-through water surface
       const W1 = this.info.w + 1;
       const D = [y * W1 + x, y * W1 + x + 1, (y + 1) * W1 + x + 1, (y + 1) * W1 + x].map((k) => this.wd[k]);
       seabed.push({ x, y, name: 'sand1', tint: 0xffffff, flat: true, h: D.map((d) => -d), tints: D.map((d) => mixColor(0xe4d4ac, 0x3c5a66, Math.min(1, d / 2.4))) });
       sea.push({ x, y, name, tint: 0xffffff, flat: true, h: [0, 0, 0, 0], alpha: D.map((d) => Math.min(0.92, 0.45 + d * 0.2)) });
+      this.shoreQuads(x, y, undefined, ground);
       return;
     }
-    if (this.isRiver(i)) {
+    if (this.bigRiver(i)) {
       // the river bed follows the slope; the water lies level in it and steps down in small falls
       // the water at each corner lies as low as the lowest water touching it: level where the river is level,
       // a sloping rapid on the tile where it comes down
@@ -602,7 +661,7 @@ export class WorldRenderer {
           if (tx < 0 || ty < 0 || tx >= this.info.w || ty >= this.info.h) continue;
           const j = ty * this.info.w + tx;
           if (isWater(this.biome[j])) t = Math.min(t, 0);
-          else if (this.isRiver(j)) t = Math.min(t, this.riverTop(tx, ty));
+          else if (this.bigRiver(j)) t = Math.min(t, this.riverTop(tx, ty));
         }
         // at the banks the water meets the ground exactly, so no strip of the bed shows under its edge
         return Math.min(t, this.cornerH(cx, cy) + 0.02);
@@ -610,13 +669,20 @@ export class WorldRenderer {
       const rapid = Math.max(...H) - Math.min(...H) > 0.3;
       ground.push({ x, y, name: 'sand0', tint: 0x6f7860 });
       ground.push({ x, y, name, tint: rapid ? 0xf2fbff : 0xd4e8f2, flat: true, h: H, alpha: H.map(() => (rapid ? 0.88 : 0.78)) });
+      if (!rapid) this.shoreQuads(x, y, H, ground);
       return;
     }
     // the ground: one sloped quad over the heights of its four corners
     ground.push({ x, y, name, tint, blend: true });
+    if (this.isStream(i)) {
+      // a thin stream through the grass, joined to the streams, rivers and sea next to it
+      // joined only along its own course: downstream, and to the streams that flow into it
+      const down = this.downstream(i);
+      ground.push({ x, y, name: `stream_${this.sides(x, y, (j) => j === down || (this.isStream(j) && this.downstream(j) === i)) || 4}`, tint: 0xffffff, over: true });
+    }
     // winter snow, faded in by season
     const t = this.temp[i] / 255;
-    if (b !== Biome.Snow && !this.isRiver(i)) {
+    if (b !== Biome.Snow) {
       const target = t < 0.33 ? cold : t < 0.5 ? cool : null;
       if (target) target.push({ x, y, name: `snow${Math.floor(hash(x + 5, y) * 4)}`, tint: 0xffffff, snow: target === cold ? 0.33 : 0.5 });
     }
@@ -644,7 +710,7 @@ export class WorldRenderer {
     }
     // rivers cut a shallow channel: the corners around them come down a little
     for (let ty = 0; ty < h; ty++) for (let tx = 0; tx < w; tx++) {
-      if (!this.isRiver(ty * w + tx)) continue;
+      if (!this.bigRiver(ty * w + tx)) continue;
       for (const [vx, vy] of [[tx, ty], [tx + 1, ty], [tx + 1, ty + 1], [tx, ty + 1]]) {
         const k = vy * W + vx;
         if (!this.cutDone.has(k)) { this.cutDone.add(k); vh[k] = Math.max(0, vh[k] - 0.4); }
@@ -813,7 +879,7 @@ export class WorldRenderer {
         quad(b, true);
       };
       const ground = [-1, -1, -1, -1];
-      const edgeFace = !q.uv && (!q.h || q.alpha); // a sea floor needs none, the water over it has it
+      const edgeFace = !q.uv && !q.over && (!q.h || q.alpha); // a sea floor needs none, the water over it has it
       if (edgeFace && q.x === w - 1) skirt(1, 2, ground, 0.5, 0.4, q.alpha ? 0.9 : 1);
       if (edgeFace && q.y === h - 1) skirt(2, 3, ground, 0.5, 0.4, q.alpha ? 0.9 : 1);
     }
@@ -828,9 +894,21 @@ export class WorldRenderer {
     const { w } = this.info;
     const i = y * w + x;
     const b = this.biome[i];
-    if (isWater(b) || this.isRiver(i)) return;
     const n = hash(x + 11, y + 7);
     const n2 = hash(x + 31, y + 17);
+    if (b === Biome.Lake && !this.mars && n < 0.12 && this.atlas.has('w_lily0')) {
+      // water lilies on still lakes
+      const p = iso(x, y);
+      const ln = n < 0.06 ? 'w_lily0' : 'w_lily1';
+      const s = this.atlas.sprite(ln);
+      const sc = this.atlas.scale('w_lily0') * (0.8 + n2 * 0.3);
+      s.scale.set(n2 < 0.5 ? -sc : sc, sc);
+      s.position.set(p.x + (n2 - 0.5) * 12, p.y + TH / 2 + 2);
+      s.zIndex = s.y;
+      objs.addChild(s);
+      list.push({ s, i, kind: 'other', base: ln, n, size: 1, flip: 1 });
+    }
+    if (isWater(b) || this.isRiver(i)) return;
     const t = this.temp[i] / 255;
     // groves and clearings: smooth noise decides how dense the trees are here (0..1)
     const dense = 0.5 + 0.55 * this.clumps.noise(x * 0.11, y * 0.11);
@@ -881,6 +959,15 @@ export class WorldRenderer {
       return;
     }
     void dense;
+    // ferns, reeds, stones and the like along the water
+    if (!this.mars && this.sides(x, y, (j) => this.isRiver(j) || isWater(this.biome[j])) && hash(x + 5, y + 61) < 0.3 && this.atlas.has('w_fern0')) {
+      const t = this.temp[i] / 255;
+      const set = t < 0.4 ? ['w_sedge', 'w_horsetail', 'w_stones', 'w_boulder', 'w_sedge']
+        : b === Biome.Marsh ? ['w_cattail', 'w_reeds', 'w_iris', 'w_marigold', 'w_sedge', 'w_horsetail']
+        : ['w_fern0', 'w_fern1', 'w_fern2', 'w_fern3', 'w_reeds', 'w_cattail', 'w_iris', 'w_sedge', 'w_marigold', 'w_stones', 'w_boulder', 'w_willow', 'w_log', 'w_horsetail', 'w_fern1', 'w_reeds'];
+      add(pick(set, hash(x + 9, y + 23)), 'other', (n2 - 0.5) * 10, (hash(x, y + 5) - 0.5) * 3);
+      return;
+    }
     switch (b) {
       case Biome.Forest:
         if (n > 0.93) add(pick(['fern', 'mushroom', 'log', 'stump', 'berries', 'bush0'], (n - 0.93) / 0.07), 'other', (n2 - 0.5) * 8, 2);
