@@ -577,15 +577,14 @@ export class WorldRenderer {
   }
 
   /** which grounds reach into which at their edges: the higher reaches into the lower */
-  private static RANK: Record<string, number> = { marsh: 1, sand: 2, steppe: 3, grass: 4, meadow: 4, tundra: 5, hill: 6, rock: 7, crag: 7, snow: 8 };
+  private static RANK: Record<string, number> = { marsh: 1, sand: 2, steppe: 3, grass: 4, meadow: 4.5, tundra: 5, hill: 6, rock: 7, crag: 7, snow: 8 };
 
   private groundFamily(j: number): { fam: string; rank: number; name: string; tint: number } | null {
     const { w } = this.info;
     if (isWater(this.biome[j]) || this.bigRiver(j)) return null;
     const x = j % w, y = (j - x) / w;
     const g = this.groundOf(this.biome[j], x, y, hash(x, y));
-    let fam = g.name.replace(/\d+$/, '');
-    if (fam === 'meadow') fam = 'grass';
+    const fam = g.name.replace(/\d+$/, '');
     const rank = WorldRenderer.RANK[fam];
     return rank ? { fam, rank, name: g.name, tint: g.tint } : null;
   }
@@ -597,9 +596,9 @@ export class WorldRenderer {
     // a water tile is the weakest of all: the land around reaches into it (under its shore)
     const own = h0 ? { fam: 'water', rank: 0, name: '' } : this.groundFamily(y * w + x);
     if (!own) return;
-    // the sands are drawn in a few unlike pictures: they also reach into each other
+    // each ground is drawn in a few unlike pictures: they also reach into each other
     const over = (f: { fam: string; rank: number; name: string }) =>
-      f.rank > own.rank ? f.fam !== own.fam : f.fam === own.fam && f.fam === 'sand' && f.name > own.name;
+      f.rank > own.rank ? f.fam !== own.fam : f.fam === own.fam && f.name > own.name;
     const found = new Map<string, { rank: number; name: string; tint: number }>();
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       if ((!dx && !dy) || x + dx < 0 || y + dy < 0 || x + dx >= w || y + dy >= h) continue;
